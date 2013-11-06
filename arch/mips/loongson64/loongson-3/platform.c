@@ -18,6 +18,63 @@
 #include <loongson_hwmon.h>
 #include <workarounds.h>
 
+/*
+ * Kernel helper policy
+ *
+ * Fan is controlled by EC in laptop pruducts, but EC can not get the current
+ * cpu temperature which used for adjusting the current fan speed.
+ *
+ * So, kernel read the CPU temperature and notify it to EC per second,
+ * that's all!
+ */
+struct loongson_fan_policy kernel_helper_policy = {
+	.type = KERNEL_HELPER_POLICY,
+	.adjust_period = 1,
+	.depend_temp = loongson3_cpu_temp,
+};
+
+/*
+ * Policy at step mode
+ *
+ * up_step array    |   down_step array
+ *                  |
+ * [min, 60), 50%   |   (min, 57), 50%
+ * [60, 65),  60%   |   [57, 62),  60%
+ * [65, 70),  70%   |   [62, 70),  70%
+ * [70, 80),  80%   |   [70, 75),  80%
+ * [80, max), 100%  |   [75, max),  100%
+ *
+ */
+struct loongson_fan_policy step_speed_policy = {
+	.type = STEP_SPEED_POLICY,
+	.adjust_period = 1,
+	.depend_temp = loongson3_cpu_temp,
+	.up_step_num = 5,
+	.down_step_num = 5,
+	.up_step = {
+			{MIN_TEMP,    60,   50},
+			{   60,       65,   60},
+			{   65,       70,   70},
+			{   70,       80,   80},
+			{   80,    MAX_TEMP,100},
+		   },
+	.down_step = {
+			{MIN_TEMP, 57,    50},
+			{   57,    62,    60},
+			{   62,    70,    70},
+			{   70,    75,    80},
+			{   75, MAX_TEMP, 100},
+		     },
+};
+
+/*
+ * Constant speed policy
+ *
+ */
+struct loongson_fan_policy constant_speed_policy = {
+	.type = CONSTANT_SPEED_POLICY,
+};
+
 static int __init loongson3_platform_init(void)
 {
 	int i;
