@@ -334,7 +334,7 @@ static void blk_mq_ipi_complete_request(struct request *rq)
 {
 	struct blk_mq_ctx *ctx = rq->mq_ctx;
 	bool shared = false;
-	int cpu;
+	int cpu, err;
 
 	if (!test_bit(QUEUE_FLAG_SAME_COMP, &rq->q->queue_flags)) {
 		rq->q->softirq_done_fn(rq);
@@ -349,7 +349,9 @@ static void blk_mq_ipi_complete_request(struct request *rq)
 		rq->csd.func = __blk_mq_complete_request_remote;
 		rq->csd.info = rq;
 		rq->csd.flags = 0;
-		smp_call_function_single_async(ctx->cpu, &rq->csd);
+		err = smp_call_function_single_async(ctx->cpu, &rq->csd);
+		if (err)
+			rq->q->softirq_done_fn(rq);
 	} else {
 		rq->q->softirq_done_fn(rq);
 	}
