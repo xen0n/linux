@@ -275,6 +275,12 @@ enum {
 /* for hda_fixup_thinkpad_acpi() */
 #include "thinkpad_helper.c"
 
+static unsigned int cxt5066_raw_init_verbs_lemote_aio_a1205[] = {
+	0x273f01c, /* Set speaker power to 1.5W@8ohm */
+	0x2729003, /* Set High pass filter to 90Hz */
+	-1 /* end */
+};
+
 static void cxt_fixup_stereo_dmic(struct hda_codec *codec,
 				  const struct hda_fixup *fix, int action)
 {
@@ -285,6 +291,8 @@ static void cxt_fixup_stereo_dmic(struct hda_codec *codec,
 static void cxt5066_increase_mic_boost(struct hda_codec *codec,
 				   const struct hda_fixup *fix, int action)
 {
+	struct conexant_spec *spec = codec->spec;
+
 	if (action != HDA_FIXUP_ACT_PRE_PROBE)
 		return;
 
@@ -293,6 +301,10 @@ static void cxt5066_increase_mic_boost(struct hda_codec *codec,
 				  (0x4 << AC_AMPCAP_NUM_STEPS_SHIFT) |
 				  (0x27 << AC_AMPCAP_STEP_SIZE_SHIFT) |
 				  (0 << AC_AMPCAP_MUTE_SHIFT));
+
+	spec->raw_init_verbs[spec->num_raw_init_verbs] =
+		cxt5066_raw_init_verbs_lemote_aio_a1205;
+	spec->num_raw_init_verbs++;
 }
 
 static void cxt_update_headset_mode(struct hda_codec *codec)
