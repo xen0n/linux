@@ -184,10 +184,16 @@ void ls2h_irq_dispatch(void)
 void ls2h_irq_router_init(void)
 {
 	/* Route INTn0 to Core0 INT1 */
-	LOONGSON_INT_ROUTER_ENTRY(0) = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 1);
+	if (loongson_sysconf.cores_per_node == 4)
+		LOONGSON_INT_ROUTER_ENTRY(0) = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 1);
+	else
+		LOONGSON_INT_ROUTER_ENTRY(0) = LOONGSON_INT_COREx_INTy(1, 1);
 
 	/* Route the LPC interrupt to Core0 INT0 */
-	LOONGSON_INT_ROUTER_LPC = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 0);
+	if (loongson_sysconf.cores_per_node == 4)
+		LOONGSON_INT_ROUTER_LPC = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 0);
+	else
+		LOONGSON_INT_ROUTER_LPC = LOONGSON_INT_COREx_INTy(1, 0);
 
 	/* Enable UART and INT0 interrupts */
 	LOONGSON_INT_ROUTER_INTENSET = (0x1 << 10) | (1 << 0);

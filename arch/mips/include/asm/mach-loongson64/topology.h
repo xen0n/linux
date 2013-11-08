@@ -3,7 +3,7 @@
 
 #ifdef CONFIG_NUMA
 
-#define cpu_to_node(cpu)	(cpu_logical_map(cpu) >> 2)
+#define cpu_to_node(cpu)	(cpu_logical_map(cpu) / loongson_sysconf.cores_per_node)
 #define parent_node(node)	(node)
 #define cpumask_of_node(node)	(&__node_data[(node)]->cpumask)
 

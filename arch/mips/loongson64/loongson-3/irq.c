@@ -71,6 +71,7 @@ static inline void mask_loongson_irq(struct irq_data *d)
 		u64 introuter_lpc_addr = smp_group[node_id] |
 			(u64)(&LOONGSON_INT_ROUTER_LPC);
 
+		if (loongson_sysconf.cores_per_node == 3) core_id++;
 		*(volatile u32 *)intenclr_addr = 1 << 10;
 		*(volatile u8 *)introuter_lpc_addr = 0x10 + (1<<core_id);
 	}
@@ -88,6 +89,7 @@ static inline void unmask_loongson_irq(struct irq_data *d)
 		u64 introuter_lpc_addr = smp_group[node_id] |
 			(u64)(&LOONGSON_INT_ROUTER_LPC);
 
+		if (loongson_sysconf.cores_per_node == 3) core_id++;
 		*(volatile u32 *)intenset_addr = 1 << 10;
 		*(volatile u8 *)introuter_lpc_addr = 0x10 + (1<<core_id);
 	}

@@ -9330,6 +9330,10 @@ static int ixgbe_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		}
 		pci_using_dac = 0;
 	}
+	if (!plat_device_is_coherent(NULL)) {
+		pci_using_dac = 0;
+		dma_force_mask(&pdev->dev);
+	}
 
 	err = pci_request_selected_regions(pdev, pci_select_bars(pdev,
 					   IORESOURCE_MEM), ixgbe_driver_name);

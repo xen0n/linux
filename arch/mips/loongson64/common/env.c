@@ -27,6 +27,7 @@ u32 cpu_clock_freq;
 EXPORT_SYMBOL(cpu_clock_freq);
 struct efi_memory_map_loongson *loongson_memmap;
 struct loongson_system_configuration loongson_sysconf;
+EXPORT_SYMBOL(loongson_sysconf);
 
 u64 loongson_chipcfg[MAX_PACKAGES] = {0xffffffffbfc00180};
 u64 loongson_chiptemp[MAX_PACKAGES];
@@ -35,6 +36,8 @@ u64 loongson_freqctrl[MAX_PACKAGES];
 unsigned long long smp_group[4];
 unsigned int has_systab = 0;
 unsigned long systab_addr;
+unsigned int Loongson3B_uncache = 0;
+EXPORT_SYMBOL(Loongson3B_uncache);
 
 struct platform_controller_hub *loongson_pch;
 extern struct platform_controller_hub ls2h_pch;
@@ -47,6 +50,16 @@ do {									\
 	if (strncmp(option, (char *)p, strlen(option)) == 0)		\
 		tmp = kstrtou32((char *)p + strlen(option"="), 10, &res); \
 } while (0)
+
+int loongson3b_is_good(void)
+{
+	/* dummy register is read only on good loongson3b */
+	unsigned int value = 0x5a5a5a5a;
+	unsigned long dummy = 0xffffffffbfe001a8;
+
+	writel(value, (volatile void *)dummy);
+	return (readl((volatile void *)dummy) != value);
+}
 
 void __init prom_init_env(void)
 {
@@ -125,12 +138,6 @@ void __init prom_init_env(void)
 		break;
 	case Legacy_3B:
 	case Loongson_3B:
-		loongson_sysconf.cores_per_node = 4; /* One chip has 2 nodes */
-		loongson_sysconf.cores_per_package = 8;
-		smp_group[0] = 0x900000003ff01000;
-		smp_group[1] = 0x900010003ff05000;
-		smp_group[2] = 0x900020003ff09000;
-		smp_group[3] = 0x900030003ff0d000;
 		loongson_chipcfg[0] = 0x900000001fe00180;
 		loongson_chipcfg[1] = 0x900020001fe00180;
 		loongson_chipcfg[2] = 0x900040001fe00180;
@@ -145,6 +152,23 @@ void __init prom_init_env(void)
 		loongson_freqctrl[3] = 0x900060001fe001d0;
 		loongson_sysconf.ht_control_base = 0x90001EFDFB000000;
 		loongson_sysconf.workarounds = WORKAROUND_CPUHOTPLUG;
+		if (ecpu->nr_cpus % 6 == 0) {   // 6-core version
+			loongson_sysconf.cores_per_node = 3; /* One chip has 2 nodes */
+			loongson_sysconf.cores_per_package = 6;
+			smp_group[0] = 0x900000003ff01100;
+			smp_group[1] = 0x900010003ff05100;
+			smp_group[2] = 0x900020003ff09100;
+			smp_group[3] = 0x900030003ff0d100;
+		} else {
+			loongson_sysconf.cores_per_node = 4; /* One chip has 2 nodes */
+			loongson_sysconf.cores_per_package = 8;
+			smp_group[0] = 0x900000003ff01000;
+			smp_group[1] = 0x900010003ff05000;
+			smp_group[2] = 0x900020003ff09000;
+			smp_group[3] = 0x900030003ff0d000;
+			if (!ecpu->cpu_startup_core_id && !loongson3b_is_good())
+				Loongson3B_uncache = 1;
+		}
 		break;
 	default:
 		loongson_sysconf.cores_per_node = 1;

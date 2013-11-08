@@ -118,7 +118,7 @@ static void notify_temp(struct work_struct *work)
 
 	temp =  fan_policy.depend_temp(0) / 1000;
 
-	ec_write_noindex(0x4d, temp);
+	ec_write_noindex(0x4d, 64);
 
 	queue_delayed_work(notify_workqueue, &notify_work,
 				fan_policy.adjust_period * HZ);

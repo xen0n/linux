@@ -721,8 +721,6 @@ static void r4k_flush_icache_range(unsigned long start, unsigned long end)
 	instruction_hazard();
 }
 
-#if defined(CONFIG_DMA_NONCOHERENT) || defined(CONFIG_DMA_MAYBE_COHERENT)
-
 static void r4k_dma_cache_wback_inv(unsigned long addr, unsigned long size)
 {
 	/* Catch bad driver code */
@@ -792,7 +790,6 @@ static void r4k_dma_cache_inv(unsigned long addr, unsigned long size)
 	bc_inv(addr, size);
 	__sync();
 }
-#endif /* CONFIG_DMA_NONCOHERENT || CONFIG_DMA_MAYBE_COHERENT */
 
 /*
  * While we're protected against bad userland addresses we don't care
@@ -1703,6 +1700,7 @@ void r4k_cache_init(void)
 {
 	extern void build_clear_page(void);
 	extern void build_copy_page(void);
+	extern unsigned int Loongson3B_uncache;
 	struct cpuinfo_mips *c = &current_cpu_data;
 
 	probe_pcache();
@@ -1753,8 +1751,7 @@ void r4k_cache_init(void)
 	flush_icache_range	= r4k_flush_icache_range;
 	local_flush_icache_range	= local_r4k_flush_icache_range;
 
-#if defined(CONFIG_DMA_NONCOHERENT) || defined(CONFIG_DMA_MAYBE_COHERENT)
-	if (coherentio) {
+	if (coherentio || !Loongson3B_uncache) {
 		_dma_cache_wback_inv	= (void *)cache_noop;
 		_dma_cache_wback	= (void *)cache_noop;
 		_dma_cache_inv		= (void *)cache_noop;
@@ -1763,7 +1760,6 @@ void r4k_cache_init(void)
 		_dma_cache_wback	= r4k_dma_cache_wback_inv;
 		_dma_cache_inv		= r4k_dma_cache_inv;
 	}
-#endif
 
 	build_clear_page();
 	build_copy_page();
@@ -1806,6 +1802,9 @@ void r4k_cache_init(void)
 		current_cpu_data.options |= MIPS_CPU_INCLUSIVE_CACHES;
 		break;
 	case CPU_LOONGSON3:
+		if (Loongson3B_uncache)
+			break;
+
 		/* Loongson-3 maintains cache coherency by hardware */
 		__flush_cache_all	= cache_noop;
 		__flush_cache_vmap	= cache_noop;

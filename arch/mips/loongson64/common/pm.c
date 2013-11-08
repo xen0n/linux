@@ -21,6 +21,12 @@
 #include <loongson.h>
 #include <mc146818rtc.h>
 
+#define HT_uncache_enable_reg0	*(volatile unsigned int *)(loongson_sysconf.ht_control_base + 0xF0)
+#define HT_uncache_base_reg0	*(volatile unsigned int *)(loongson_sysconf.ht_control_base + 0xF4)
+#define HT_uncache_enable_reg1	*(volatile unsigned int *)(loongson_sysconf.ht_control_base + 0xF8)
+#define HT_uncache_base_reg1	*(volatile unsigned int *)(loongson_sysconf.ht_control_base + 0xFC)
+
+extern unsigned int Loongson3B_uncache;
 static unsigned int __maybe_unused cached_master_mask;	/* i8259A */
 static unsigned int __maybe_unused cached_slave_mask;
 static unsigned int __maybe_unused cached_bonito_irq_mask; /* bonito */
@@ -219,6 +225,19 @@ static int loongson_pm_enter(suspend_state_t state)
 		cmos_write64(0x0, 0x40);  /* clear pc in cmos */
 		cmos_write64(0x0, 0x48);  /* clear sp in cmos */
 		pm_set_resume_via_firmware();
+		if (Loongson3B_uncache) {
+			/* set HT-access uncache */
+			HT_uncache_enable_reg0	= 0xc0000000;
+			HT_uncache_base_reg0	= 0x0080fff0;
+
+			HT_uncache_enable_reg1	= 0xc0000000;
+			HT_uncache_base_reg1	= 0x00008000;
+		} else {
+			/* set HT-access cache */
+			HT_uncache_enable_reg0	= 0x0;
+			HT_uncache_enable_reg1	= 0x0;
+			printk("SET HT_DMA CACHED\n");
+		}
 #else
 		loongson_suspend_enter();
 #endif

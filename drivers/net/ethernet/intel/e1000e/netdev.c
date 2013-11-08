@@ -7102,6 +7102,10 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 			goto err_dma;
 		}
 	}
+	if (!plat_device_is_coherent(NULL)) {
+		pci_using_dac = 0;
+		dma_force_mask(&pdev->dev);
+	}
 
 	bars = pci_select_bars(pdev, IORESOURCE_MEM);
 	err = pci_request_selected_regions_exclusive(pdev, bars,

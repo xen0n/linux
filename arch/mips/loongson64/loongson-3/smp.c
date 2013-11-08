@@ -96,6 +96,21 @@ static void ipi_set0_regs_init(void)
 		(SMP_CORE_GROUP3_BASE + SMP_CORE2_OFFSET + SET0);
 	ipi_set0_regs[15] = (void *)
 		(SMP_CORE_GROUP3_BASE + SMP_CORE3_OFFSET + SET0);
+
+	if (loongson_sysconf.cores_per_node == 4) return;
+
+	ipi_set0_regs[0] = (void *)(SMP_CORE_GROUP0_BASE + SMP_CORE0_OFFSET + SET0);
+	ipi_set0_regs[1] = (void *)(SMP_CORE_GROUP0_BASE + SMP_CORE1_OFFSET + SET0);
+	ipi_set0_regs[2] = (void *)(SMP_CORE_GROUP0_BASE + SMP_CORE2_OFFSET + SET0);
+	ipi_set0_regs[3] = (void *)(SMP_CORE_GROUP1_BASE + SMP_CORE0_OFFSET + SET0);
+	ipi_set0_regs[4] = (void *)(SMP_CORE_GROUP1_BASE + SMP_CORE1_OFFSET + SET0);
+	ipi_set0_regs[5] = (void *)(SMP_CORE_GROUP1_BASE + SMP_CORE2_OFFSET + SET0);
+	ipi_set0_regs[6] = (void *)(SMP_CORE_GROUP2_BASE + SMP_CORE0_OFFSET + SET0);
+	ipi_set0_regs[7] = (void *)(SMP_CORE_GROUP2_BASE + SMP_CORE1_OFFSET + SET0);
+	ipi_set0_regs[8] = (void *)(SMP_CORE_GROUP2_BASE + SMP_CORE2_OFFSET + SET0);
+	ipi_set0_regs[9] = (void *)(SMP_CORE_GROUP3_BASE + SMP_CORE0_OFFSET + SET0);
+	ipi_set0_regs[10] = (void *)(SMP_CORE_GROUP3_BASE + SMP_CORE1_OFFSET + SET0);
+	ipi_set0_regs[11] = (void *)(SMP_CORE_GROUP3_BASE + SMP_CORE2_OFFSET + SET0);
 }
 
 static void ipi_clear0_regs_init(void)
@@ -132,6 +147,21 @@ static void ipi_clear0_regs_init(void)
 		(SMP_CORE_GROUP3_BASE + SMP_CORE2_OFFSET + CLEAR0);
 	ipi_clear0_regs[15] = (void *)
 		(SMP_CORE_GROUP3_BASE + SMP_CORE3_OFFSET + CLEAR0);
+
+	if (loongson_sysconf.cores_per_node == 4) return;
+
+	ipi_clear0_regs[0] = (void *)(SMP_CORE_GROUP0_BASE + SMP_CORE0_OFFSET + CLEAR0);
+	ipi_clear0_regs[1] = (void *)(SMP_CORE_GROUP0_BASE + SMP_CORE1_OFFSET + CLEAR0);
+	ipi_clear0_regs[2] = (void *)(SMP_CORE_GROUP0_BASE + SMP_CORE2_OFFSET + CLEAR0);
+	ipi_clear0_regs[3] = (void *)(SMP_CORE_GROUP1_BASE + SMP_CORE0_OFFSET + CLEAR0);
+	ipi_clear0_regs[4] = (void *)(SMP_CORE_GROUP1_BASE + SMP_CORE1_OFFSET + CLEAR0);
+	ipi_clear0_regs[5] = (void *)(SMP_CORE_GROUP1_BASE + SMP_CORE2_OFFSET + CLEAR0);
+	ipi_clear0_regs[6] = (void *)(SMP_CORE_GROUP2_BASE + SMP_CORE0_OFFSET + CLEAR0);
+	ipi_clear0_regs[7] = (void *)(SMP_CORE_GROUP2_BASE + SMP_CORE1_OFFSET + CLEAR0);
+	ipi_clear0_regs[8] = (void *)(SMP_CORE_GROUP2_BASE + SMP_CORE2_OFFSET + CLEAR0);
+	ipi_clear0_regs[9] = (void *)(SMP_CORE_GROUP3_BASE + SMP_CORE0_OFFSET + CLEAR0);
+	ipi_clear0_regs[10] = (void *)(SMP_CORE_GROUP3_BASE + SMP_CORE1_OFFSET + CLEAR0);
+	ipi_clear0_regs[11] = (void *)(SMP_CORE_GROUP3_BASE + SMP_CORE2_OFFSET + CLEAR0);
 }
 
 static void ipi_status0_regs_init(void)
@@ -168,6 +198,21 @@ static void ipi_status0_regs_init(void)
 		(SMP_CORE_GROUP3_BASE + SMP_CORE2_OFFSET + STATUS0);
 	ipi_status0_regs[15] = (void *)
 		(SMP_CORE_GROUP3_BASE + SMP_CORE3_OFFSET + STATUS0);
+
+	if (loongson_sysconf.cores_per_node == 4) return;
+
+	ipi_status0_regs[0] = (void *)(SMP_CORE_GROUP0_BASE + SMP_CORE0_OFFSET + STATUS0);
+	ipi_status0_regs[1] = (void *)(SMP_CORE_GROUP0_BASE + SMP_CORE1_OFFSET + STATUS0);
+	ipi_status0_regs[2] = (void *)(SMP_CORE_GROUP0_BASE + SMP_CORE2_OFFSET + STATUS0);
+	ipi_status0_regs[3] = (void *)(SMP_CORE_GROUP1_BASE + SMP_CORE0_OFFSET + STATUS0);
+	ipi_status0_regs[4] = (void *)(SMP_CORE_GROUP1_BASE + SMP_CORE1_OFFSET + STATUS0);
+	ipi_status0_regs[5] = (void *)(SMP_CORE_GROUP1_BASE + SMP_CORE2_OFFSET + STATUS0);
+	ipi_status0_regs[6] = (void *)(SMP_CORE_GROUP2_BASE + SMP_CORE0_OFFSET + STATUS0);
+	ipi_status0_regs[7] = (void *)(SMP_CORE_GROUP2_BASE + SMP_CORE1_OFFSET + STATUS0);
+	ipi_status0_regs[8] = (void *)(SMP_CORE_GROUP2_BASE + SMP_CORE2_OFFSET + STATUS0);
+	ipi_status0_regs[9] = (void *)(SMP_CORE_GROUP3_BASE + SMP_CORE0_OFFSET + STATUS0);
+	ipi_status0_regs[10] = (void *)(SMP_CORE_GROUP3_BASE + SMP_CORE1_OFFSET + STATUS0);
+	ipi_status0_regs[11] = (void *)(SMP_CORE_GROUP3_BASE + SMP_CORE2_OFFSET + STATUS0);
 }
 
 static void ipi_en0_regs_init(void)
@@ -204,6 +249,21 @@ static void ipi_en0_regs_init(void)
 		(SMP_CORE_GROUP3_BASE + SMP_CORE2_OFFSET + EN0);
 	ipi_en0_regs[15] = (void *)
 		(SMP_CORE_GROUP3_BASE + SMP_CORE3_OFFSET + EN0);
+
+	if (loongson_sysconf.cores_per_node == 4) return;
+
+	ipi_en0_regs[0] = (void *)(SMP_CORE_GROUP0_BASE + SMP_CORE0_OFFSET + EN0);
+	ipi_en0_regs[1] = (void *)(SMP_CORE_GROUP0_BASE + SMP_CORE1_OFFSET + EN0);
+	ipi_en0_regs[2] = (void *)(SMP_CORE_GROUP0_BASE + SMP_CORE2_OFFSET + EN0);
+	ipi_en0_regs[3] = (void *)(SMP_CORE_GROUP1_BASE + SMP_CORE0_OFFSET + EN0);
+	ipi_en0_regs[4] = (void *)(SMP_CORE_GROUP1_BASE + SMP_CORE1_OFFSET + EN0);
+	ipi_en0_regs[5] = (void *)(SMP_CORE_GROUP1_BASE + SMP_CORE2_OFFSET + EN0);
+	ipi_en0_regs[6] = (void *)(SMP_CORE_GROUP2_BASE + SMP_CORE0_OFFSET + EN0);
+	ipi_en0_regs[7] = (void *)(SMP_CORE_GROUP2_BASE + SMP_CORE1_OFFSET + EN0);
+	ipi_en0_regs[8] = (void *)(SMP_CORE_GROUP2_BASE + SMP_CORE2_OFFSET + EN0);
+	ipi_en0_regs[9] = (void *)(SMP_CORE_GROUP3_BASE + SMP_CORE0_OFFSET + EN0);
+	ipi_en0_regs[10] = (void *)(SMP_CORE_GROUP3_BASE + SMP_CORE1_OFFSET + EN0);
+	ipi_en0_regs[11] = (void *)(SMP_CORE_GROUP3_BASE + SMP_CORE2_OFFSET + EN0);
 }
 
 static void ipi_mailbox_buf_init(void)
@@ -240,6 +300,21 @@ static void ipi_mailbox_buf_init(void)
 		(SMP_CORE_GROUP3_BASE + SMP_CORE2_OFFSET + BUF);
 	ipi_mailbox_buf[15] = (void *)
 		(SMP_CORE_GROUP3_BASE + SMP_CORE3_OFFSET + BUF);
+
+	if (loongson_sysconf.cores_per_node == 4) return;
+
+	ipi_mailbox_buf[0] = (void *)(SMP_CORE_GROUP0_BASE + SMP_CORE0_OFFSET + BUF);
+	ipi_mailbox_buf[1] = (void *)(SMP_CORE_GROUP0_BASE + SMP_CORE1_OFFSET + BUF);
+	ipi_mailbox_buf[2] = (void *)(SMP_CORE_GROUP0_BASE + SMP_CORE2_OFFSET + BUF);
+	ipi_mailbox_buf[3] = (void *)(SMP_CORE_GROUP1_BASE + SMP_CORE0_OFFSET + BUF);
+	ipi_mailbox_buf[4] = (void *)(SMP_CORE_GROUP1_BASE + SMP_CORE1_OFFSET + BUF);
+	ipi_mailbox_buf[5] = (void *)(SMP_CORE_GROUP1_BASE + SMP_CORE2_OFFSET + BUF);
+	ipi_mailbox_buf[6] = (void *)(SMP_CORE_GROUP2_BASE + SMP_CORE0_OFFSET + BUF);
+	ipi_mailbox_buf[7] = (void *)(SMP_CORE_GROUP2_BASE + SMP_CORE1_OFFSET + BUF);
+	ipi_mailbox_buf[8] = (void *)(SMP_CORE_GROUP2_BASE + SMP_CORE2_OFFSET + BUF);
+	ipi_mailbox_buf[9] = (void *)(SMP_CORE_GROUP3_BASE + SMP_CORE0_OFFSET + BUF);
+	ipi_mailbox_buf[10] = (void *)(SMP_CORE_GROUP3_BASE + SMP_CORE1_OFFSET + BUF);
+	ipi_mailbox_buf[11] = (void *)(SMP_CORE_GROUP3_BASE + SMP_CORE2_OFFSET + BUF);
 }
 
 /*
