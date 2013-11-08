@@ -69,13 +69,23 @@ static inline int plat_dma_supported(struct device *dev, u64 mask)
 	return 1;
 }
 
+extern unsigned int Loongson3B_uncache;
+
 static inline int plat_device_is_coherent(struct device *dev)
 {
 #ifdef CONFIG_DMA_NONCOHERENT
 	return 0;
 #else
-	return 1;
+	return !Loongson3B_uncache;
 #endif /* CONFIG_DMA_NONCOHERENT */
+}
+
+static inline int dma_force_mask(struct device *dev)
+{
+	*dev->dma_mask = DMA_BIT_MASK(38);
+	dev->coherent_dma_mask = DMA_BIT_MASK(38);
+
+	return 0;
 }
 
 static inline void plat_post_dma_flush(struct device *dev)

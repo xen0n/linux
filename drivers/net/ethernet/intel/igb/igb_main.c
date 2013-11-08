@@ -2265,6 +2265,10 @@ static int igb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 			goto err_dma;
 		}
 	}
+	if (!plat_device_is_coherent(NULL)) {
+		pci_using_dac = 1;
+		dma_force_mask(&pdev->dev);
+	}
 
 	err = pci_request_selected_regions(pdev, pci_select_bars(pdev,
 					   IORESOURCE_MEM),
