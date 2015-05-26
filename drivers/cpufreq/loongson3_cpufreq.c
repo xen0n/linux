@@ -22,7 +22,7 @@
 
 #include <loongson.h>
 
-static uint nowait;
+static uint nowait = 1;
 static spinlock_t cpufreq_reg_lock[MAX_PACKAGES];
 
 static void (*saved_cpu_wait)(void);
