@@ -22,7 +22,7 @@ ifdef CONFIG_CPU_LOONGSON2F_WORKAROUNDS
   endif
 endif
 
-cflags-$(CONFIG_CPU_LOONGSON3)	+= -Wa,--trap
+cflags-$(CONFIG_CPU_LOONGSON3)	+= -Wa,--trap -Wa,-mnofix-ls3a-llsc
 #
 # binutils from v2.25 on and gcc starting from v4.9.0 treat -march=loongson3a
 # as MIPS64 R2; older versions as just R1.  This leaves the possibility open
