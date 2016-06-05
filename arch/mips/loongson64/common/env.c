@@ -44,6 +44,16 @@ struct platform_controller_hub *loongson_pch;
 extern struct platform_controller_hub ls2h_pch;
 extern struct platform_controller_hub rs780_pch;
 
+struct board_devices *eboard;
+struct interface_info *einter;
+struct loongson_special_attribute *especial;
+
+extern char *bios_vendor;
+extern char *bios_release_date;
+extern char *board_manufacturer;
+extern char _bios_info[];
+extern char _board_info[];
+
 #define parse_even_earlier(res, option, p)				\
 do {									\
 	unsigned int tmp __maybe_unused;				\
@@ -66,6 +76,8 @@ void __init prom_init_env(void)
 {
 	/* pmon passes arguments in 32bit pointers */
 	unsigned int processor_id;
+        char *bios_info;
+        char *board_info;
 
 #ifndef CONFIG_LEFI_FIRMWARE_INTERFACE
 	int *_prom_envp;
@@ -92,7 +104,6 @@ void __init prom_init_env(void)
 	struct boot_params *boot_p;
 	struct loongson_params *loongson_p;
 	struct system_loongson *esys;
-	struct board_devices *eboard;
 	struct efi_cpuinfo_loongson *ecpu;
 	struct irq_source_routing_table *eirq_source;
 
@@ -106,10 +117,14 @@ void __init prom_init_env(void)
 		((u64)loongson_p + loongson_p->cpu_offset);
 	eboard	= (struct board_devices *)
 		((u64)loongson_p + loongson_p->boarddev_table_offset);
+        einter = (struct interface_info *)
+                ((u64)loongson_p + loongson_p->interface_offset);
 	eirq_source = (struct irq_source_routing_table *)
 		((u64)loongson_p + loongson_p->irq_offset);
 	loongson_memmap = (struct efi_memory_map_loongson *)
 		((u64)loongson_p + loongson_p->memory_offset);
+        especial = (struct loongson_special_attribute *)
+                ((u64)loongson_p + loongson_p->special_offset);
 
 	cpu_clock_freq = ecpu->cpu_clock_freq;
 	loongson_sysconf.cputype = ecpu->cputype;
@@ -211,6 +226,21 @@ void __init prom_init_env(void)
                 else
 			loongson_sysconf.pci_io_base = 0x1ff00000;
         }
+
+        /* parse bios info */
+        strcpy(_bios_info, einter->description);
+        bios_info = _bios_info;
+        bios_vendor = strsep(&bios_info, "-");
+        strsep(&bios_info, "-");
+        strsep(&bios_info, "-");
+        bios_release_date = strsep(&bios_info, "-");
+        if (!bios_release_date)
+                bios_release_date = especial->special_name;
+
+        /* parse board info */
+        strcpy(_board_info, eboard->name);
+        board_info = _board_info;
+        board_manufacturer = strsep(&board_info, "-");
 
 	loongson_sysconf.restart_addr = boot_p->reset_system.ResetWarm;
 	loongson_sysconf.poweroff_addr = boot_p->reset_system.Shutdown;
