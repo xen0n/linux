@@ -22,6 +22,7 @@
 #include <loongson.h>
 #include <boot_param.h>
 #include <workarounds.h>
+#include <loongson-pch.h>
 
 u32 cpu_clock_freq;
 EXPORT_SYMBOL(cpu_clock_freq);
@@ -189,6 +190,7 @@ void __init prom_init_env(void)
 	loongson_sysconf.pci_mem_end_addr = eirq_source->pci_mem_end_addr;
 	loongson_sysconf.pci_io_base = eirq_source->pci_io_start_addr;
 	loongson_sysconf.dma_mask_bits = eirq_source->dma_mask_bits;
+
 	if (loongson_sysconf.dma_mask_bits < 32 ||
 		loongson_sysconf.dma_mask_bits > 64)
 		loongson_sysconf.dma_mask_bits = 32;
@@ -201,6 +203,14 @@ void __init prom_init_env(void)
 		loongson_pch = &rs780_pch;
 		loongson_sysconf.ec_sci_irq = 0x07;
 	}
+
+        if (loongson_pch && loongson_pch->board_type == LS2H) {
+                int ls2h_board_version = (ls2h_readl(LS2H_GPIO_IN_REG) >> 8) & 0xF;
+                if (ls2h_board_version == 0x4)
+			loongson_sysconf.pci_io_base = 0x1bf00000;
+                else
+			loongson_sysconf.pci_io_base = 0x1ff00000;
+        }
 
 	loongson_sysconf.restart_addr = boot_p->reset_system.ResetWarm;
 	loongson_sysconf.poweroff_addr = boot_p->reset_system.Shutdown;
