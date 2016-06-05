@@ -183,7 +183,7 @@ static struct usb_ohci_pdata ls2h_ohci_platform_data = {
 };
 
 static struct platform_device ls2h_ohci_device = {
-	.name           = "ohci-platform",
+	.name           = "ls2h-ohci",
 	.id             = 0,
 	.dev = {
 		.platform_data	= &ls2h_ohci_platform_data,
@@ -212,7 +212,7 @@ static struct usb_ehci_pdata ls2h_ehci_platform_data = {
 };
 
 static struct platform_device ls2h_ehci_device = {
-	.name	= "ehci-platform",
+	.name	= "ls2h-ehci",
 	.id	= 0,
 	.dev	= {
 		.platform_data	= &ls2h_ehci_platform_data,

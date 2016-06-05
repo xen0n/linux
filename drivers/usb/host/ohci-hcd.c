@@ -1250,6 +1250,11 @@ MODULE_LICENSE ("GPL");
 #define PLATFORM_DRIVER		ohci_hcd_tilegx_driver
 #endif
 
+#ifdef CONFIG_USB_LS2H_OHCI
+#include "ohci-ls2h.c"
+#define LS2H_OHCI_DRIVER         ohci_hcd_ls2h_driver
+#endif
+
 static int __init ohci_hcd_mod_init(void)
 {
 	int retval = 0;
@@ -1310,9 +1315,19 @@ static int __init ohci_hcd_mod_init(void)
 		goto error_davinci;
 #endif
 
+#ifdef LS2H_OHCI_DRIVER
+	retval = platform_driver_register(&LS2H_OHCI_DRIVER);
+	if (retval < 0)
+		goto error_ls2h;
+#endif
+
 	return retval;
 
 	/* Error path */
+#ifdef LS2H_OHCI_DRIVER
+	platform_driver_unregister(&LS2H_OHCI_DRIVER);
+ error_ls2h:
+#endif
 #ifdef DAVINCI_PLATFORM_DRIVER
 	platform_driver_unregister(&DAVINCI_PLATFORM_DRIVER);
  error_davinci:
@@ -1352,6 +1367,9 @@ module_init(ohci_hcd_mod_init);
 
 static void __exit ohci_hcd_mod_exit(void)
 {
+#ifdef LS2H_OHCI_DRIVER
+	platform_driver_unregister(&LS2H_OHCI_DRIVER);
+#endif
 #ifdef DAVINCI_PLATFORM_DRIVER
 	platform_driver_unregister(&DAVINCI_PLATFORM_DRIVER);
 #endif

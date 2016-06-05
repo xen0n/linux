@@ -285,6 +285,12 @@ config USB_W90X900_EHCI
 	---help---
 		Enables support for the W90X900 USB controller
 
+config USB_LS2H_EHCI
+        bool "Loongson2H EHCI support"
+        depends on USB_EHCI_HCD && CPU_LOONGSON3
+        ---help---
+          Enables support for the LOONGSON 2H EHCI controller
+
 config USB_CNS3XXX_EHCI
 	bool "Cavium CNS3XXX EHCI Module (DEPRECATED)"
 	depends on ARCH_CNS3XXX
@@ -411,6 +417,13 @@ config USB_OHCI_HCD
 	  module will be called ohci-hcd.
 
 if USB_OHCI_HCD
+
+config USB_LS2H_OHCI
+        bool "Loongson2H OHCI support"
+        depends on USB_OHCI_HCD && CPU_LOONGSON3
+        ---help---
+          Enables support for the LOONGSON 2H OHCI controller
+
 
 config USB_OHCI_HCD_OMAP1
 	tristate "OHCI support for OMAP1/2 chips"
