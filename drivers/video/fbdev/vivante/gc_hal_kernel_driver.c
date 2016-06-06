@@ -1005,7 +1005,7 @@ int loongson_gpu_probe(struct platform_device *pdev)
     printk("all reserved_size is %lx\n", all_reserved_size);
 
     if(loongson_sysconf.vram_type == VRAM_TYPE_UMA)
-        device_addr = bus_addr | 0x40000000;
+        device_addr = (bus_addr & 0xffffffff) | 0x40000000;
     if(loongson_sysconf.vram_type == VRAM_TYPE_SP)
         device_addr = bus_addr & 0xffffffff;
 

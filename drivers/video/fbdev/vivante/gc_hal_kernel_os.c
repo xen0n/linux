@@ -1602,11 +1602,22 @@ gckOS_MapMemory(
         mdlMap->vma->vm_pgoff = 0;
 	if(loongson_sysconf.vram_type == VRAM_TYPE_UMA)
 	{
-		res_tmp =remap_pfn_range(mdlMap->vma,
-	                            mdlMap->vma->vm_start,
-	                            (mdl->dmaHandle & 0x0fffffff ) >> PAGE_SHIFT,
-	                            mdl->numPages*PAGE_SIZE,
-	                            mdlMap->vma->vm_page_prot);
+		if(mdl->dmaHandle & 0xb0000000) {
+			/* 2h gpu device addr 0x5000_0000 */
+			res_tmp =remap_pfn_range(mdlMap->vma,
+					mdlMap->vma->vm_start,
+					(mdl->dmaHandle + (loongson_sysconf.uma_vram_addr - 0x50000000)) >> PAGE_SHIFT,
+					mdl->numPages*PAGE_SIZE,
+					mdlMap->vma->vm_page_prot);
+
+		} else {
+			/* 2h gpu device addr 0x4000_0000 */
+			res_tmp =remap_pfn_range(mdlMap->vma,
+					mdlMap->vma->vm_start,
+					(mdl->dmaHandle & 0x0fffffff ) >> PAGE_SHIFT,
+					mdl->numPages*PAGE_SIZE,
+					mdlMap->vma->vm_page_prot);
+		}
 	}
 
 	if(loongson_sysconf.vram_type == VRAM_TYPE_SP)
@@ -2088,15 +2099,24 @@ gckOS_AllocateNonPagedMemory(
 	}
 
         mdlMap->vma->vm_pgoff = 0;
-
 	if(loongson_sysconf.vram_type == VRAM_TYPE_UMA)
 	{
-		res_tmp = remap_pfn_range(mdlMap->vma,
-	                            mdlMap->vma->vm_start,
-	                            //mdl->dmaHandle >> PAGE_SHIFT,
-	                            (mdl->dmaHandle & 0x0fffffff) >> PAGE_SHIFT,
-	                            mdl->numPages * PAGE_SIZE,
-	                            mdlMap->vma->vm_page_prot);
+		if(mdl->dmaHandle & 0xb0000000) {
+			/* 2h gpu device addr 0x5000_0000 */
+			res_tmp =remap_pfn_range(mdlMap->vma,
+					mdlMap->vma->vm_start,
+					(mdl->dmaHandle + (loongson_sysconf.uma_vram_addr - 0x50000000)) >> PAGE_SHIFT,
+					mdl->numPages*PAGE_SIZE,
+					mdlMap->vma->vm_page_prot);
+
+		} else {
+			/* 2h gpu device addr 0x4000_0000 */
+			res_tmp =remap_pfn_range(mdlMap->vma,
+					mdlMap->vma->vm_start,
+					(mdl->dmaHandle & 0x0fffffff ) >> PAGE_SHIFT,
+					mdl->numPages*PAGE_SIZE,
+					mdlMap->vma->vm_page_prot);
+		}
 	}
 
 	if(loongson_sysconf.vram_type == VRAM_TYPE_SP)
