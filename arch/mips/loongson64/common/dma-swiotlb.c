@@ -109,14 +109,15 @@ static int loongson_dma_set_mask(struct device *dev, u64 mask)
 	return 0;
 }
 
-#define SZ_4G	0x100000000ULL
+#define SZ_4G			0x100000000ULL
+#define LS2H_DMA_HIGH_MEM_START 0x80000000ULL
 
 static dma_addr_t loongson_ls2h_phys_to_dma(struct device *dev, phys_addr_t paddr)
 {
 	dma_addr_t daddr;
 
 	daddr = (paddr < SZ_256M) ? paddr :
-		(paddr - loongson_sysconf.high_physmem_start + SZ_256M);
+		(paddr - LS2H_DMA_HIGH_MEM_START);
 
 	return (daddr < SZ_4G) ? daddr : -1ULL; /* DMA address should be below 4GB */
 }
@@ -124,7 +125,7 @@ static dma_addr_t loongson_ls2h_phys_to_dma(struct device *dev, phys_addr_t padd
 static phys_addr_t loongson_ls2h_dma_to_phys(struct device *dev, dma_addr_t daddr)
 {
 	return (daddr < SZ_256M) ? daddr :
-		(daddr + loongson_sysconf.high_physmem_start - SZ_256M);
+		(daddr + LS2H_DMA_HIGH_MEM_START);
 }
 
 static dma_addr_t loongson_rs780_phys_to_dma(struct device *dev, phys_addr_t paddr)
