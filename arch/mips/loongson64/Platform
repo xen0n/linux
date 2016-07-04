@@ -24,10 +24,10 @@ endif
 
 ifdef CONFIG_CPU_LOONGSON3
   cflags-y += -Wa$(comma)--trap
-  ifeq ($(call cc-option-yn, -Wa$(comma)-monfix-ls3a-llsc), y)
+  ifeq ($(call cc-option-yn, -Wa$(comma)-mnofix-ls3a-llsc), y)
     cflags-y += -Wa$(comma)-mnofix-ls3a-llsc
   endif
-  ifeq ($(call cc-option-yn, -Wa$(comma)-mon-fix-loongson3-llsc), y)
+  ifeq ($(call cc-option-yn, -Wa$(comma)-mno-fix-loongson3-llsc), y)
     cflags-y += -Wa$(comma)-mno-fix-loongson3-llsc
   endif
 endif
