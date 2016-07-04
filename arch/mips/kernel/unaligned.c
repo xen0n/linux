@@ -1275,6 +1275,99 @@ static void emulate_load_store_insn(struct pt_regs *regs,
 		compute_return_epc(regs);
 		break;
 
+#ifdef CONFIG_CPU_LOONGSON3
+	case ldc2_op:
+		switch (insn.loongson3_lsdc2_format.opcode1) {
+		/*
+		 * Loongson3 overridden ldc2 instructions.
+		 * opcode1              instruction
+		 *   0x1          gslhx: load 2 bytes to GPR
+		 *   0x2          gslwx: load 4 bytes to GPR
+		 *   0x3          gsldx: load 8 bytes to GPR
+		 */
+		case 0x1:
+			if (!access_ok(VERIFY_READ, addr, 2))
+				goto sigbus;
+
+			LoadHW(addr, value, res);
+
+			if (res)
+				goto fault;
+			compute_return_epc(regs);
+			regs->regs[insn.loongson3_lsdc2_format.rt] = value;
+			break;
+		case 0x2:
+			if (!access_ok(VERIFY_READ, addr, 4))
+				goto sigbus;
+
+			LoadW(addr, value, res);
+
+			if (res)
+				goto fault;
+			compute_return_epc(regs);
+			regs->regs[insn.loongson3_lsdc2_format.rt] = value;
+			break;
+		case 0x3:
+			if (!access_ok(VERIFY_READ, addr, 8))
+				goto sigbus;
+
+			LoadDW(addr, value, res);
+
+			if (res)
+				goto fault;
+			compute_return_epc(regs);
+			regs->regs[insn.loongson3_lsdc2_format.rt] = value;
+			break;
+		}
+		break;
+	case sdc2_op:
+		switch (insn.loongson3_lsdc2_format.opcode1) {
+		/*
+		 * Loongson3 overridden sdc2 instructions.
+		 * opcode1              instruction
+		 *   0x1          gsshx: store 2 bytes from GPR
+		 *   0x2          gsswx: store 4 bytes from GPR
+		 *   0x3          gssdx: store 8 bytes from GPR
+		 */
+		case 0x1:
+			if (!access_ok(VERIFY_WRITE, addr, 2))
+				goto sigbus;
+
+			compute_return_epc(regs);
+			value = regs->regs[insn.loongson3_lsdc2_format.rt];
+
+			StoreHW(addr, value, res);
+
+			if (res)
+				goto fault;
+			break;
+		case 0x2:
+			if (!access_ok(VERIFY_WRITE, addr, 4))
+				goto sigbus;
+
+			compute_return_epc(regs);
+			value = regs->regs[insn.loongson3_lsdc2_format.rt];
+
+			StoreW(addr, value, res);
+
+			if (res)
+				goto fault;
+			break;
+		case 0x3:
+			if (!access_ok(VERIFY_WRITE, addr, 8))
+				goto sigbus;
+
+			compute_return_epc(regs);
+			value = regs->regs[insn.loongson3_lsdc2_format.rt];
+
+			StoreDW(addr, value, res);
+
+			if (res)
+				goto fault;
+			break;
+		}
+		break;
+#else
 #ifndef CONFIG_CPU_MIPSR6
 	/*
 	 * COP2 is available to implementor for application specific use.
@@ -1298,6 +1391,7 @@ static void emulate_load_store_insn(struct pt_regs *regs,
 	case sdc2_op:
 		cu2_notifier_call_chain(CU2_SDC2_OP, regs);
 		break;
+#endif
 #endif
 	default:
 		/*
