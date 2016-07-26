@@ -885,6 +885,7 @@ static void emulate_load_store_insn(struct pt_regs *regs,
 {
 	union mips_instruction insn;
 	unsigned long value;
+	unsigned long value1;
 	unsigned int res;
 	unsigned long origpc;
 	unsigned long orig31;
@@ -1444,7 +1445,85 @@ static void emulate_load_store_insn(struct pt_regs *regs,
 		}
 		break;
 
+	case swc2_op:
+		if(insn.loongson3_lswc2_format.ls == 0)
+			goto sigbus;
 
+		/* gssq */
+		if (insn.loongson3_lswc2_format.fr == 0) {
+			if (!access_ok(VERIFY_WRITE, addr, 16))
+				goto sigbus;
+			/* write upper 8 bypte first */
+			value1 = regs->regs[insn.loongson3_lswc2_format.rq];
+
+			StoreDW(addr + 8, value1, res);
+			if (res)
+				goto fault;
+			value = regs->regs[insn.loongson3_lswc2_format.rt];
+
+			StoreDW(addr, value, res);
+			if (res)
+				goto fault;
+			compute_return_epc(regs);
+
+		/* gssqc1 */
+		} else {
+			if (!access_ok(VERIFY_WRITE, addr, 16))
+				goto sigbus;
+
+			lose_fpu(1);
+			value1 = get_fpr64(current->thread.fpu.fpr, insn.loongson3_lswc2_format.rq);
+
+			StoreDW(addr + 8, value1, res);
+			if (res)
+				goto fault;
+			value = get_fpr64(current->thread.fpu.fpr, insn.loongson3_lswc2_format.rt);
+
+			StoreDW(addr, value, res);
+			if (res)
+				goto fault;
+			compute_return_epc(regs);
+			own_fpu(1);
+		}
+		break;
+	case lwc2_op:
+		if(insn.loongson3_lswc2_format.ls == 0)
+			goto sigbus;
+		/* gslq */
+		if (insn.loongson3_lswc2_format.fr == 0) {
+			if (!access_ok(VERIFY_READ, addr, 16))
+				goto sigbus;
+
+			LoadDW(addr, value, res);
+			if (res)
+				goto fault;
+
+			LoadDW(addr + 8, value1, res);
+			if (res)
+				goto fault;
+			regs->regs[insn.loongson3_lswc2_format.rt] = value;
+			regs->regs[insn.loongson3_lswc2_format.rq] = value1;
+			compute_return_epc(regs);
+
+		/* gslqc1 */
+		} else {
+			if (!access_ok(VERIFY_READ, addr, 16))
+				goto sigbus;
+
+			lose_fpu(1);
+			LoadDW(addr, value, res);
+			if (res)
+				goto fault;
+			LoadDW(addr+8, value1, res);
+			if (res)
+				goto fault;
+
+			set_fpr64(current->thread.fpu.fpr, insn.loongson3_lswc2_format.rt, value);
+			set_fpr64(current->thread.fpu.fpr, insn.loongson3_lswc2_format.rq, value1);
+			compute_return_epc(regs);
+			own_fpu(1);
+		}
+		break;
 #else
 #ifndef CONFIG_CPU_MIPSR6
 	/*

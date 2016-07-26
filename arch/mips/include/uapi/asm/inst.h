@@ -888,6 +888,17 @@ struct loongson3_lsdc2_format {	/* Loongson3 overridden ldc2/sdc2 Load/Store for
 	;))))))
 };
 
+struct loongson3_lswc2_format {	/* Loongson3 overridden lwc2/swc2 Load/Store format */
+	__BITFIELD_FIELD(unsigned int opcode : 6,
+	__BITFIELD_FIELD(unsigned int base : 5,
+	__BITFIELD_FIELD(unsigned int rt : 5,
+	__BITFIELD_FIELD(unsigned int fr : 1,
+	__BITFIELD_FIELD(unsigned int offset : 9,
+	__BITFIELD_FIELD(unsigned int ls : 1,
+	__BITFIELD_FIELD(unsigned int rq: 5,
+	;)))))))
+};
+
 /*
  * MIPS16e instruction formats (16-bit length)
  */
@@ -984,6 +995,7 @@ union mips_instruction {
 	struct mm16_r3_format mm16_r3_format;
 	struct mm16_r5_format mm16_r5_format;
 	struct loongson3_lsdc2_format loongson3_lsdc2_format;
+	struct loongson3_lswc2_format loongson3_lswc2_format;
 };
 
 union mips16e_instruction {
