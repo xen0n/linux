@@ -36,32 +36,20 @@ static struct notifier_block loongson3_cpufreq_notifier_block = {
 };
 
 #ifdef CONFIG_SMP
-static void set_shared_udelay_val(int cpu, unsigned long lpj)
-{
-	int i;
-	cpumask_t *mask;
-
-	if (loongson_sysconf.cputype != Loongson_3A)
-		cpu_data[cpu].udelay_val = lpj;
-	else {
-		mask = topology_core_cpumask(cpu);
-		for_each_cpu(i, mask)
-			cpu_data[i].udelay_val = lpj;
-	}
-}
-
 static int loongson3_cpu_freq_notifier(struct notifier_block *nb,
 					unsigned long val, void *data)
 {
 	struct cpufreq_freqs *freqs = (struct cpufreq_freqs *)data;
-	unsigned long lpj, cpu = freqs->cpu;
+	unsigned long cpu = freqs->cpu;
 	struct clock_event_device *cd = &per_cpu(mips_clockevent_device, cpu);
 
 	if (val == CPUFREQ_POSTCHANGE) {
-		lpj = cpufreq_scale(loops_per_jiffy,
-				cpu_clock_freq / 1000, freqs->new);
-		set_shared_udelay_val(cpu, lpj);
-		clockevent_set_clock(cd, freqs->new * 1000 / 2);
+		if (cpu != smp_processor_id())
+			clockevents_config(cd, freqs->new * 1000 / 2);
+		else
+			clockevents_update_freq(cd, freqs->new * 1000 / 2);
+		cpu_data[cpu].udelay_val =
+			cpufreq_scale(loops_per_jiffy, cpu_clock_freq / 1000, freqs->new);
 	}
 
 	return 0;
@@ -70,8 +58,13 @@ static int loongson3_cpu_freq_notifier(struct notifier_block *nb,
 static int loongson3_cpu_freq_notifier(struct notifier_block *nb,
 					unsigned long val, void *data)
 {
-	if (val == CPUFREQ_POSTCHANGE)
+	struct cpufreq_freqs *freqs = (struct cpufreq_freqs *)data;
+	struct clock_event_device *cd = &per_cpu(mips_clockevent_device, 0);
+
+	if (val == CPUFREQ_POSTCHANGE) {
+		clockevents_update_freq(cd, freqs->new * 1000 / 2);
 		current_cpu_data.udelay_val = loops_per_jiffy;
+	}
 
 	return 0;
 }
@@ -118,7 +111,7 @@ static int loongson3_cpufreq_cpu_init(struct cpufreq_policy *policy)
 	policy->cpuinfo.transition_latency = 1000;
 
 	/* Loongson-3A: all cores in a package share one clock */
-	if (loongson_sysconf.cputype == Loongson_3A)
+	if ((read_c0_prid() & 0xf) == PRID_REV_LOONGSON3A_R1)
 		cpumask_copy(policy->cpus, topology_core_cpumask(policy->cpu));
 
 	return cpufreq_table_validate_and_show(policy,
@@ -176,11 +169,11 @@ void loongson3_cpu_wait(void)
 	if (shared_cpus > 1)
 		goto out;
 
-	if (loongson_sysconf.cputype == Loongson_3A) {
+	if ((read_c0_prid() & 0xf) == PRID_REV_LOONGSON3A_R1) {
 		cpu_freq = LOONGSON_CHIPCFG(package_id);
 		LOONGSON_CHIPCFG(package_id) &= ~0x7;    /* Put CPU into wait mode */
 		LOONGSON_CHIPCFG(package_id) = cpu_freq; /* Restore CPU state */
-	} else if (loongson_sysconf.cputype == Loongson_3B) {
+	} else {
 		cpu_freq = LOONGSON_FREQCTRL(package_id);
 		LOONGSON_FREQCTRL(package_id) &= ~(0x7 << (core_id*4)); /* Put CPU into wait mode */
 		LOONGSON_FREQCTRL(package_id) = cpu_freq;               /* Restore CPU state */
