@@ -24,7 +24,7 @@ static inline phys_addr_t fixup_bigphys_addr(phys_addr_t phys_addr, phys_addr_t 
 static inline void __iomem *plat_ioremap(phys_addr_t offset, unsigned long size,
 	unsigned long flags)
 {
-#if CONFIG_64BIT
+#ifdef CONFIG_64BIT
 #define LOONGSON_UNCACHED_ACCEL_BASE _AC(0xb800000000000000, UL)
 	u64 base = LOONGSON_UNCACHED_ACCEL_BASE;
 
