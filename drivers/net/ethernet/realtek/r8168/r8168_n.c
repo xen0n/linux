@@ -22796,7 +22796,9 @@ rtl8168_init_one(struct pci_dev *pdev,
                         dev->hw_features &= ~NETIF_F_IPV6_CSUM;
                         netif_set_gso_max_size(dev, LSO_32K);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,18,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
                         dev->gso_min_segs = NIC_MIN_PHYS_BUF_COUNT;
+#endif
                         dev->gso_max_segs = NIC_MAX_PHYS_BUF_COUNT_LSO_64K;
 #endif
                 } else {
@@ -22804,7 +22806,9 @@ rtl8168_init_one(struct pci_dev *pdev,
                         dev->features |=  NETIF_F_IPV6_CSUM | NETIF_F_TSO6;
                         netif_set_gso_max_size(dev, LSO_64K);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,18,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
                         dev->gso_min_segs = NIC_MIN_PHYS_BUF_COUNT;
+#endif
                         dev->gso_max_segs = NIC_MAX_PHYS_BUF_COUNT_LSO2;
 #endif
                 }
@@ -25001,7 +25005,12 @@ rtl8168_start_xmit(struct sk_buff *skb,
         wmb();
         txd->opts1 = cpu_to_le32(opts1);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
         dev->trans_start = jiffies;
+#else
+        /* TODO(xen0n): is this really needed anymore? (cf. 9b36627) */
+        netif_trans_update(dev);
+#endif
 
         tp->cur_tx += frags + 1;
 
