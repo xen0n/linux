@@ -74,6 +74,7 @@
 #include <linux/context_tracking.h>
 #include <linux/sched/prio.h>
 #include <linux/tick.h>
+#include <linux/mmu_context.h>
 
 #include <asm/irq_regs.h>
 #include <asm/switch_to.h>
