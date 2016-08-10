@@ -24582,7 +24582,7 @@ static void rtl8168_recover(struct rtl8168_private *tp)
 
         for (i = 0; i < NUM_RX_DESC; i++) {
                 if (!tp->Rx_skbuff[i])
-                        rtl8168_alloc_rx_skb(tp->pci_dev, tp->Rx_skbuff + i,
+                        rtl8168_alloc_rx_skb(tp, tp->Rx_skbuff + i,
                                            tp->RxDescArray + i, tp->rx_buf_sz);
         }
 
