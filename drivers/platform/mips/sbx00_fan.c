@@ -393,9 +393,10 @@ static ssize_t get_fan_speed(struct device *dev,
 	return sprintf(buf, "%d\n", val);
 }
 
-static void sbx00_fan1_init(void)
+static void sbx00_fan1_init(struct work_struct *work)
 {
 	u8 reg;
+	int ret;
 	int speed_low, speed_high;
 
 	/* Configure gpio3 as FANOUT0 */
@@ -435,7 +436,14 @@ static void sbx00_fan1_init(void)
 		speed_percent_threshold[0] = speed_low * 100 / speed_high;
 	pr_info("SpeedPercentThreshold of FAN1 is %d%%\n", speed_percent_threshold[0]);
 
-	INIT_DEFERRABLE_WORK(&fan_policy[0].work, fan1_adjust);
+	/* force fans in auto mode first */
+	work->func = fan1_adjust;
+	sbx00_fan_mode[0] = FAN_AUTO_MODE;
+	sbx00_fan_start_auto(0);
+
+	ret = sysfs_create_files(&sbx00_hwmon_dev->kobj, hwmon_fan[0]);
+	if (ret)
+		printk(KERN_ERR "fail to create sysfs files\n");
 }
 
 static void fan1_adjust(struct work_struct *work)
@@ -467,9 +475,10 @@ exit:
         schedule_delayed_work_on(0, &fan_policy[0].work, fan_policy[0].adjust_period * HZ);
 }
 
-static void sbx00_fan2_init(void)
+static void sbx00_fan2_init(struct work_struct *work)
 {
 	u8 reg;
+	int ret;
 	int speed_low, speed_high;
 
 	/* Configure gpio48 as FANOUT1 */
@@ -509,7 +518,14 @@ static void sbx00_fan2_init(void)
 		speed_percent_threshold[1] = speed_low * 100 / speed_high;
 	pr_info("SpeedPercentThreshold of FAN2 is %d%%\n", speed_percent_threshold[1]);
 
-	INIT_DEFERRABLE_WORK(&fan_policy[1].work, fan2_adjust);
+	/* force fans in auto mode first */
+	work->func = fan2_adjust;
+	sbx00_fan_mode[1] = FAN_AUTO_MODE;
+	sbx00_fan_start_auto(1);
+
+	ret = sysfs_create_files(&sbx00_hwmon_dev->kobj, hwmon_fan[1]);
+	if (ret)
+		printk(KERN_ERR "fail to create sysfs files\n");
 }
 
 static void fan2_adjust(struct work_struct *work)
@@ -541,9 +557,10 @@ exit:
         schedule_delayed_work_on(0, &fan_policy[1].work, fan_policy[1].adjust_period * HZ);
 }
 
-static void sbx00_fan3_init(void)
+static void sbx00_fan3_init(struct work_struct *work)
 {
 	u8 reg;
+	int ret;
 	int speed_low, speed_high;
 
 	/* Configure gpio49 as FANOUT2 */
@@ -583,7 +600,14 @@ static void sbx00_fan3_init(void)
 		speed_percent_threshold[2] = speed_low * 100 / speed_high;
 	pr_info("SpeedPercentThreshold of FAN3 is %d%%\n", speed_percent_threshold[2]);
 
-	INIT_DEFERRABLE_WORK(&fan_policy[2].work, fan3_adjust);
+	/* force fans in auto mode first */
+	work->func = fan3_adjust;
+	sbx00_fan_mode[2] = FAN_AUTO_MODE;
+	sbx00_fan_start_auto(2);
+
+	ret = sysfs_create_files(&sbx00_hwmon_dev->kobj, hwmon_fan[2]);
+	if (ret)
+		printk(KERN_ERR "fail to create sysfs files\n");
 }
 
 static void fan3_adjust(struct work_struct *work)
@@ -617,7 +641,6 @@ exit:
 
 static int sbx00_fan_probe(struct platform_device *dev)
 {
-	int ret;
 	int id = dev->id - 1;
 	struct sensor_device *sdev = (struct sensor_device *)dev->dev.platform_data;
 
@@ -638,24 +661,20 @@ static int sbx00_fan_probe(struct platform_device *dev)
 		break;
 	}
 
-	if (id == 0)
-		sbx00_fan1_init();
-	if (id == 1)
-		sbx00_fan2_init();
-	if (id == 2)
-		sbx00_fan3_init();
+	if (id == 0) {
+		INIT_DEFERRABLE_WORK(&fan_policy[0].work, sbx00_fan1_init);
+		schedule_delayed_work_on(0, &fan_policy[0].work, 0);
+	}
+	if (id == 1) {
+		INIT_DEFERRABLE_WORK(&fan_policy[1].work, sbx00_fan2_init);
+		schedule_delayed_work_on(0, &fan_policy[1].work, 0);
+	}
+	if (id == 2) {
+		INIT_DEFERRABLE_WORK(&fan_policy[2].work, sbx00_fan3_init);
+		schedule_delayed_work_on(0, &fan_policy[2].work, 0);
+	}
 
 	sbx00_fan_enable[id] = 1;
-
-	/* force fans in auto mode first */
-	sbx00_fan_mode[id] = FAN_AUTO_MODE;
-	sbx00_fan_start_auto(id);
-
-	ret = sysfs_create_files(&sbx00_hwmon_dev->kobj, hwmon_fan[id]);
-	if (ret) {
-		printk(KERN_ERR "fail to create sysfs files\n");
-		return ret;
-	}
 
 	return 0;
 }
