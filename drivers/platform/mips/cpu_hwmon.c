@@ -20,7 +20,7 @@ int loongson3_cpu_temp(int cpu)
 	u32 reg;
 
 	reg = LOONGSON_CHIPTEMP(cpu);
-	if ((read_c0_prid() & 0xf) == PRID_REV_LOONGSON3A_R1)
+	if ((read_c0_prid() & PRID_REV_MASK) == PRID_REV_LOONGSON3A_R1)
 		reg = (reg >> 8) & 0xff;
 	else
 		reg = ((reg >> 8) & 0xff) - 100;

@@ -757,7 +757,7 @@ void play_dead(void)
 	void (*play_dead_at_ckseg1)(int *);
 
 	idle_task_exit();
-	switch (read_c0_prid() & 0xf) {
+	switch (read_c0_prid() & PRID_REV_MASK) {
 	case PRID_REV_LOONGSON3A_R1:
 	default:
 		play_dead_at_ckseg1 =
@@ -783,7 +783,7 @@ void loongson3_disable_clock(int cpu)
 	uint64_t core_id = cpu_data[cpu].core;
 	uint64_t package_id = cpu_data[cpu].package;
 
-	if ((read_c0_prid() & 0xf) == PRID_REV_LOONGSON3A_R1) {
+	if ((read_c0_prid() & PRID_REV_MASK) == PRID_REV_LOONGSON3A_R1) {
 		LOONGSON_CHIPCFG(package_id) &= ~(1 << (12 + core_id));
 	} else {
 		if (!(loongson_sysconf.workarounds & WORKAROUND_CPUHOTPLUG))
@@ -796,7 +796,7 @@ void loongson3_enable_clock(int cpu)
 	uint64_t core_id = cpu_data[cpu].core;
 	uint64_t package_id = cpu_data[cpu].package;
 
-	if ((read_c0_prid() & 0xf) == PRID_REV_LOONGSON3A_R1) {
+	if ((read_c0_prid() & PRID_REV_MASK) == PRID_REV_LOONGSON3A_R1) {
 		LOONGSON_CHIPCFG(package_id) |= 1 << (12 + core_id);
 	} else {
 		if (!(loongson_sysconf.workarounds & WORKAROUND_CPUHOTPLUG))

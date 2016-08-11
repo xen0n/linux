@@ -26,16 +26,12 @@
 	mfc0	t0, $5, 1
 	or	t0, (0x1 << 29)
 	mtc0	t0, $5, 1
-
-	/* Enable STFill Buffer for GS464E */
-	mfc0	t0, $15, 0
-	andi	t0, 0xFF
-	sltiu	t0, 0x8
-	bnez	t0, 1f
+#ifdef CONFIG_LOONGSON3_ENHANCEMENT
+	/* Enable STFill Buffer */
 	mfc0	t0, $16, 6
 	or	t0, 0x100
 	mtc0	t0, $16, 6
-1:
+#endif
 	_ehb
 	.set	pop
 #endif
@@ -56,16 +52,12 @@
 	mfc0	t0, $5, 1
 	or	t0, (0x1 << 29)
 	mtc0	t0, $5, 1
-
-	/* Enable STFill Buffer for GS464E */
-	mfc0	t0, $15, 0
-	andi	t0, 0xFF
-	sltiu	t0, 0x8
-	bnez	t0, 1f
+#ifdef CONFIG_LOONGSON3_ENHANCEMENT
+	/* Enable STFill Buffer */
 	mfc0	t0, $16, 6
 	or	t0, 0x100
 	mtc0	t0, $16, 6
-1:
+#endif
 	_ehb
 	.set	pop
 #endif
