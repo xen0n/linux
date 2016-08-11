@@ -36,7 +36,6 @@
  */
 #define Index_Invalidate_I		(Cache_I | Index_Writeback_Inv)
 #define Index_Writeback_Inv_D		(Cache_D | Index_Writeback_Inv)
-#define Index_Writeback_Inv_V		0x02
 #define Index_Load_Tag_I		(Cache_I | Index_Load_Tag)
 #define Index_Load_Tag_D		(Cache_D | Index_Load_Tag)
 #define Index_Store_Tag_I		(Cache_I | Index_Store_Tag)

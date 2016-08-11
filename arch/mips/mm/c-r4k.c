@@ -1372,32 +1372,6 @@ static void probe_vcache(void)
 
 	c->vcache.waybit = 0;
 
-	if (system_state == SYSTEM_BOOTING)
-		pr_info("Unified victim cache %ldkB %s, linesize %d bytes.\n",
-			vcache_size >> 10, way_string[c->vcache.ways], c->vcache.linesz);
-}
-
-static void probe_vcache(void)
-{
-	struct cpuinfo_mips *c = &current_cpu_data;
-	unsigned int config2, lsize;
-
-	if (current_cpu_type() != CPU_LOONGSON3)
-		return;
-
-	config2 = read_c0_config2();
-	if ((lsize = ((config2 >> 20) & 15)))
-		c->vcache.linesz = 2 << lsize;
-	else
-		c->vcache.linesz = lsize;
-
-	c->vcache.sets = 64 << ((config2 >> 24) & 15);
-	c->vcache.ways = 1 + ((config2 >> 16) & 15);
-
-	vcache_size = c->vcache.sets * c->vcache.ways * c->vcache.linesz;
-
-	c->vcache.waybit = 0;
-
 	pr_info("Unified victim cache %ldkB %s, linesize %d bytes.\n",
 		vcache_size >> 10, way_string[c->vcache.ways], c->vcache.linesz);
 }
