@@ -7,6 +7,7 @@
 obj-y				+= core/
 
 obj-$(CONFIG_EXYNOS_VIDEO)     += exynos/
+obj-$(CONFIG_VIVANTE)          += vivante/
 
 obj-$(CONFIG_FB_MACMODES)      += macmodes.o
 obj-$(CONFIG_FB_WMT_GE_ROPS)   += wmt_ge_rops.o
@@ -90,6 +91,7 @@ obj-$(CONFIG_FB_PXA168)		  += pxa168fb.o
 obj-$(CONFIG_PXA3XX_GCU)	  += pxa3xx-gcu.o
 obj-$(CONFIG_MMP_DISP)           += mmp/
 obj-$(CONFIG_FB_W100)		  += w100fb.o
+obj-$(CONFIG_FB_LS2H)		  += ls2hfb.o
 obj-$(CONFIG_FB_TMIO)		  += tmiofb.o
 obj-$(CONFIG_FB_AU1100)		  += au1100fb.o
 obj-$(CONFIG_FB_AU1200)		  += au1200fb.o

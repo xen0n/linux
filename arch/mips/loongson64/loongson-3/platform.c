@@ -10,18 +10,86 @@
  * option) any later version.
  */
 
+#include <linux/gpio.h>
+#include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/slab.h>
 #include <linux/platform_device.h>
 #include <asm/bootinfo.h>
 #include <boot_param.h>
+#include <loongson-pch.h>
 #include <loongson_hwmon.h>
 #include <workarounds.h>
+
+int hpet_enabled = 0;
+
+/*
+ * Kernel helper policy
+ *
+ * Fan is controlled by EC in laptop pruducts, but EC can not get the current
+ * cpu temperature which used for adjusting the current fan speed.
+ *
+ * So, kernel read the CPU temperature and notify it to EC per second,
+ * that's all!
+ */
+struct loongson_fan_policy kernel_helper_policy = {
+	.type = KERNEL_HELPER_POLICY,
+	.adjust_period = 1,
+	.depend_temp = loongson3_cpu_temp,
+};
+
+/*
+ * Policy at step mode
+ *
+ * up_step array    |   down_step array
+ *                  |
+ * [min, 60), 50%   |   (min, 57), 50%
+ * [60, 65),  60%   |   [57, 62),  60%
+ * [65, 70),  70%   |   [62, 70),  70%
+ * [70, 80),  80%   |   [70, 75),  80%
+ * [80, max), 100%  |   [75, max),  100%
+ *
+ */
+struct loongson_fan_policy step_speed_policy = {
+	.type = STEP_SPEED_POLICY,
+	.adjust_period = 1,
+	.depend_temp = loongson3_cpu_temp,
+	.up_step_num = 5,
+	.down_step_num = 5,
+	.up_step = {
+			{MIN_TEMP,    60,   50},
+			{   60,       65,   60},
+			{   65,       70,   70},
+			{   70,       80,   80},
+			{   80,    MAX_TEMP,100},
+		   },
+	.down_step = {
+			{MIN_TEMP, 57,    50},
+			{   57,    62,    60},
+			{   62,    70,    70},
+			{   70,    75,    80},
+			{   75, MAX_TEMP, 100},
+		     },
+};
+
+/*
+ * Constant speed policy
+ *
+ */
+struct loongson_fan_policy constant_speed_policy = {
+	.type = CONSTANT_SPEED_POLICY,
+};
+
+#define GPIO_LCD_CNTL		5
+#define GPIO_BACKLIGHIT_CNTL	7
 
 static int __init loongson3_platform_init(void)
 {
 	int i;
 	struct platform_device *pdev;
+
+	if (loongson_pch)
+		loongson_pch->pch_arch_initcall();
 
 	if (loongson_sysconf.ecname[0] != '\0')
 		platform_device_register_simple(loongson_sysconf.ecname, -1, NULL, 0);
@@ -37,7 +105,21 @@ static int __init loongson3_platform_init(void)
 		platform_device_register(pdev);
 	}
 
+	if (loongson_sysconf.workarounds & WORKAROUND_LVDS_GPIO) {
+		gpio_request(GPIO_LCD_CNTL,  "gpio_lcd_cntl");
+		gpio_request(GPIO_BACKLIGHIT_CNTL, "gpio_bl_cntl");
+	}
+
+	return 0;
+}
+
+static int __init loongson3_device_init(void)
+{
+	if (loongson_pch)
+		loongson_pch->pch_device_initcall();
+
 	return 0;
 }
 
 arch_initcall(loongson3_platform_init);
+device_initcall(loongson3_device_init);

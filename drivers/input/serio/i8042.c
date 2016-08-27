@@ -105,7 +105,7 @@ static char i8042_aux_firmware_id[128];
  * i8042_lock protects serialization between i8042_command and
  * the interrupt handler.
  */
-static DEFINE_SPINLOCK(i8042_lock);
+DEFINE_SPINLOCK(i8042_lock);
 
 /*
  * Writers to AUX and KBD ports as well as users issuing i8042_command
@@ -897,7 +897,7 @@ static int i8042_controller_selftest(void)
 	do {
 
 		if (i8042_command(&param, I8042_CMD_CTL_TEST)) {
-			pr_err("i8042 controller selftest timeout\n");
+			pr_info("i8042 controller selftest timeout\n");
 			return -ENODEV;
 		}
 

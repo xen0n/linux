@@ -96,6 +96,10 @@ static DEFINE_SPINLOCK(io_tlb_lock);
 
 static int late_alloc;
 
+extern struct page *dma_addr_to_page(struct device *dev, dma_addr_t dma_addr);
+extern void __dma_sync_virtual(void *addr, size_t size, enum dma_data_direction direction);
+extern void __dma_sync(struct page *page, unsigned long offset, size_t size, enum dma_data_direction direction);
+
 static int __init
 setup_io_tlb_npages(char *str)
 {
@@ -417,7 +421,11 @@ static void swiotlb_bounce(phys_addr_t orig_addr, phys_addr_t tlb_addr,
 		}
 	} else if (dir == DMA_TO_DEVICE) {
 		memcpy(vaddr, phys_to_virt(orig_addr), size);
+		if (!plat_device_is_coherent(NULL))
+			__dma_sync_virtual(vaddr, size, dir);
 	} else {
+		if (!plat_device_is_coherent(NULL))
+			__dma_sync_virtual(vaddr, size, dir);
 		memcpy(phys_to_virt(orig_addr), vaddr, size);
 	}
 }
@@ -674,6 +682,11 @@ swiotlb_alloc_coherent(struct device *hwdev, size_t size,
 		}
 	}
 
+	if (!plat_device_is_coherent(hwdev)) {
+		dma_cache_wback_inv((unsigned long) ret, size);
+		ret = UNCAC_ADDR(ret);
+	}
+
 	*dma_handle = dev_addr;
 	memset(ret, 0, size);
 
@@ -695,6 +708,11 @@ swiotlb_free_coherent(struct device *hwdev, size_t size, void *vaddr,
 	phys_addr_t paddr = dma_to_phys(hwdev, dev_addr);
 
 	WARN_ON(irqs_disabled());
+	if (!plat_device_is_coherent(hwdev)) {
+		vaddr = CAC_ADDR(vaddr);
+		dma_cache_wback_inv((unsigned long)vaddr, size);
+	}
+
 	if (!is_swiotlb_buffer(paddr))
 		free_pages((unsigned long)vaddr, get_order(size));
 	else
@@ -742,6 +760,7 @@ dma_addr_t swiotlb_map_page(struct device *dev, struct page *page,
 {
 	phys_addr_t map, phys = page_to_phys(page) + offset;
 	dma_addr_t dev_addr = phys_to_dma(dev, phys);
+	int dev_swiotlb_force = dma_get_attr(DMA_ATTR_FORCE_SWIOTLB, attrs);
 
 	BUG_ON(dir == DMA_NONE);
 	/*
@@ -749,8 +768,11 @@ dma_addr_t swiotlb_map_page(struct device *dev, struct page *page,
 	 * we can safely return the device addr and not worry about bounce
 	 * buffering it.
 	 */
-	if (dma_capable(dev, dev_addr, size) && !swiotlb_force)
+	if (dma_capable(dev, dev_addr, size) && !swiotlb_force && !dev_swiotlb_force) {
+		if (!plat_device_is_coherent(dev))
+			__dma_sync(dma_addr_to_page(dev, dev_addr), dev_addr & ~PAGE_MASK, size, dir);
 		return dev_addr;
+	}
 
 	trace_swiotlb_bounced(dev, dev_addr, size, swiotlb_force);
 
@@ -792,6 +814,9 @@ static void unmap_single(struct device *hwdev, dma_addr_t dev_addr,
 		swiotlb_tbl_unmap_single(hwdev, paddr, size, dir);
 		return;
 	}
+
+	if (!plat_device_is_coherent(hwdev))
+		__dma_sync(dma_addr_to_page(hwdev, dev_addr), dev_addr & ~PAGE_MASK, size, dir);
 
 	if (dir != DMA_FROM_DEVICE)
 		return;
@@ -880,7 +905,7 @@ swiotlb_map_sg_attrs(struct device *hwdev, struct scatterlist *sgl, int nelems,
 		     enum dma_data_direction dir, struct dma_attrs *attrs)
 {
 	struct scatterlist *sg;
-	int i;
+	int i, dev_swiotlb_force = dma_get_attr(DMA_ATTR_FORCE_SWIOTLB, attrs);
 
 	BUG_ON(dir == DMA_NONE);
 
@@ -888,7 +913,7 @@ swiotlb_map_sg_attrs(struct device *hwdev, struct scatterlist *sgl, int nelems,
 		phys_addr_t paddr = sg_phys(sg);
 		dma_addr_t dev_addr = phys_to_dma(hwdev, paddr);
 
-		if (swiotlb_force ||
+		if (swiotlb_force || dev_swiotlb_force ||
 		    !dma_capable(hwdev, dev_addr, sg->length)) {
 			phys_addr_t map = map_single(hwdev, sg_phys(sg),
 						     sg->length, dir);
@@ -902,8 +927,11 @@ swiotlb_map_sg_attrs(struct device *hwdev, struct scatterlist *sgl, int nelems,
 				return 0;
 			}
 			sg->dma_address = phys_to_dma(hwdev, map);
-		} else
+		} else {
+			if (!plat_device_is_coherent(hwdev))
+				__dma_sync(sg_page(sg), sg->offset, sg->length, dir);
 			sg->dma_address = dev_addr;
+		}
 		sg_dma_len(sg) = sg->length;
 	}
 	return nelems;

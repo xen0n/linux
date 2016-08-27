@@ -52,6 +52,9 @@ struct conexant_spec {
 	bool dc_enable;
 	unsigned int dc_input_bias; /* offset into olpc_xo_dc_bias */
 	struct nid_path *dc_mode_path;
+
+	const unsigned int *raw_init_verbs[5];
+	unsigned int num_raw_init_verbs;
 };
 
 
@@ -190,7 +193,13 @@ static int cx_auto_build_controls(struct hda_codec *codec)
 
 static int cx_auto_init(struct hda_codec *codec)
 {
+	int i, j;
 	struct conexant_spec *spec = codec->spec;
+
+	for (i = 0; i < spec->num_raw_init_verbs; i++)
+		for (j = 0; spec->raw_init_verbs[i][j] != -1; j++)
+			snd_hda_codec_exec_verb(codec, spec->raw_init_verbs[i][j], NULL);
+
 	snd_hda_gen_init(codec);
 	if (!spec->dynamic_eapd)
 		cx_auto_turn_eapd(codec, spec->num_eapds, spec->eapds, true);
@@ -266,6 +275,12 @@ enum {
 /* for hda_fixup_thinkpad_acpi() */
 #include "thinkpad_helper.c"
 
+static unsigned int cxt5066_raw_init_verbs_lemote_aio_a1205[] = {
+	0x273f01c, /* Set speaker power to 1.5W@8ohm */
+	0x2729003, /* Set High pass filter to 90Hz */
+	-1 /* end */
+};
+
 static void cxt_fixup_stereo_dmic(struct hda_codec *codec,
 				  const struct hda_fixup *fix, int action)
 {
@@ -276,6 +291,8 @@ static void cxt_fixup_stereo_dmic(struct hda_codec *codec,
 static void cxt5066_increase_mic_boost(struct hda_codec *codec,
 				   const struct hda_fixup *fix, int action)
 {
+	struct conexant_spec *spec = codec->spec;
+
 	if (action != HDA_FIXUP_ACT_PRE_PROBE)
 		return;
 
@@ -284,6 +301,10 @@ static void cxt5066_increase_mic_boost(struct hda_codec *codec,
 				  (0x4 << AC_AMPCAP_NUM_STEPS_SHIFT) |
 				  (0x27 << AC_AMPCAP_STEP_SIZE_SHIFT) |
 				  (0 << AC_AMPCAP_MUTE_SHIFT));
+
+	spec->raw_init_verbs[spec->num_raw_init_verbs] =
+		cxt5066_raw_init_verbs_lemote_aio_a1205;
+	spec->num_raw_init_verbs++;
 }
 
 static void cxt_update_headset_mode(struct hda_codec *codec)
@@ -865,6 +886,78 @@ static void add_cx5051_fake_mutes(struct hda_codec *codec)
 	spec->gen.dac_min_mute = true;
 }
 
+#ifdef CONFIG_PROC_FS
+static void cxt5066_proc_hook(struct snd_info_buffer *buffer,
+			      struct hda_codec *codec, hda_nid_t nid)
+{
+	if (nid == codec->core.afg) {
+		unsigned int res;
+		const struct {
+			unsigned int val;
+			const char *desc;
+		} speaker_power_map[] = {
+			{ 0x10, "2.00	1.00	N/A	N/A	(Unit:W)" },
+			{ 0x14, "1.80	0.90	N/A	N/A	(Unit:W)" },
+			{ 0x1c, "1.50	1.00	N/A	N/A	(Unit:W)" },
+			{ 0x20, "1.40	1.00	N/A	N/A	(Unit:W)" },
+			{ 0x24, "1.20	1.00	N/A	N/A	(Unit:W)" },
+			{ 0x28, "1.00	0.50	N/A	N/A	(Unit:W)" },
+			{ 0x2c, "0.80	0.40	N/A	N/A	(Unit:W)" },
+			{ 0x30, "0.60	0.30	N/A	N/A	(Unit:W)" },
+			{ 0x34, "0.50	0.25	2.00	1.00	(Unit:W)" },
+			{ 0x38, "0.40	0.20	1.60	0.80	(Unit:W)" },
+			{ 0x3c, "0.25	0.13	1.00	0.50	(Unit:W)" },
+			{ -1,   "???" }
+		};
+		int i;
+
+		snd_iprintf(buffer, "Node 0x27 [Vendor Defined Widget]:\n");
+
+		snd_hda_codec_exec_verb(codec, 0x27a2000, &res);
+		snd_iprintf(buffer, "  PC beep: %s\n",
+		            res == 0x0 ? "independent mode(default)" :
+		            res == 0x2 ? "mixed mode" : "???");
+
+		snd_hda_codec_exec_verb(codec, 0x27a7000, &res);
+		snd_iprintf(buffer, "  Class D: %s\n",
+		            res == 0x0 ? "stereo mode(default)" :
+			    res == 0x10 ? "mono mode" : "???");
+
+		snd_hda_codec_exec_verb(codec, 0x27bf000, &res);
+		for (i = 0;
+		     speaker_power_map[i].val != -1 &&
+		     speaker_power_map[i].val != res;
+		     i++) {}
+		snd_iprintf(buffer, "  Speaker power: %s\n",
+			    speaker_power_map[i].desc);
+
+		snd_hda_codec_exec_verb(codec, 0x01f1f00, &res);
+		snd_iprintf(buffer, "  GS Mark: %s\n",
+		            res == 0x0 ? "Disabled" :
+		            res == 0x1 ? "Enabled" : "???");
+
+		snd_hda_codec_exec_verb(codec, 0x27a9000, &res);
+		if (res > 0x0 && res <= 0x3f)
+			snd_iprintf(buffer, "  High pass filter: %dHz\n", res*30);
+		else
+			snd_iprintf(buffer, "  High pass filter: %s\n",
+			            res == 0x0 ? "120Hz(default)" : "???");
+
+		snd_hda_codec_exec_verb(codec, 0x27aa008, &res);
+		if (res > 0x0 && res <= 0x3f)
+			snd_iprintf(buffer, "  Low pass filter: %dHz\n", res*15);
+		else
+			snd_iprintf(buffer, "  Low pass filter: %s\n",
+			            res == 0x0 ? "Disabled" : "???");
+
+		snd_hda_codec_exec_verb(codec, 0x27b4100, &res);
+		snd_iprintf(buffer, "  Adjust 3.3V LDO voltage: 0x%x\n", res);
+	}
+}
+#else
+#define cxt5066_proc_hook NULL
+#endif
+
 static int patch_conexant_auto(struct hda_codec *codec)
 {
 	struct conexant_spec *spec;
@@ -878,6 +971,8 @@ static int patch_conexant_auto(struct hda_codec *codec)
 	snd_hda_gen_spec_init(&spec->gen);
 	codec->spec = spec;
 	codec->patch_ops = cx_auto_patch_ops;
+
+	codec->proc_widget_hook = cxt5066_proc_hook;
 
 	cx_auto_parse_beep(codec);
 	cx_auto_parse_eapd(codec);
@@ -905,6 +1000,14 @@ static int patch_conexant_auto(struct hda_codec *codec)
 		codec->pin_amp_workaround = 1;
 		snd_hda_pick_fixup(codec, cxt5051_fixup_models,
 				   cxt5051_fixups, cxt_fixups);
+		break;
+	/* CX20631/CX20641 node1b's default value is not same as datasheet, cause rear mic not work */
+	case 0x14f15097:
+	case 0x14f150a1:
+		snd_hda_codec_set_pincfg(codec, 0x1b, 0x01a190f0);
+		codec->pin_amp_workaround = 1;
+		snd_hda_pick_fixup(codec, cxt5066_fixup_models,
+				   cxt5066_fixups, cxt_fixups);
 		break;
 	case 0x14f150f2:
 		codec->power_save_node = 1;

@@ -1223,6 +1223,14 @@ SYSCALL_DEFINE3(socket, int, family, int, type, int, protocol)
 	if (SOCK_NONBLOCK != O_NONBLOCK && (flags & SOCK_NONBLOCK))
 		flags = (flags & ~SOCK_NONBLOCK) | O_NONBLOCK;
 
+	if (!plat_device_is_coherent(NULL)) {
+		DECLARE_BITMAP(cpu_bits, 8);
+
+		bitmap_fill(cpu_bits, 8);
+		if (family == PF_INET)
+			set_cpus_allowed_ptr(current, to_cpumask(cpu_bits));
+	}
+
 	retval = sock_create(family, type, protocol, &sock);
 	if (retval < 0)
 		goto out;

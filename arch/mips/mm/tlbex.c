@@ -90,6 +90,11 @@ static inline int __maybe_unused r10000_llsc_war(void)
 	return R10000_LLSC_WAR;
 }
 
+static inline int __maybe_unused loongson_llsc_war(void)
+{
+       return LOONGSON_LLSC_WAR;
+}
+
 static int use_bbit_insns(void)
 {
 	switch (current_cpu_type()) {
@@ -173,7 +178,10 @@ enum label_id {
 	label_large_segbits_fault,
 #ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT
 	label_tlb_huge_update,
+	label_tail_huge_miss,
+	label_tail_huge_done,
 #endif
+	label_tail_miss,
 };
 
 UASM_L_LA(_second_part)
@@ -192,7 +200,10 @@ UASM_L_LA(_r3000_write_probe_fail)
 UASM_L_LA(_large_segbits_fault)
 #ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT
 UASM_L_LA(_tlb_huge_update)
+UASM_L_LA(_tail_huge_miss)
+UASM_L_LA(_tail_huge_done)
 #endif
+UASM_L_LA(_tail_miss)
 
 static int hazard_instance;
 
@@ -707,8 +718,24 @@ static void build_huge_tlb_write_entry(u32 **p, struct uasm_label **l,
 	uasm_i_ori(p, tmp, tmp, PM_HUGE_MASK & 0xffff);
 	uasm_i_mtc0(p, tmp, C0_PAGEMASK);
 
-	build_tlb_write_entry(p, l, r, wmode);
+	if (wmode == tlb_random) { /* Caller is TLB Refill Handler */
+		build_tlb_write_entry(p, l, r, wmode);
+		build_restore_pagemask(p, r, tmp, label_leave, restore_scratch);
+		return;
+	}
 
+	/* Caller is TLB Load/Store/Modify Handler */
+	uasm_i_mfc0(p, tmp, C0_INDEX);
+	uasm_il_bltz(p, r, tmp, label_tail_huge_miss);
+	uasm_i_nop(p);
+	build_tlb_write_entry(p, l, r, tlb_indexed);
+	uasm_il_b(p, r, label_tail_huge_done);
+	uasm_i_nop(p);
+
+	uasm_l_tail_huge_miss(l, *p);
+	build_tlb_write_entry(p, l, r, tlb_random);
+
+	uasm_l_tail_huge_done(l, *p);
 	build_restore_pagemask(p, r, tmp, label_leave, restore_scratch);
 }
 
@@ -914,6 +941,8 @@ build_get_pgd_vmalloc64(u32 **p, struct uasm_label **l, struct uasm_reloc **r,
 		 * to mimic that here by taking a load/istream page
 		 * fault.
 		 */
+		if (loongson_llsc_war())
+			uasm_i_sync(p, 0);
 		UASM_i_LA(p, ptr, (unsigned long)tlb_do_page_fault_0);
 		uasm_i_jr(p, ptr);
 
@@ -1522,6 +1551,8 @@ static void build_loongson3_tlb_refill_handler(void)
 
 	if (check_for_high_segbits) {
 		uasm_l_large_segbits_fault(&l, p);
+		if (loongson_llsc_war())
+			uasm_i_sync(&p, 0);
 		UASM_i_LA(&p, K1, (unsigned long)tlb_do_page_fault_0);
 		uasm_i_jr(&p, K1);
 		uasm_i_nop(&p);
@@ -1620,6 +1651,8 @@ static void
 iPTE_LW(u32 **p, unsigned int pte, unsigned int ptr)
 {
 #ifdef CONFIG_SMP
+	if (loongson_llsc_war())
+		uasm_i_sync(p, 0);
 # ifdef CONFIG_PHYS_ADDR_T_64BIT
 	if (cpu_has_64bits)
 		uasm_i_lld(p, pte, 0, ptr);
@@ -2029,7 +2062,14 @@ build_r4000_tlbchange_handler_tail(u32 **p, struct uasm_label **l,
 	uasm_i_ori(p, ptr, ptr, sizeof(pte_t));
 	uasm_i_xori(p, ptr, ptr, sizeof(pte_t));
 	build_update_entries(p, tmp, ptr);
+	uasm_i_mfc0(p, ptr, C0_INDEX);
+	uasm_il_bltz(p, r, ptr, label_tail_miss);
+	uasm_i_nop(p);
 	build_tlb_write_entry(p, l, r, tlb_indexed);
+	uasm_il_b(p, r, label_leave);
+	uasm_i_nop(p);
+	uasm_l_tail_miss(l, *p);
+	build_tlb_write_entry(p, l, r, tlb_random);
 	uasm_l_leave(l, *p);
 	build_restore_work_registers(p);
 	uasm_i_eret(p); /* return from trap */
@@ -2201,6 +2241,8 @@ static void build_r4000_tlb_load_handler(void)
 #endif
 
 	uasm_l_nopage_tlbl(&l, p);
+	if (loongson_llsc_war())
+		uasm_i_sync(&p, 0);
 	build_restore_work_registers(&p);
 #ifdef CONFIG_CPU_MICROMIPS
 	if ((unsigned long)tlb_do_page_fault_0 & 1) {
@@ -2256,6 +2298,8 @@ static void build_r4000_tlb_store_handler(void)
 #endif
 
 	uasm_l_nopage_tlbs(&l, p);
+	if (loongson_llsc_war())
+		uasm_i_sync(&p, 0);
 	build_restore_work_registers(&p);
 #ifdef CONFIG_CPU_MICROMIPS
 	if ((unsigned long)tlb_do_page_fault_1 & 1) {
@@ -2312,6 +2356,8 @@ static void build_r4000_tlb_modify_handler(void)
 #endif
 
 	uasm_l_nopage_tlbm(&l, p);
+	if (loongson_llsc_war())
+		uasm_i_sync(&p, 0);
 	build_restore_work_registers(&p);
 #ifdef CONFIG_CPU_MICROMIPS
 	if ((unsigned long)tlb_do_page_fault_1 & 1) {

@@ -1,6 +1,7 @@
 config MIPS
 	bool
 	default y
+	select AUDIT_ARCH
 	select ARCH_SUPPORTS_UPROBES
 	select ARCH_MIGHT_HAVE_PC_PARPORT
 	select ARCH_MIGHT_HAVE_PC_SERIO
@@ -15,6 +16,7 @@ config MIPS
 	select HAVE_ARCH_KGDB
 	select HAVE_ARCH_SECCOMP_FILTER
 	select HAVE_ARCH_TRACEHOOK
+	select HAVE_ARCH_AUDITSYSCALL
 	select HAVE_CBPF_JIT if !CPU_MICROMIPS
 	select HAVE_FUNCTION_TRACER
 	select HAVE_DYNAMIC_FTRACE
@@ -1045,6 +1047,15 @@ config FW_ARC
 config ARCH_MAY_HAVE_PC_FDC
 	bool
 
+config AUDIT_ARCH
+	bool
+
+config AUDITSYSCALL_O32
+	bool
+
+config AUDITSYSCALL_N32
+	bool
+
 config BOOT_RAW
 	bool
 
@@ -1356,9 +1367,19 @@ config CPU_LOONGSON3
 	select WEAK_REORDERING_BEYOND_LLSC
 	select MIPS_PGD_C0_CONTEXT
 	select GPIOLIB
+	select MIPS_L1_CACHE_SHIFT_6
 	help
 		The Loongson 3 processor implements the MIPS64R2 instruction
 		set with many extensions.
+
+config LOONGSON3_CPUAUTOPLUG
+	tristate "Loongson 3 CPUAutoplug Driver"
+	depends on CPU_LOONGSON3 && HOTPLUG_CPU
+	help
+	  This option adds a CPUAutoplug driver for Loongson-3 multi-core processors
+	  which cpu frequencies of all cores should be configured together.
+
+	  If in doubt, say N.
 
 config LOONGSON3_ENHANCEMENT
 	bool "New Loongson 3 CPU Enhancements"
@@ -3094,6 +3115,7 @@ config MIPS32_O32
 	select COMPAT
 	select MIPS32_COMPAT
 	select SYSVIPC_COMPAT if SYSVIPC
+	select AUDITSYSCALL_O32 if AUDITSYSCALL
 	help
 	  Select this option if you want to run o32 binaries.  These are pure
 	  32-bit binaries as used by the 32-bit Linux/MIPS port.  Most of
@@ -3107,6 +3129,7 @@ config MIPS32_N32
 	select COMPAT
 	select MIPS32_COMPAT
 	select SYSVIPC_COMPAT if SYSVIPC
+	select AUDITSYSCALL_N32 if AUDITSYSCALL
 	help
 	  Select this option if you want to run n32 binaries.  These are
 	  64-bit binaries using 32-bit quantities for addressing and certain
