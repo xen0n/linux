@@ -276,7 +276,6 @@ int r4k_clockevent_init(void)
 				  CLOCK_EVT_FEAT_C3STOP |
 				  CLOCK_EVT_FEAT_PERCPU;
 
-	/* Calculate the min delta */
 	min_delta		= calculate_min_delta();
 
 	cd->rating		= 300;
