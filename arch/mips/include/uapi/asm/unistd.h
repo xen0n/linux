@@ -5,15 +5,16 @@
  *
  * Copyright (C) 1995, 96, 97, 98, 99, 2000 by Ralf Baechle
  * Copyright (C) 1999, 2000 Silicon Graphics, Inc.
+ *
+ * Changed system calls macros _syscall5 - _syscall7 to push args 5 to 7 onto
+ * the stack. Robin Farine for ACN S.A, Copyright (C) 1996 by ACN S.A
  */
 #ifndef _UAPI_ASM_UNISTD_H
 #define _UAPI_ASM_UNISTD_H
 
 #include <asm/sgidefs.h>
 
-#if (defined(__WANT_SYSCALL_NUMBERS) &&					\
-     (__WANT_SYSCALL_NUMBERS == _MIPS_SIM_ABI32)) ||			\
-    (!defined(__WANT_SYSCALL_NUMBERS) && _MIPS_SIM == _MIPS_SIM_ABI32)
+#if _MIPS_SIM == _MIPS_SIM_ABI32
 
 /*
  * Linux o32 style syscalls are in the range from 4000 to 4999.
@@ -388,14 +389,12 @@
  */
 #define __NR_Linux_syscalls		362
 
-#endif /* Want O32 || _MIPS_SIM == _MIPS_SIM_ABI32  */
+#endif /* _MIPS_SIM == _MIPS_SIM_ABI32 */
 
 #define __NR_O32_Linux			4000
 #define __NR_O32_Linux_syscalls		362
 
-#if (defined(__WANT_SYSCALL_NUMBERS) &&					\
-	(__WANT_SYSCALL_NUMBERS == _MIPS_SIM_ABI64)) ||			\
-	(!defined(__WANT_SYSCALL_NUMBERS) && _MIPS_SIM == _MIPS_SIM_ABI64)
+#if _MIPS_SIM == _MIPS_SIM_ABI64
 
 /*
  * Linux 64-bit syscalls are in the range from 5000 to 5999.
@@ -730,14 +729,12 @@
  */
 #define __NR_Linux_syscalls		322
 
-#endif /* Want N64 || _MIPS_SIM == _MIPS_SIM_ABI64  */
+#endif /* _MIPS_SIM == _MIPS_SIM_ABI64 */
 
 #define __NR_64_Linux			5000
 #define __NR_64_Linux_syscalls		322
 
-#if (defined(__WANT_SYSCALL_NUMBERS) &&					\
-	(__WANT_SYSCALL_NUMBERS == _MIPS_SIM_NABI32)) ||		\
-	(!defined(__WANT_SYSCALL_NUMBERS) && _MIPS_SIM == _MIPS_SIM_NABI32)
+#if _MIPS_SIM == _MIPS_SIM_NABI32
 
 /*
  * Linux N32 syscalls are in the range from 6000 to 6999.
@@ -1076,7 +1073,7 @@
  */
 #define __NR_Linux_syscalls		326
 
-#endif /* Want N32 || _MIPS_SIM == _MIPS_SIM_NABI32  */
+#endif /* _MIPS_SIM == _MIPS_SIM_NABI32 */
 
 #define __NR_N32_Linux			6000
 #define __NR_N32_Linux_syscalls		326
