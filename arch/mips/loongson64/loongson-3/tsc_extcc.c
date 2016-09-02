@@ -14,8 +14,8 @@
 #include <linux/static_key.h>
 
 #include <asm/hpet.h>
-#if 0
 #include <asm/timer.h>
+#if 0
 #include <asm/vgtod.h>
 #endif
 #include <asm/time.h>
@@ -68,7 +68,6 @@ static unsigned int hpet_readl(unsigned int offset)
 	return (unsigned int) hpet_read((int) offset);
 }
 
-#if 0
 /*
  * Use a ring-buffer like data structure, where a writer advances the head by
  * writing a new data entry and a reader advances the tail when it observes a
@@ -99,9 +98,7 @@ struct cyc2ns {
 }; /* exactly fits one cacheline */
 
 static DEFINE_PER_CPU_ALIGNED(struct cyc2ns, cyc2ns);
-#endif
 
-#if 0
 struct cyc2ns_data *cyc2ns_read_begin(void)
 {
 	struct cyc2ns_data *head;
@@ -141,9 +138,7 @@ void cyc2ns_read_end(struct cyc2ns_data *head)
 	}
 	preempt_enable();
 }
-#endif
 
-#if 0
 /*
  * Begin writing a new @data entry for @cpu.
  *
@@ -183,9 +178,7 @@ static void cyc2ns_write_end(int cpu, struct cyc2ns_data *data)
 
 	ACCESS_ONCE(c2n->head) = data;
 }
-#endif
 
-#if 0
 /*
  * Accelerators for sched_clock()
  * convert from cycles(64bits) => nanoseconds (64bits)
@@ -228,9 +221,7 @@ static void cyc2ns_init(int cpu)
 	c2n->head = c2n->data;
 	c2n->tail = c2n->data;
 }
-#endif
 
-#if 0
 static inline unsigned long long cycles_2_ns(unsigned long long cyc)
 {
 	struct cyc2ns_data *data, *tail;
@@ -282,7 +273,7 @@ static void set_cyc2ns_scale(unsigned long cpu_khz, int cpu)
 
 	data = cyc2ns_write_begin(cpu);
 
-	tsc_now = rdtsc();
+	tsc_now = rdextcc();
 	ns_now = cycles_2_ns(tsc_now);
 
 	/*
@@ -313,15 +304,13 @@ done:
 	sched_clock_idle_wakeup_event(0);
 	local_irq_restore(flags);
 }
-#endif
-#if 0
 /*
  * Scheduler clock - returns current time in nanosec units.
  */
 u64 native_sched_clock(void)
 {
 	if (static_branch_likely(&__use_tsc)) {
-		u64 tsc_now = rdtsc();
+		u64 tsc_now = rdextcc();
 
 		/* return the value in ns */
 		return cycles_2_ns(tsc_now);
@@ -350,7 +339,8 @@ u64 native_sched_clock_from_tsc(u64 tsc)
 
 /* We need to define a real function for sched_clock, to override the
    weak default version */
-#ifdef CONFIG_PARAVIRT
+/* MIPS doesn't have paravirt_sched_clock() */
+#if 0
 unsigned long long sched_clock(void)
 {
 	return paravirt_sched_clock();
@@ -358,7 +348,6 @@ unsigned long long sched_clock(void)
 #else
 unsigned long long
 sched_clock(void) __attribute__((alias("native_sched_clock")));
-#endif
 #endif
 
 #if 0
@@ -920,13 +909,14 @@ int recalibrate_cpu_khz(void)
 EXPORT_SYMBOL(recalibrate_cpu_khz);
 
 
-#if 0
 static unsigned long long cyc2ns_suspend;
 
 void tsc_save_sched_clock_state(void)
 {
+#ifdef CONFIG_HAVE_UNSTABLE_SCHED_CLOCK
 	if (!sched_clock_stable())
 		return;
+#endif
 
 	cyc2ns_suspend = sched_clock();
 }
@@ -945,8 +935,10 @@ void tsc_restore_sched_clock_state(void)
 	unsigned long flags;
 	int cpu;
 
+#ifdef CONFIG_HAVE_UNSTABLE_SCHED_CLOCK
 	if (!sched_clock_stable())
 		return;
+#endif
 
 	local_irq_save(flags);
 
@@ -969,6 +961,12 @@ void tsc_restore_sched_clock_state(void)
 	local_irq_restore(flags);
 }
 
+/*
+ * GS464E ExtCC is core-independent and constant frequency, thus can be
+ * thought as being equivalent to constant_tsc on x86. Hence the following
+ * block is unnecessary.
+ */
+#if 0
 #ifdef CONFIG_CPU_FREQ
 
 /* Frequency scaling support. Adjust the TSC based timer when the cpu frequency
@@ -1112,10 +1110,10 @@ void mark_tsc_unstable(char *reason)
 {
 	if (!tsc_unstable) {
 		tsc_unstable = 1;
-#if 0
+#ifdef CONFIG_HAVE_UNSTABLE_SCHED_CLOCK
 		clear_sched_clock_stable();
-		disable_sched_clock_irqtime();
 #endif
+		disable_sched_clock_irqtime();
 		pr_info("Marking TSC unstable due to %s\n", reason);
 		/* Change only the rating, when not registered */
 		if (clocksource_tsc.mult)
@@ -1324,9 +1322,7 @@ device_initcall(init_tsc_clocksource);
 void __init tsc_init(void)
 {
 	u64 lpj;
-#if 0
 	int cpu;
-#endif
 
 #if 0
 	if (!boot_cpu_has(X86_FEATURE_TSC)) {
@@ -1350,7 +1346,6 @@ void __init tsc_init(void)
 		(unsigned long)cpu_khz / 1000,
 		(unsigned long)cpu_khz % 1000);
 
-#if 0
 	/*
 	 * Secondary CPUs do not run through tsc_init(), so set up
 	 * all the scale factors for all CPUs, assuming the same
@@ -1361,7 +1356,6 @@ void __init tsc_init(void)
 		cyc2ns_init(cpu);
 		set_cyc2ns_scale(cpu_khz, cpu);
 	}
-#endif
 
 	if (tsc_disabled > 0)
 		return;
@@ -1373,8 +1367,8 @@ void __init tsc_init(void)
 
 #if 0
 	if (!no_sched_irq_time)
-		enable_sched_clock_irqtime();
 #endif
+		enable_sched_clock_irqtime();
 
 	lpj = ((u64)tsc_khz * 1000);
 	do_div(lpj, HZ);
