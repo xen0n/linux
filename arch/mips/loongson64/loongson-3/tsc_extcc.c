@@ -14,8 +14,8 @@
 #include <linux/static_key.h>
 
 #include <asm/hpet.h>
-#if 0
 #include <asm/timer.h>
+#if 0
 #include <asm/vgtod.h>
 #endif
 #include <asm/time.h>
@@ -921,8 +921,10 @@ static unsigned long long cyc2ns_suspend;
 
 void tsc_save_sched_clock_state(void)
 {
+#ifdef CONFIG_HAVE_UNSTABLE_SCHED_CLOCK
 	if (!sched_clock_stable())
 		return;
+#endif
 
 	cyc2ns_suspend = sched_clock();
 }
@@ -941,8 +943,10 @@ void tsc_restore_sched_clock_state(void)
 	unsigned long flags;
 	int cpu;
 
+#ifdef CONFIG_HAVE_UNSTABLE_SCHED_CLOCK
 	if (!sched_clock_stable())
 		return;
+#endif
 
 	local_irq_save(flags);
 
@@ -1114,7 +1118,9 @@ void mark_tsc_unstable(char *reason)
 {
 	if (!tsc_unstable) {
 		tsc_unstable = 1;
+#ifdef CONFIG_HAVE_UNSTABLE_SCHED_CLOCK
 		clear_sched_clock_stable();
+#endif
 		disable_sched_clock_irqtime();
 		pr_info("Marking TSC unstable due to %s\n", reason);
 		/* Change only the rating, when not registered */
@@ -1367,7 +1373,9 @@ void __init tsc_init(void)
 	tsc_disabled = 0;
 	static_branch_enable(&__use_tsc);
 
+#if 0
 	if (!no_sched_irq_time)
+#endif
 		enable_sched_clock_irqtime();
 
 	lpj = ((u64)tsc_khz * 1000);
