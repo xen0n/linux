@@ -58,7 +58,7 @@ struct clocksource *art_related_clocksource;
 /* compatibility with x86 code */
 extern int hpet_enabled;  /* defined in platform.c */
 
-static int is_hpet_enabled()
+static int is_hpet_enabled(void)
 {
 	return hpet_enabled;
 }
@@ -718,7 +718,7 @@ success:
  */
 unsigned long native_calibrate_tsc(void)
 {
-	u64 tsc1, tsc2, delta, ref1, ref2;
+	u64 tsc1, tsc2, /* delta, */ ref1, ref2;
 	unsigned long /* tsc_pit_min = ULONG_MAX, */ tsc_ref_min = ULONG_MAX;
 	unsigned long flags;
 	int hpet = is_hpet_enabled(), i;
@@ -749,7 +749,9 @@ unsigned long native_calibrate_tsc(void)
 	 */
 
 	for (i = 0; i < 3; i++) {
+#if 0
 		unsigned long tsc_pit_khz;
+#endif
 
 		/*
 		 * Read the start value and the reference count of
@@ -1096,8 +1098,8 @@ void mark_tsc_unstable(char *reason)
 {
 	if (!tsc_unstable) {
 		tsc_unstable = 1;
-		clear_sched_clock_stable();
 #if 0
+		clear_sched_clock_stable();
 		disable_sched_clock_irqtime();
 #endif
 		pr_info("Marking TSC unstable due to %s\n", reason);
@@ -1308,7 +1310,9 @@ device_initcall(init_tsc_clocksource);
 void __init tsc_init(void)
 {
 	u64 lpj;
+#if 0
 	int cpu;
+#endif
 
 #if 0
 	if (!boot_cpu_has(X86_FEATURE_TSC)) {
@@ -1387,6 +1391,8 @@ void __init tsc_init(void)
  */
 unsigned long calibrate_delay_is_known(void)
 {
+	/* MIPS doesn't have the cpu_data() mechanism in x86 at the moment. */
+#if 0
 	int sibling, cpu = smp_processor_id();
 	struct cpumask *mask = topology_core_cpumask(cpu);
 
@@ -1401,6 +1407,7 @@ unsigned long calibrate_delay_is_known(void)
 	sibling = cpumask_any_but(mask, cpu);
 	if (sibling < nr_cpu_ids)
 		return cpu_data(sibling).loops_per_jiffy;
+#endif
 	return 0;
 }
 #endif
