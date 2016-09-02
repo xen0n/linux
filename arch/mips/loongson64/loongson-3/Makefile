@@ -4,6 +4,8 @@
 obj-y			+= irq.o cop2-ex.o platform.o acpi_init.o
 obj-y			+= loongson3-memset.o loongson3-memcpy.o
 
+obj-$(CONFIG_LOONGSON3_ENHANCEMENT) += tsc_extcc.o
+
 obj-$(CONFIG_SMP)	+= smp.o
 
 obj-$(CONFIG_NUMA)	+= numa.o
