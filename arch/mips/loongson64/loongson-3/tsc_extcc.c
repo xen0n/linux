@@ -448,11 +448,25 @@ static u64 tsc_read_refs(u64 *p, int hpet)
 static unsigned long calc_hpet_ref(u64 deltatsc, u64 hpet1, u64 hpet2)
 {
 	u64 tmp;
+	unsigned int hpet_period;
 
 	if (hpet2 < hpet1)
 		hpet2 += 0x100000000ULL;
 	hpet2 -= hpet1;
-	tmp = ((u64)hpet2 * hpet_readl(HPET_PERIOD));
+
+	/*
+	 * Upstream PMON has a bug of not initializing the HPET_PERIOD
+	 * register, fortunately the RS780E/SB700 is the only supported
+	 * board configuration, in which case the correct value is
+	 * constant and available.
+	 */
+	hpet_period = hpet_readl(HPET_PERIOD);
+#ifdef CONFIG_RS780_HPET
+	if (!hpet_period)
+		hpet_period = 0x429b17e;
+#endif
+
+	tmp = ((u64)hpet2 * hpet_period);
 	do_div(tmp, 1000000);
 	do_div(deltatsc, tmp);
 
