@@ -436,6 +436,8 @@ static u64 tsc_read_refs(u64 *p, int hpet)
 #else
 		t2 = rdextcc();
 #endif
+		pr_info("tsc_read_refs: t2=%llu t1=%llu delta=%llu\n",
+				t2, t1, t2 - t1);
 		if ((t2 - t1) < SMI_TRESHOLD)
 			return t2;
 	}
@@ -453,8 +455,10 @@ static unsigned long calc_hpet_ref(u64 deltatsc, u64 hpet1, u64 hpet2)
 		hpet2 += 0x100000000ULL;
 	hpet2 -= hpet1;
 	tmp = ((u64)hpet2 * hpet_readl(HPET_PERIOD));
+	pr_info("calc_hpet_ref: periods=%llu time=%llu\n", hpet2, tmp);
 	do_div(tmp, 1000000);
 	do_div(deltatsc, tmp);
+	pr_info("calc_hpet_ref: tmp=%llu result=%llu\n", tmp, deltatsc);
 
 	return (unsigned long) deltatsc;
 }
@@ -779,6 +783,9 @@ unsigned long native_calibrate_tsc(void)
 		/* Pick the lowest PIT TSC calibration so far */
 		tsc_pit_min = min(tsc_pit_min, tsc_pit_khz);
 #endif
+		pr_info("tsc1=%llu tsc2=%llu\n", tsc1, tsc2);
+		pr_info("ref1=%llu ref2=%llu\n", ref1, ref2);
+		pr_info("prev tsc_ref_min=%lu\n", tsc_ref_min);
 
 		/* hpet or pmtimer available ? */
 		if (ref1 == ref2)
@@ -795,6 +802,7 @@ unsigned long native_calibrate_tsc(void)
 			tsc2 = calc_pmtimer_ref(tsc2, ref1, ref2);
 
 		tsc_ref_min = min(tsc_ref_min, (unsigned long) tsc2);
+		pr_info("new tsc_ref_min=%lu\n", tsc_ref_min);
 
 #if 0
 		/* Check the reference deviation */
