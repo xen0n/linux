@@ -129,6 +129,24 @@ config LOONGSON_HPET
 
 	  If unsure, say Yes.
 
+config LOONGSON_EXTCC_CLKSRC
+	bool "Use GS464E external counter as clocksource"
+	depends on LOONGSON3_ENHANCEMENT && LOONGSON_HPET
+	help
+	  This option enables the external counter found on GS464E chips to
+	  be used as clocksource.
+
+	  The external counter is an internal cycle counter independent of
+	  processor cores, and provides very good time resolution (1GHz on
+	  3A2000 and 1.4GHz on 3A3000).
+
+	  As the Loongson processors in general lack an on-chip timer that is
+	  stable in terms of frequency, like the PIT on x86 systems,
+	  only systems with HPET are supported now. Currently this means you
+	  have to enable LOONGSON_HPET to use this feature.
+
+	  If unsure, say Y.
+
 config LOONGSON_UART_BASE
 	bool
 	default y
