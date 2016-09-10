@@ -2114,6 +2114,22 @@ config MIPS_VA_BITS_48
 	  This option is only supported with 16k and 64k page sizes.
 	  If unsure, say N.
 
+config MIPS_VA_BITS_47_COMPAT
+	bool "Use 47-bit VM space instead (EXPERIMENTAL)"
+	depends on MIPS_VA_BITS_48
+	help
+	  Some applications and libraries assume the virtual memory space is
+	  47-bit or less, due to the prevalence of AMD64 platforms where this
+	  restriction is present. Hence turning on full 48-bit VM addresses
+	  may cause these applications to stop working. GNOME Shell, PolicyKit
+	  and SpiderMonkey are affected, for example.
+	  This option retains compatibility with those (broken for now) apps,
+	  while providing more address space to programs. However, note that
+	  the option is only here as a stop-gap solution; the underlying
+	  problems of respective applications should be fixed, instead of
+	  depending on this option being supported indefinitely.
+	  If unsure, say N.
+
 choice
 	prompt "Kernel page size"
 	default PAGE_SIZE_4KB
