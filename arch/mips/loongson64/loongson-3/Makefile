@@ -13,3 +13,5 @@ obj-$(CONFIG_SUSPEND)	+= pm.o sleep.o
 obj-$(CONFIG_RS780_HPET) += hpet.o
 
 obj-$(CONFIG_LOONGSON3_CPUAUTOPLUG) += loongson3_cpuautoplug.o
+
+obj-$(CONFIG_LOONGSON_EXTCC_CLKSRC) += tsc_extcc.o

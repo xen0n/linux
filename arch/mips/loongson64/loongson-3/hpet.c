@@ -40,7 +40,7 @@ static void smbus_enable(int offset, int bit)
 	smbus_write(offset, cfg);
 }
 
-static int hpet_read(int offset)
+int hpet_read(int offset)
 {
 	return *(volatile unsigned int *)(HPET_MMIO_ADDR + offset);
 }

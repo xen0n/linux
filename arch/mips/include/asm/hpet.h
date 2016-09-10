@@ -69,5 +69,7 @@
 #define HPET_T0_IRQ		0
 
 extern void __init setup_hpet_timer(void);
+
+extern int hpet_read(int offset);
 #endif /* CONFIG_RS780_HPET */
 #endif /* _ASM_HPET_H */
