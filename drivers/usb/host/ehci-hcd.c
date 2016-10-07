@@ -1313,6 +1313,11 @@ MODULE_LICENSE ("GPL");
 #define	PLATFORM_DRIVER		ehci_hcd_sead3_driver
 #endif
 
+#ifdef CONFIG_USB_LS2H_EHCI
+#include "ehci-ls2h.c"
+#define PLATFORM_DRIVER         ehci_ls2h_driver
+#endif
+
 static int __init ehci_hcd_init(void)
 {
 	int retval = 0;

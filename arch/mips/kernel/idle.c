@@ -189,6 +189,7 @@ void __init check_wait(void)
 	case CPU_BMIPS5000:
 		cpu_wait = r4k_wait_irqoff;
 		break;
+
 	case CPU_RM7000:
 		cpu_wait = rm7k_wait_irqoff;
 		break;

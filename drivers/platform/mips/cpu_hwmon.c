@@ -144,7 +144,7 @@ static void do_thermal_timer(struct work_struct *work)
 	if (value <= CPU_THERMAL_THRESHOLD)
 		schedule_delayed_work(&thermal_work, msecs_to_jiffies(5000));
 	else
-		orderly_poweroff(true);
+		schedule_delayed_work(&thermal_work, msecs_to_jiffies(5000));
 }
 
 static int __init loongson_hwmon_init(void)

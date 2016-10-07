@@ -22,17 +22,37 @@
 #include <loongson.h>
 #include <boot_param.h>
 #include <workarounds.h>
+#include <loongson-pch.h>
 
 u32 cpu_clock_freq;
 EXPORT_SYMBOL(cpu_clock_freq);
 struct efi_memory_map_loongson *loongson_memmap;
 struct loongson_system_configuration loongson_sysconf;
+EXPORT_SYMBOL(loongson_sysconf);
 
 u64 loongson_chipcfg[MAX_PACKAGES] = {0xffffffffbfc00180};
 u64 loongson_chiptemp[MAX_PACKAGES];
 u64 loongson_freqctrl[MAX_PACKAGES];
 
 unsigned long long smp_group[4];
+unsigned int has_systab = 0;
+unsigned long systab_addr;
+unsigned int Loongson3B_uncache = 0;
+EXPORT_SYMBOL(Loongson3B_uncache);
+
+struct platform_controller_hub *loongson_pch;
+extern struct platform_controller_hub ls2h_pch;
+extern struct platform_controller_hub rs780_pch;
+
+struct board_devices *eboard;
+struct interface_info *einter;
+struct loongson_special_attribute *especial;
+
+extern char *bios_vendor;
+extern char *bios_release_date;
+extern char *board_manufacturer;
+extern char _bios_info[];
+extern char _board_info[];
 
 #define parse_even_earlier(res, option, p)				\
 do {									\
@@ -42,10 +62,22 @@ do {									\
 		tmp = kstrtou32((char *)p + strlen(option"="), 10, &res); \
 } while (0)
 
+int loongson3b_is_good(void)
+{
+	/* dummy register is read only on good loongson3b */
+	unsigned int value = 0x5a5a5a5a;
+	unsigned long dummy = 0xffffffffbfe001a8;
+
+	writel(value, (volatile void *)dummy);
+	return (readl((volatile void *)dummy) != value);
+}
+
 void __init prom_init_env(void)
 {
 	/* pmon passes arguments in 32bit pointers */
 	unsigned int processor_id;
+        char *bios_info;
+        char *board_info;
 
 #ifndef CONFIG_LEFI_FIRMWARE_INTERFACE
 	int *_prom_envp;
@@ -83,14 +115,22 @@ void __init prom_init_env(void)
 		((u64)loongson_p + loongson_p->system_offset);
 	ecpu = (struct efi_cpuinfo_loongson *)
 		((u64)loongson_p + loongson_p->cpu_offset);
+	eboard	= (struct board_devices *)
+		((u64)loongson_p + loongson_p->boarddev_table_offset);
+        einter = (struct interface_info *)
+                ((u64)loongson_p + loongson_p->interface_offset);
 	eirq_source = (struct irq_source_routing_table *)
 		((u64)loongson_p + loongson_p->irq_offset);
 	loongson_memmap = (struct efi_memory_map_loongson *)
 		((u64)loongson_p + loongson_p->memory_offset);
+        especial = (struct loongson_special_attribute *)
+                ((u64)loongson_p + loongson_p->special_offset);
 
 	cpu_clock_freq = ecpu->cpu_clock_freq;
 	loongson_sysconf.cputype = ecpu->cputype;
-	if (ecpu->cputype == Loongson_3A) {
+	switch (ecpu->cputype) {
+	case Legacy_3A:
+	case Loongson_3A:
 		loongson_sysconf.cores_per_node = 4;
 		loongson_sysconf.cores_per_package = 4;
 		smp_group[0] = 0x900000003ff01000;
@@ -111,13 +151,9 @@ void __init prom_init_env(void)
 		loongson_freqctrl[3] = 0x900030001fe001d0;
 		loongson_sysconf.ht_control_base = 0x90000EFDFB000000;
 		loongson_sysconf.workarounds = WORKAROUND_CPUFREQ;
-	} else if (ecpu->cputype == Loongson_3B) {
-		loongson_sysconf.cores_per_node = 4; /* One chip has 2 nodes */
-		loongson_sysconf.cores_per_package = 8;
-		smp_group[0] = 0x900000003ff01000;
-		smp_group[1] = 0x900010003ff05000;
-		smp_group[2] = 0x900020003ff09000;
-		smp_group[3] = 0x900030003ff0d000;
+		break;
+	case Legacy_3B:
+	case Loongson_3B:
 		loongson_chipcfg[0] = 0x900000001fe00180;
 		loongson_chipcfg[1] = 0x900020001fe00180;
 		loongson_chipcfg[2] = 0x900040001fe00180;
@@ -132,7 +168,25 @@ void __init prom_init_env(void)
 		loongson_freqctrl[3] = 0x900060001fe001d0;
 		loongson_sysconf.ht_control_base = 0x90001EFDFB000000;
 		loongson_sysconf.workarounds = WORKAROUND_CPUHOTPLUG;
-	} else {
+		if (ecpu->nr_cpus % 6 == 0) {   // 6-core version
+			loongson_sysconf.cores_per_node = 3; /* One chip has 2 nodes */
+			loongson_sysconf.cores_per_package = 6;
+			smp_group[0] = 0x900000003ff01100;
+			smp_group[1] = 0x900010003ff05100;
+			smp_group[2] = 0x900020003ff09100;
+			smp_group[3] = 0x900030003ff0d100;
+		} else {
+			loongson_sysconf.cores_per_node = 4; /* One chip has 2 nodes */
+			loongson_sysconf.cores_per_package = 8;
+			smp_group[0] = 0x900000003ff01000;
+			smp_group[1] = 0x900010003ff05000;
+			smp_group[2] = 0x900020003ff09000;
+			smp_group[3] = 0x900030003ff0d000;
+			if (!ecpu->cpu_startup_core_id && !loongson3b_is_good())
+				Loongson3B_uncache = 1;
+		}
+		break;
+	default:
 		loongson_sysconf.cores_per_node = 1;
 		loongson_sysconf.cores_per_package = 1;
 		loongson_chipcfg[0] = 0x900000001fe00180;
@@ -151,9 +205,42 @@ void __init prom_init_env(void)
 	loongson_sysconf.pci_mem_end_addr = eirq_source->pci_mem_end_addr;
 	loongson_sysconf.pci_io_base = eirq_source->pci_io_start_addr;
 	loongson_sysconf.dma_mask_bits = eirq_source->dma_mask_bits;
+
 	if (loongson_sysconf.dma_mask_bits < 32 ||
 		loongson_sysconf.dma_mask_bits > 64)
 		loongson_sysconf.dma_mask_bits = 32;
+
+	if (strstr(eboard->name,"2H")) {
+		loongson_pch = &ls2h_pch;
+		loongson_sysconf.ec_sci_irq = 0x80;
+	}
+	else {
+		loongson_pch = &rs780_pch;
+		loongson_sysconf.ec_sci_irq = 0x07;
+	}
+
+        if (loongson_pch && loongson_pch->board_type == LS2H) {
+                int ls2h_board_version = (ls2h_readl(LS2H_GPIO_IN_REG) >> 8) & 0xF;
+                if (ls2h_board_version == 0x4)
+			loongson_sysconf.pci_io_base = 0x1bf00000;
+                else
+			loongson_sysconf.pci_io_base = 0x1ff00000;
+        }
+
+        /* parse bios info */
+        strcpy(_bios_info, einter->description);
+        bios_info = _bios_info;
+        bios_vendor = strsep(&bios_info, "-");
+        strsep(&bios_info, "-");
+        strsep(&bios_info, "-");
+        bios_release_date = strsep(&bios_info, "-");
+        if (!bios_release_date)
+                bios_release_date = especial->special_name;
+
+        /* parse board info */
+        strcpy(_board_info, eboard->name);
+        board_info = _board_info;
+        board_manufacturer = strsep(&board_info, "-");
 
 	loongson_sysconf.restart_addr = boot_p->reset_system.ResetWarm;
 	loongson_sysconf.poweroff_addr = boot_p->reset_system.Shutdown;

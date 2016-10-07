@@ -278,6 +278,7 @@ extern u64 loongson_freqctrl[MAX_PACKAGES];
 #ifdef CONFIG_CPU_SUPPORTS_CPUFREQ
 #include <linux/cpufreq.h>
 extern struct cpufreq_frequency_table loongson2_clockmod_table[];
+extern struct cpufreq_frequency_table loongson3_clockmod_table[];
 #endif
 
 /*
@@ -356,5 +357,13 @@ extern unsigned long _loongson_addrwincfg_base;
 	LOONGSON_ADDRWIN_CFG(PCIDMA, DDR, win, src, dst, size)
 
 #endif	/* ! CONFIG_CPU_SUPPORTS_ADDRWINCFG */
+
+void loongson_suspend_lowlevel(void);
+
+#ifdef CONFIG_HOTPLUG_CPU
+extern int disable_unused_cpus(void);
+#else
+static inline int disable_unused_cpus(void) { return 0; }
+#endif
 
 #endif /* __ASM_MACH_LOONGSON64_LOONGSON_H */

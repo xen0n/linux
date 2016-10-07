@@ -121,6 +121,9 @@ static unsigned long nid_to_addroffset(unsigned int nid)
 	return result;
 }
 
+extern unsigned int has_systab;
+extern unsigned long systab_addr;
+
 static void __init szmem(unsigned int node)
 {
 	u32 i, mem_type;
@@ -139,6 +142,9 @@ static void __init szmem(unsigned int node)
 
 		switch (mem_type) {
 		case SYSTEM_RAM_LOW:
+			if (node_id == 0)
+				loongson_sysconf.low_physmem_start =
+					loongson_memmap->map[i].mem_start;
 			start_pfn = ((node_id << 44) + mem_start) >> PAGE_SHIFT;
 			node_psize = (mem_size << 20) >> PAGE_SHIFT;
 			end_pfn  = start_pfn + node_psize;
@@ -153,6 +159,9 @@ static void __init szmem(unsigned int node)
 				PFN_PHYS(end_pfn - start_pfn), node);
 			break;
 		case SYSTEM_RAM_HIGH:
+			if (node_id == 0)
+				loongson_sysconf.high_physmem_start =
+					loongson_memmap->map[i].mem_start;
 			start_pfn = ((node_id << 44) + mem_start) >> PAGE_SHIFT;
 			node_psize = (mem_size << 20) >> PAGE_SHIFT;
 			end_pfn  = start_pfn + node_psize;
@@ -173,6 +182,21 @@ static void __init szmem(unsigned int node)
 				(u64)mem_size << 20, BOOT_MEM_RESERVED);
 			memblock_reserve(((node_id << 44) + mem_start),
 				mem_size << 20);
+			break;
+		case SMBIOS_TABLE:
+			has_systab = 1;
+			systab_addr = mem_start;
+			add_memory_region((node_id << 44) + mem_start,
+				0x2000, BOOT_MEM_RESERVED);
+			memblock_reserve(((node_id << 44) + mem_start), 0x2000);
+			break;
+		case UMA_VIDEO_RAM:
+			loongson_sysconf.vram_type = VRAM_TYPE_UMA;
+			loongson_sysconf.uma_vram_addr = mem_start & 0xffffffff;
+			loongson_sysconf.uma_vram_size = mem_size;
+			add_memory_region((node_id << 44) + mem_start,
+				(u64)mem_size << 20, BOOT_MEM_RESERVED);
+			memblock_reserve(((node_id << 44) + mem_start), mem_size << 20);
 			break;
 		}
 	}

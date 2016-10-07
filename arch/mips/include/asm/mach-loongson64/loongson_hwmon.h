@@ -52,4 +52,8 @@ struct loongson_fan_policy {
 	struct delayed_work work;
 };
 
+extern struct loongson_fan_policy kernel_helper_policy;
+extern struct loongson_fan_policy step_speed_policy;
+extern struct loongson_fan_policy constant_speed_policy;
+
 #endif /* __LOONGSON_HWMON_H_*/

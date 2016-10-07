@@ -56,6 +56,9 @@ void __init prom_init_memory(void)
 
 #else /* CONFIG_LEFI_FIRMWARE_INTERFACE */
 
+extern unsigned int has_systab;
+extern unsigned long systab_addr;
+
 void __init prom_init_memory(void)
 {
 	int i;
@@ -70,16 +73,34 @@ void __init prom_init_memory(void)
 		if (node_id == 0) {
 			switch (mem_type) {
 			case SYSTEM_RAM_LOW:
+				loongson_sysconf.low_physmem_start =
+					loongson_memmap->map[i].mem_start;
 				add_memory_region(loongson_memmap->map[i].mem_start,
 					(u64)loongson_memmap->map[i].mem_size << 20,
 					BOOT_MEM_RAM);
 				break;
 			case SYSTEM_RAM_HIGH:
+				loongson_sysconf.high_physmem_start =
+					loongson_memmap->map[i].mem_start;
 				add_memory_region(loongson_memmap->map[i].mem_start,
 					(u64)loongson_memmap->map[i].mem_size << 20,
 					BOOT_MEM_RAM);
 				break;
 			case MEM_RESERVED:
+				add_memory_region(loongson_memmap->map[i].mem_start,
+					(u64)loongson_memmap->map[i].mem_size << 20,
+					BOOT_MEM_RESERVED);
+				break;
+			case SMBIOS_TABLE:
+				has_systab = 1;
+				systab_addr = loongson_memmap->map[i].mem_start;
+				add_memory_region(loongson_memmap->map[i].mem_start,
+					0x2000, BOOT_MEM_RESERVED);
+				break;
+			case UMA_VIDEO_RAM:
+				loongson_sysconf.vram_type = VRAM_TYPE_UMA;
+				loongson_sysconf.uma_vram_addr = loongson_memmap->map[i].mem_start & 0xffffffff;
+				loongson_sysconf.uma_vram_size = loongson_memmap->map[i].mem_size;
 				add_memory_region(loongson_memmap->map[i].mem_start,
 					(u64)loongson_memmap->map[i].mem_size << 20,
 					BOOT_MEM_RESERVED);
