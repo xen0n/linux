@@ -10,6 +10,10 @@ NAME = Psychotic Stoned Sheep
 # Comments in this file are targeted only to the developer, do not
 # expect to learn how to build the kernel reading this file.
 
+CKVERSION = -ck1
+CKNAME = BFS Powered
+EXTRAVERSION := $(EXTRAVERSION)$(CKVERSION)
+
 # o Do not use make's built-in rules and variables
 #   (this increases performance and avoids hard-to-debug behaviour);
 # o Look for make include files relative to root of kernel src
