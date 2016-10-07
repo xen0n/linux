@@ -760,7 +760,7 @@ dma_addr_t swiotlb_map_page(struct device *dev, struct page *page,
 {
 	phys_addr_t map, phys = page_to_phys(page) + offset;
 	dma_addr_t dev_addr = phys_to_dma(dev, phys);
-	int dev_swiotlb_force = dma_get_attr(DMA_ATTR_FORCE_SWIOTLB, attrs);
+	int dev_swiotlb_force = attrs & DMA_ATTR_FORCE_SWIOTLB;
 
 	BUG_ON(dir == DMA_NONE);
 	/*
@@ -905,7 +905,7 @@ swiotlb_map_sg_attrs(struct device *hwdev, struct scatterlist *sgl, int nelems,
 		     enum dma_data_direction dir, unsigned long attrs)
 {
 	struct scatterlist *sg;
-	int i, dev_swiotlb_force = dma_get_attr(DMA_ATTR_FORCE_SWIOTLB, attrs);
+	int i, dev_swiotlb_force = attrs & DMA_ATTR_FORCE_SWIOTLB;
 
 	BUG_ON(dir == DMA_NONE);
 

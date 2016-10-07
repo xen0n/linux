@@ -80,9 +80,9 @@ int __init pcibios_map_irq(const struct pci_dev *dev, u8 slot, u8 pin)
 /* Do platform specific device initialization at pci_enable_device() time */
 int pcibios_plat_dev_init(struct pci_dev *dev)
 {
-	init_dma_attrs(&dev->dev.archdata.dma_attrs);
+	dev->dev.archdata.dma_attrs = 0;
 	if (loongson_sysconf.workarounds & WORKAROUND_PCIE_DMA)
-		dma_set_attr(DMA_ATTR_FORCE_SWIOTLB, &dev->dev.archdata.dma_attrs);
+		dev->dev.archdata.dma_attrs |= DMA_ATTR_FORCE_SWIOTLB;
 
 	return 0;
 }

@@ -58,9 +58,9 @@ static dma_addr_t loongson_dma_map_page(struct device *dev, struct page *page,
 	dma_addr_t daddr;
 
 	if (offset % PCIE_DMA_ALIGN)
-		daddr = swiotlb_map_page(dev, page, offset, size, dir, &dev->archdata.dma_attrs);
+		daddr = swiotlb_map_page(dev, page, offset, size, dir, dev->archdata.dma_attrs);
 	else
-		daddr = swiotlb_map_page(dev, page, offset, size, dir, NULL);
+		daddr = swiotlb_map_page(dev, page, offset, size, dir, 0);
 
 	mb();
 
@@ -72,7 +72,7 @@ static int loongson_dma_map_sg(struct device *dev, struct scatterlist *sg,
 				unsigned long attrs)
 {
 	int r = swiotlb_map_sg_attrs(dev, sg, nents, dir,
-					&dev->archdata.dma_attrs);
+					dev->archdata.dma_attrs);
 	mb();
 
 	return r;
