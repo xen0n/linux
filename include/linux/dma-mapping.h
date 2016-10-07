@@ -56,6 +56,10 @@
  * that gives better TLB efficiency.
  */
 #define DMA_ATTR_ALLOC_SINGLE_PAGES	(1UL << 7)
+/*
+ * DMA_ATTR_FORCE_SWIOTLB: Force swiotlb usage. Used by Loongson platform.
+ */
+#define DMA_ATTR_FORCE_SWIOTLB		(1UL << 8)
 
 /*
  * A dma_addr_t can hold any valid DMA or bus address for the platform.
