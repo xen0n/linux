@@ -547,4 +547,7 @@ config STACKDEPOT
 	bool
 	select STACKTRACE
 
+config SBITMAP
+	bool
+
 endmenu
