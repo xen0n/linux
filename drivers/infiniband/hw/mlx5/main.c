@@ -232,23 +232,19 @@ static int set_roce_addr(struct ib_device *device, u8 port_num,
 			 const union ib_gid *gid,
 			 const struct ib_gid_attr *attr)
 {
-	struct mlx5_ib_dev *dev	= to_mdev(device);
-	u32  in[MLX5_ST_SZ_DW(set_roce_address_in)];
-	u32 out[MLX5_ST_SZ_DW(set_roce_address_out)];
+	struct mlx5_ib_dev *dev = to_mdev(device);
+	u32  in[MLX5_ST_SZ_DW(set_roce_address_in)]  = {0};
+	u32 out[MLX5_ST_SZ_DW(set_roce_address_out)] = {0};
 	void *in_addr = MLX5_ADDR_OF(set_roce_address_in, in, roce_address);
 	enum rdma_link_layer ll = mlx5_ib_port_link_layer(device, port_num);
 
 	if (ll != IB_LINK_LAYER_ETHERNET)
 		return -EINVAL;
 
-	memset(in, 0, sizeof(in));
-
 	ib_gid_to_mlx5_roce_addr(gid, attr, in_addr);
 
 	MLX5_SET(set_roce_address_in, in, roce_address_index, index);
 	MLX5_SET(set_roce_address_in, in, opcode, MLX5_CMD_OP_SET_ROCE_ADDRESS);
-
-	memset(out, 0, sizeof(out));
 	return mlx5_cmd_exec(dev->mdev, in, sizeof(in), out, sizeof(out));
 }
 
@@ -288,7 +284,9 @@ __be16 mlx5_get_roce_udp_sport(struct mlx5_ib_dev *dev, u8 port_num,
 
 static int mlx5_use_mad_ifc(struct mlx5_ib_dev *dev)
 {
-	return !MLX5_CAP_GEN(dev->mdev, ib_virt);
+	if (MLX5_CAP_GEN(dev->mdev, port_type) == MLX5_CAP_PORT_TYPE_IB)
+		return !MLX5_CAP_GEN(dev->mdev, ib_virt);
+	return 0;
 }
 
 enum {
@@ -751,8 +749,7 @@ static int mlx5_query_hca_port(struct ib_device *ibdev, u8 port,
 				     &props->active_width);
 	if (err)
 		goto out;
-	err = mlx5_query_port_proto_oper(mdev, &props->active_speed, MLX5_PTYS_IB,
-					 port);
+	err = mlx5_query_port_ib_proto_oper(mdev, &props->active_speed, port);
 	if (err)
 		goto out;
 
@@ -1428,6 +1425,13 @@ static int parse_flow_attr(u32 *match_c, u32 *match_v,
 					     dmac_47_16),
 				ib_spec->eth.val.dst_mac);
 
+		ether_addr_copy(MLX5_ADDR_OF(fte_match_set_lyr_2_4, outer_headers_c,
+					     smac_47_16),
+				ib_spec->eth.mask.src_mac);
+		ether_addr_copy(MLX5_ADDR_OF(fte_match_set_lyr_2_4, outer_headers_v,
+					     smac_47_16),
+				ib_spec->eth.val.src_mac);
+
 		if (ib_spec->eth.mask.vlan_tag) {
 			MLX5_SET(fte_match_set_lyr_2_4, outer_headers_c,
 				 vlan_tag, 1);
@@ -1849,6 +1853,7 @@ static struct ib_flow *mlx5_ib_create_flow(struct ib_qp *qp,
 					   int domain)
 {
 	struct mlx5_ib_dev *dev = to_mdev(qp->device);
+	struct mlx5_ib_qp *mqp = to_mqp(qp);
 	struct mlx5_ib_flow_handler *handler = NULL;
 	struct mlx5_flow_destination *dst = NULL;
 	struct mlx5_ib_flow_prio *ft_prio;
@@ -1875,7 +1880,10 @@ static struct ib_flow *mlx5_ib_create_flow(struct ib_qp *qp,
 	}
 
 	dst->type = MLX5_FLOW_DESTINATION_TYPE_TIR;
-	dst->tir_num = to_mqp(qp)->raw_packet_qp.rq.tirn;
+	if (mqp->flags & MLX5_IB_QP_RSS)
+		dst->tir_num = mqp->rss_qp.tirn;
+	else
+		dst->tir_num = mqp->raw_packet_qp.rq.tirn;
 
 	if (flow_attr->type == IB_FLOW_ATTR_NORMAL) {
 		if (flow_attr->flags & IB_FLOW_ATTR_FLAGS_DONT_TRAP)  {

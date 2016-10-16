@@ -110,10 +110,10 @@
 
 	timer {
 		compatible = "arm,armv8-timer";
-		interrupts = <1 0 0xff01>,	/* Secure Phys IRQ */
-			     <1 13 0xff01>,	/* Non-secure Phys IRQ */
-			     <1 14 0xff01>,	/* Virt IRQ */
-			     <1 15 0xff01>;	/* Hyp IRQ */
+		interrupts = <1 0 0xff08>,	/* Secure Phys IRQ */
+			     <1 13 0xff08>,	/* Non-secure Phys IRQ */
+			     <1 14 0xff08>,	/* Virt IRQ */
+			     <1 15 0xff08>;	/* Hyp IRQ */
 		clock-frequency = <50000000>;
 	};
 
@@ -923,7 +923,7 @@
 			/* mac address will be overwritten by the bootloader */
 			local-mac-address = [00 00 00 00 00 00];
 			phy-connection-type = "rgmii";
-			phy-handle = <&menet0phy>,<&menetphy>;
+			phy-handle = <&menetphy>,<&menet0phy>;
 			mdio {
 				compatible = "apm,xgene-mdio";
 				#address-cells = <1>;

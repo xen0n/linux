@@ -3386,9 +3386,6 @@ static int do_numa_page(struct fault_env *fe, pte_t pte)
 	bool was_writable = pte_write(pte);
 	int flags = 0;
 
-	/* A PROT_NONE fault should not end up here */
-	BUG_ON(!(vma->vm_flags & (VM_READ | VM_EXEC | VM_WRITE)));
-
 	/*
 	* The "pte" at this point cannot be used safely without
 	* validation through pte_unmap_same(). It's of NUMA type but
@@ -3433,7 +3430,7 @@ static int do_numa_page(struct fault_env *fe, pte_t pte)
 	 * pte_dirty has unpredictable behaviour between PTE scan updates,
 	 * background writeback, dirty balancing and application behaviour.
 	 */
-	if (!(vma->vm_flags & VM_WRITE))
+	if (!pte_write(pte))
 		flags |= TNF_NO_GROUP;
 
 	/*
@@ -3491,6 +3488,11 @@ static int wp_huge_pmd(struct fault_env *fe, pmd_t orig_pmd)
 	split_huge_pmd(fe->vma, fe->pmd, fe->address);
 
 	return VM_FAULT_FALLBACK;
+}
+
+static inline bool vma_is_accessible(struct vm_area_struct *vma)
+{
+	return vma->vm_flags & (VM_READ | VM_EXEC | VM_WRITE);
 }
 
 /*
@@ -3559,7 +3561,7 @@ static int handle_pte_fault(struct fault_env *fe)
 	if (!pte_present(entry))
 		return do_swap_page(fe, entry);
 
-	if (pte_protnone(entry))
+	if (pte_protnone(entry) && vma_is_accessible(fe->vma))
 		return do_numa_page(fe, entry);
 
 	fe->ptl = pte_lockptr(fe->vma->vm_mm, fe->pmd);
@@ -3625,7 +3627,7 @@ static int __handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 
 		barrier();
 		if (pmd_trans_huge(orig_pmd) || pmd_devmap(orig_pmd)) {
-			if (pmd_protnone(orig_pmd))
+			if (pmd_protnone(orig_pmd) && vma_is_accessible(vma))
 				return do_huge_pmd_numa_page(&fe, orig_pmd);
 
 			if ((fe.flags & FAULT_FLAG_WRITE) &&
