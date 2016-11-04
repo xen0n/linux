@@ -1709,6 +1709,19 @@ signed long __sched schedule_timeout(signed long timeout)
 
 	expire = timeout + jiffies;
 
+#ifdef CONFIG_HIGH_RES_TIMERS
+	if (timeout == 1 && hrtimer_resolution < NSEC_PER_SEC / HZ) {
+		/*
+		 * Special case 1 as being a request for the minimum timeout
+		 * and use highres timers to timeout after 1ms to workaround
+		 * the granularity of low Hz tick timers.
+		 */
+		if (!schedule_min_hrtimeout())
+			return 0;
+		goto out_timeout;
+	}
+#endif
+
 	setup_timer_on_stack(&timer, process_timeout, (unsigned long)current);
 	__mod_timer(&timer, expire, false);
 	schedule();
@@ -1716,10 +1729,10 @@ signed long __sched schedule_timeout(signed long timeout)
 
 	/* Remove the timer from the object tracker */
 	destroy_timer_on_stack(&timer);
-
+out_timeout:
 	timeout = expire - jiffies;
 
- out:
+out:
 	return timeout < 0 ? 0 : timeout;
 }
 EXPORT_SYMBOL(schedule_timeout);
