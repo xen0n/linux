@@ -2,7 +2,7 @@
 # Makefile for Loongson-3 family machines
 #
 obj-y			+= irq.o cop2-ex.o platform.o acpi_init.o
-obj-y			+= loongson3-memset.o
+obj-y			+= loongson3-memset.o loongson3-memcpy.o
 
 obj-$(CONFIG_SMP)	+= smp.o
 
