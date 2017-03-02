@@ -116,8 +116,10 @@ void amdgpu_ttm_placement_from_domain(struct amdgpu_bo *abo, u32 domain)
 		if (flags & AMDGPU_GEM_CREATE_CPU_GTT_USWC)
 			places[c].flags |= TTM_PL_FLAG_WC |
 				TTM_PL_FLAG_UNCACHED;
-		else
+		else if (plat_device_is_coherent(NULL))
 			places[c].flags |= TTM_PL_FLAG_CACHED;
+		else
+			places[c].flags |= TTM_PL_FLAG_UNCACHED;
 		c++;
 	}
 
@@ -128,8 +130,10 @@ void amdgpu_ttm_placement_from_domain(struct amdgpu_bo *abo, u32 domain)
 		if (flags & AMDGPU_GEM_CREATE_CPU_GTT_USWC)
 			places[c].flags |= TTM_PL_FLAG_WC |
 				TTM_PL_FLAG_UNCACHED;
-		else
+		else if (plat_device_is_coherent(NULL))
 			places[c].flags |= TTM_PL_FLAG_CACHED;
+		else
+			places[c].flags |= TTM_PL_FLAG_UNCACHED;
 		c++;
 	}
 
@@ -157,7 +161,10 @@ void amdgpu_ttm_placement_from_domain(struct amdgpu_bo *abo, u32 domain)
 	if (!c) {
 		places[c].fpfn = 0;
 		places[c].lpfn = 0;
-		places[c].flags = TTM_PL_MASK_CACHING | TTM_PL_FLAG_SYSTEM;
+		if (plat_device_is_coherent(NULL))
+			places[c].flags = TTM_PL_MASK_CACHING | TTM_PL_FLAG_SYSTEM;
+		else
+			places[c].flags = TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED | TTM_PL_FLAG_SYSTEM;
 		c++;
 	}
 
