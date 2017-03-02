@@ -27,4 +27,25 @@ static inline void arch_setup_dma_ops(struct device *dev, u64 dma_base,
 #endif
 }
 
+static inline void __dma_sync_virtual(void *addr, size_t size,
+				enum dma_data_direction direction)
+{
+	switch (direction) {
+	case DMA_TO_DEVICE:
+		dma_cache_wback((unsigned long)addr, size);
+		break;
+
+	case DMA_FROM_DEVICE:
+		dma_cache_inv((unsigned long)addr, size);
+		break;
+
+	case DMA_BIDIRECTIONAL:
+		dma_cache_wback_inv((unsigned long)addr, size);
+		break;
+
+	default:
+		BUG();
+	}
+}
+
 #endif /* _ASM_DMA_MAPPING_H */

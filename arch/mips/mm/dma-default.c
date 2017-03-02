@@ -29,6 +29,7 @@
 enum coherent_io_user_state coherentio = IO_COHERENCE_DEFAULT;
 EXPORT_SYMBOL_GPL(coherentio);
 int hw_coherentio = 0;	/* Actual hardware supported DMA coherency setting. */
+EXPORT_SYMBOL_GPL(hw_coherentio);
 
 static int __init setcoherentio(char *str)
 {
@@ -204,27 +205,6 @@ static int mips_dma_mmap(struct device *dev, struct vm_area_struct *vma,
 	}
 
 	return ret;
-}
-
-static inline void __dma_sync_virtual(void *addr, size_t size,
-	enum dma_data_direction direction)
-{
-	switch (direction) {
-	case DMA_TO_DEVICE:
-		dma_cache_wback((unsigned long)addr, size);
-		break;
-
-	case DMA_FROM_DEVICE:
-		dma_cache_inv((unsigned long)addr, size);
-		break;
-
-	case DMA_BIDIRECTIONAL:
-		dma_cache_wback_inv((unsigned long)addr, size);
-		break;
-
-	default:
-		BUG();
-	}
 }
 
 /*
