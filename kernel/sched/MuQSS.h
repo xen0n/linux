@@ -131,10 +131,20 @@ static inline int cpupri_init(void __maybe_unused *cpupri)
  * This data should only be modified by the local cpu.
  */
 struct rq {
+	raw_spinlock_t lock;
+
 	struct task_struct *curr, *idle, *stop;
 	struct mm_struct *prev_mm;
 
-	raw_spinlock_t lock;
+	unsigned int nr_running;
+	/*
+	 * This is part of a global counter where only the total sum
+	 * over all CPUs matters. A task can increase this counter on
+	 * one CPU and if it got migrated afterwards it may decrease
+	 * it on another CPU. Always updated under the runqueue lock:
+	 */
+	unsigned long nr_uninterruptible;
+	u64 nr_switches;
 
 	/* Stored data about rq->curr to work outside rq lock */
 	u64 rq_deadline;
