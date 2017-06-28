@@ -374,11 +374,7 @@ extern atomic_long_t nr_swap_pages;
 extern long total_swap_pages;
 extern bool has_usable_swap(void);
 
-/* Swap 50% full? Release swapcache more aggressively.. */
-static inline bool vm_swap_full(void)
-{
-	return atomic_long_read(&nr_swap_pages) * 2 < total_swap_pages;
-}
+#define vm_swap_full()	1
 
 static inline long get_nr_swap_pages(void)
 {
