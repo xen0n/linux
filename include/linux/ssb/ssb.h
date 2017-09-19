@@ -277,6 +277,7 @@ struct ssb_device {
 
 	u8 core_index;
 	unsigned int irq;
+	unsigned int dma_desc_sync_size;
 
 	/* Internal-only stuff follows. */
 	void *drvdata;		/* Per-device data */

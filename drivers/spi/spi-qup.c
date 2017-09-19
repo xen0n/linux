@@ -862,7 +862,7 @@ static bool spi_qup_can_dma(struct spi_master *master, struct spi_device *spi,
 			    struct spi_transfer *xfer)
 {
 	struct spi_qup *qup = spi_master_get_devdata(master);
-	size_t dma_align = dma_get_cache_alignment();
+	size_t dma_align = dma_get_cache_alignment(qup->dev);
 	int n_words;
 
 	if (xfer->rx_buf) {
@@ -1038,7 +1038,7 @@ static int spi_qup_probe(struct platform_device *pdev)
 	master->transfer_one = spi_qup_transfer_one;
 	master->dev.of_node = pdev->dev.of_node;
 	master->auto_runtime_pm = true;
-	master->dma_alignment = dma_get_cache_alignment();
+	master->dma_alignment = dma_get_cache_alignment(dev);
 	master->max_dma_len = SPI_MAX_XFER;
 
 	platform_set_drvdata(pdev, master);
