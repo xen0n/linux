@@ -29,4 +29,6 @@ extern int hw_coherentio;
 #define hw_coherentio	0
 #endif /* CONFIG_DMA_MAYBE_COHERENT */
 
+int mips_dma_get_cache_alignment(struct device *dev);
+
 #endif
