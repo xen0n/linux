@@ -384,6 +384,14 @@ static void mips_dma_cache_sync(struct device *dev, void *vaddr, size_t size,
 		__dma_sync_virtual(vaddr, size, direction);
 }
 
+int mips_dma_get_cache_alignment(struct device *dev)
+{
+	if (plat_device_is_coherent(dev))
+		return 1;
+	else
+		return ARCH_DMA_MINALIGN;
+}
+
 static const struct dma_map_ops mips_default_dma_map_ops = {
 	.alloc = mips_dma_alloc_coherent,
 	.free = mips_dma_free_coherent,
@@ -398,6 +406,7 @@ static const struct dma_map_ops mips_default_dma_map_ops = {
 	.sync_sg_for_device = mips_dma_sync_sg_for_device,
 	.dma_supported = mips_dma_supported,
 	.cache_sync = mips_dma_cache_sync,
+	.get_cache_alignment = mips_dma_get_cache_alignment
 };
 
 const struct dma_map_ops *mips_dma_map_ops = &mips_default_dma_map_ops;
