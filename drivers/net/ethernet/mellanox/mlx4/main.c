@@ -1582,7 +1582,7 @@ static int mlx4_init_icm(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap,
 	 */
 	dev->caps.reserved_mtts =
 		ALIGN(dev->caps.reserved_mtts * dev->caps.mtt_entry_sz,
-		      dma_get_cache_alignment()) / dev->caps.mtt_entry_sz;
+		      dma_get_cache_alignment(&dev->persist->pdev->dev)) / dev->caps.mtt_entry_sz;
 
 	err = mlx4_init_icm_table(dev, &priv->mr_table.mtt_table,
 				  init_hca->mtt_base,
