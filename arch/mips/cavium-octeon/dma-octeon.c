@@ -301,7 +301,8 @@ static struct octeon_dma_map_ops _octeon_pci_dma_map_ops = {
 		.sync_sg_for_cpu = swiotlb_sync_sg_for_cpu,
 		.sync_sg_for_device = octeon_dma_sync_sg_for_device,
 		.mapping_error = swiotlb_dma_mapping_error,
-		.dma_supported = swiotlb_dma_supported
+		.dma_supported = swiotlb_dma_supported,
+		.get_cache_alignment = mips_dma_get_cache_alignment
 	},
 };
 
