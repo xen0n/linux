@@ -136,7 +136,6 @@ static void b44_init_rings(struct b44 *);
 
 static void b44_init_hw(struct b44 *, int);
 
-static int dma_desc_sync_size;
 static int instance;
 
 static const char b44_gstrings[][ETH_GSTRING_LEN] = {
@@ -151,7 +150,7 @@ static inline void b44_sync_dma_desc_for_device(struct ssb_device *sdev,
 						enum dma_data_direction dir)
 {
 	dma_sync_single_for_device(sdev->dma_dev, dma_base + offset,
-				   dma_desc_sync_size, dir);
+				   sdev->dma_desc_sync_size, dir);
 }
 
 static inline void b44_sync_dma_desc_for_cpu(struct ssb_device *sdev,
@@ -160,7 +159,7 @@ static inline void b44_sync_dma_desc_for_cpu(struct ssb_device *sdev,
 					     enum dma_data_direction dir)
 {
 	dma_sync_single_for_cpu(sdev->dma_dev, dma_base + offset,
-				dma_desc_sync_size, dir);
+				sdev->dma_desc_sync_size, dir);
 }
 
 static inline unsigned long br32(const struct b44 *bp, unsigned long reg)
@@ -2342,6 +2341,11 @@ static int b44_init_one(struct ssb_device *sdev,
 	struct net_device *dev;
 	struct b44 *bp;
 	int err;
+	unsigned int dma_desc_align_size = dma_get_cache_alignment(sdev->dma_dev);
+
+	/* Setup paramaters for syncing RX/TX DMA descriptors */
+	sdev->dma_desc_sync_size =
+		max_t(unsigned int, dma_desc_align_size, sizeof(struct dma_desc));
 
 	instance++;
 
@@ -2585,11 +2589,7 @@ static inline void b44_pci_exit(void)
 
 static int __init b44_init(void)
 {
-	unsigned int dma_desc_align_size = dma_get_cache_alignment();
 	int err;
-
-	/* Setup paramaters for syncing RX/TX DMA descriptors */
-	dma_desc_sync_size = max_t(unsigned int, dma_desc_align_size, sizeof(struct dma_desc));
 
 	err = b44_pci_init();
 	if (err)

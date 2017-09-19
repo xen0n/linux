@@ -486,7 +486,7 @@ static void *vb2_dc_get_userptr(struct device *dev, unsigned long vaddr,
 	int ret = 0;
 	struct sg_table *sgt;
 	unsigned long contig_size;
-	unsigned long dma_align = dma_get_cache_alignment();
+	unsigned long dma_align = dma_get_cache_alignment(dev);
 
 	/* Only cache aligned DMA transfers are reliable */
 	if (!IS_ALIGNED(vaddr | size, dma_align)) {
