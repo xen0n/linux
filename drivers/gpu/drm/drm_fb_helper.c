@@ -1271,8 +1271,10 @@ EXPORT_SYMBOL(drm_fb_helper_set_suspend_unlocked);
 
 static int setcmap_pseudo_palette(struct fb_cmap *cmap, struct fb_info *info)
 {
-	u32 *palette = (u32 *)info->pseudo_palette;
 	int i;
+	u32 *palette = (u32 *)info->pseudo_palette;
+	struct drm_crtc *crtc;
+	struct drm_fb_helper *fb_helper = info->par;
 
 	if (cmap->start + cmap->len > 16)
 		return -EINVAL;
@@ -1296,6 +1298,14 @@ static int setcmap_pseudo_palette(struct fb_cmap *cmap, struct fb_info *info)
 			value |= mask;
 		}
 		palette[cmap->start + i] = value;
+	}
+	for (i = 0; i < fb_helper->crtc_count; i++) {
+		crtc = fb_helper->crtc_info[i].mode_set.crtc;
+		if (!crtc->funcs->gamma_set || !crtc->gamma_size)
+			return -EINVAL;
+
+		crtc->funcs->gamma_set(crtc, cmap->red, cmap->green, cmap->blue,
+						     crtc->gamma_size, NULL);
 	}
 
 	return 0;
