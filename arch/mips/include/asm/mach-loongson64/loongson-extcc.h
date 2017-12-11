@@ -5,6 +5,8 @@
 
 #include <linux/types.h>
 
+typedef u64 cycle_t;
+
 /**
  * rdtsc() - returns the current TSC without ordering constraints
  *
