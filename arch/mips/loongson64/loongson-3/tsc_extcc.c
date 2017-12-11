@@ -2,6 +2,7 @@
 
 #include <linux/kernel.h>
 #include <linux/sched.h>
+#include <linux/sched/clock.h>
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/timer.h>
@@ -56,7 +57,7 @@ struct clocksource *art_related_clocksource;
 #endif
 
 /* compatibility with x86 code */
-extern int hpet_enabled;  /* defined in platform.c */
+int hpet_enabled = 1;  /* defined in platform.c */
 
 static int is_hpet_enabled(void)
 {
@@ -176,7 +177,7 @@ static void cyc2ns_write_end(int cpu, struct cyc2ns_data *data)
 	 */
 	smp_wmb();
 
-	ACCESS_ONCE(c2n->head) = data;
+	WRITE_ONCE(c2n->head, data);
 }
 
 /*
@@ -301,7 +302,7 @@ static void set_cyc2ns_scale(unsigned long cpu_khz, int cpu)
 	cyc2ns_write_end(cpu, data);
 
 done:
-	sched_clock_idle_wakeup_event(0);
+	sched_clock_idle_wakeup_event();
 	local_irq_restore(flags);
 }
 /*
