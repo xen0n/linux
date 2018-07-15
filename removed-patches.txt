@@ -1,0 +1,5 @@
+# these commits are removed as compared to loongson-community/master@770daca132714f9d20acd9607da8192755bdf102
+8faca0f7a4edff903d07e9da3464b5b8069800fa mvsas: Optimise performance and stability
+26116936818b9570a2725ae38e158faab9cefaae drm: Add radeon/amdgpu firmwares
+aeadce80743237036067301f31f49ba71d48e862 Change some KERN_ERR to KERN_INFO
+fd134f2336eb74e0349e2df5bb2d542210c26cdb drm/radeon: Use high performance profile
