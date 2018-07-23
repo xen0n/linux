@@ -64,6 +64,8 @@ static int is_hpet_enabled(void)
 	return hpet_enabled;
 }
 
+int hpet_read(int offset);
+
 static unsigned int hpet_readl(unsigned int offset)
 {
 	return (unsigned int) hpet_read((int) offset);
