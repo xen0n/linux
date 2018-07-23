@@ -27,6 +27,7 @@ void turn_off_lvds(void)
 	if (loongson_sysconf.workarounds & WORKAROUND_LVDS_GPIO)
 		gpio_lvds_off();
 }
+EXPORT_SYMBOL_GPL(turn_off_lvds);
 
 void turn_on_lvds(void)
 {
@@ -35,6 +36,7 @@ void turn_on_lvds(void)
 	if (loongson_sysconf.workarounds & WORKAROUND_LVDS_GPIO)
 		gpio_lvds_on();
 }
+EXPORT_SYMBOL_GPL(turn_on_lvds);
 
 static int __init usb_fix_for_tmcs(void)
 {
