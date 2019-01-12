@@ -25,6 +25,7 @@
 #include <asm/hypervisor.h>
 #include <asm/nmi.h>
 #endif
+#include <asm/mach-loongson64/loongson.h>
 #include <asm/mach-loongson64/loongson-extcc.h>
 
 unsigned int __read_mostly cpu_khz;	/* TSC clocks / usec, not used here */
@@ -772,8 +773,19 @@ unsigned long native_calibrate_tsc(void)
 #else
 		/* just busy-wait a little on GS464E */
 		do {
-			/* 50ms on 1GHz counter */
-			cycle_t target = rdextcc() + 50000000UL;
+			/*
+			 * calculate the step value from cpu_clock_freq
+			 *
+			 * cpu_clock_freq = cycles per 1 second
+			 * step = increment of extcc counter after 50ms
+			 *
+			 * assuming 1 cycle = 1 extcc increment, we have
+			 *
+			 * step = cpu_clock_freq / (1s / 50ms) = cpu_clock_freq / 20
+			 */
+			cycle_t step = cpu_clock_freq / 20;
+
+			cycle_t target = rdextcc() + step;
 			while (rdextcc() < target) {
 			}
 		} while(0);
