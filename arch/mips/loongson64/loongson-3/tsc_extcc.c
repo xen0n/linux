@@ -454,7 +454,7 @@ static unsigned long calc_hpet_ref(u64 deltatsc, u64 hpet1, u64 hpet2)
 	 * constant and available.
 	 */
 	hpet_period = hpet_readl(HPET_PERIOD);
-#ifdef CONFIG_RS780_HPET
+#ifdef CONFIG_LOONGSON_HPET
 	if (!hpet_period)
 		hpet_period = 0x429b17e;
 #endif
