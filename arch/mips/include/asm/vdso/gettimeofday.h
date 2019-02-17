@@ -17,6 +17,9 @@
 #include <asm/clocksource.h>
 #include <asm/unistd.h>
 #include <asm/vdso.h>
+#ifdef CONFIG_LOONGSON_EXTCC_CLKSRC
+#include <asm/mach-loongson64/extcc.h>
+#endif
 
 #define VDSO_HAS_CLOCK_GETRES		1
 
@@ -176,6 +179,10 @@ static __always_inline u64 __arch_get_hw_counter(s32 clock_mode)
 #ifdef CONFIG_CLKSRC_MIPS_GIC
 	if (clock_mode == VDSO_CLOCKMODE_GIC)
 		return read_gic_count(get_vdso_data());
+#endif
+#ifdef CONFIG_LOONGSON_EXTCC_CLKSRC
+	if (clock_mode == VDSO_CLOCKMODE_EXTCC)
+		return read_extcc();
 #endif
 	/*
 	 * Core checks mode already. So this raced against a concurrent
