@@ -12,6 +12,9 @@
 
 #include <loongson.h>
 #include <cs5536/cs5536_mfgpt.h>
+#ifdef CONFIG_LOONGSON_EXTCC_CLKSRC
+#include <extcc.h>
+#endif
 
 void __init plat_time_init(void)
 {
@@ -19,6 +22,10 @@ void __init plat_time_init(void)
 	mips_hpt_frequency = cpu_clock_freq / 2;
 
 	setup_mfgpt0_timer();
+
+#ifdef CONFIG_LOONGSON_EXTCC_CLKSRC
+	extcc_clocksource_init();
+#endif
 }
 
 void read_persistent_clock64(struct timespec64 *ts)
