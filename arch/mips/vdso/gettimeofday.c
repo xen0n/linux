@@ -17,6 +17,9 @@
 #include <asm/io.h>
 #include <asm/unistd.h>
 #include <asm/vdso.h>
+#ifdef CONFIG_LOONGSON_EXTCC_CLKSRC
+#include <asm/mach-loongson64/extcc.h>
+#endif
 
 #ifdef CONFIG_MIPS_CLOCK_VSYSCALL
 
@@ -147,6 +150,11 @@ static __always_inline u64 get_ns(const union mips_vdso_data *data)
 #ifdef CONFIG_CLKSRC_MIPS_GIC
 	case VDSO_CLOCK_GIC:
 		cycle_now = read_gic_count(data);
+		break;
+#endif
+#ifdef CONFIG_LOONGSON_EXTCC_CLKSRC
+	case VDSO_CLOCK_EXTCC:
+		cycle_now = rdextcc_ordered();
 		break;
 #endif
 	default:
