@@ -128,6 +128,19 @@ config LOONGSON_HPET
 
 	  If unsure, say Yes.
 
+config LOONGSON_EXTCC_CLKSRC
+	bool "GS464E external counter clocksource"
+	depends on LOONGSON3_ENHANCEMENT && GENERIC_SCHED_CLOCK
+	help
+	  This option enables the external counter found on GS464E chips to
+	  be used as clocksource.
+
+	  The external counter is an internal cycle counter independent of
+	  processor cores, and provides very good (nanosecond-scale) time
+	  resolution.
+
+	  If unsure, say Yes.
+
 config LOONGSON_UART_BASE
 	bool
 	default y
