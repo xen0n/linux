@@ -21,6 +21,9 @@
 #include <asm/io.h>
 #include <asm/unistd.h>
 #include <asm/vdso.h>
+#ifdef CONFIG_LOONGSON_EXTCC_CLKSRC
+#include <asm/mach-loongson64/extcc.h>
+#endif
 
 #define VDSO_HAS_CLOCK_GETRES		1
 
@@ -204,6 +207,11 @@ static __always_inline u64 __arch_get_hw_counter(s32 clock_mode)
 #ifdef CONFIG_CLKSRC_MIPS_GIC
 	case VDSO_CLOCK_GIC:
 		cycle_now = read_gic_count(data);
+		break;
+#endif
+#ifdef CONFIG_LOONGSON_EXTCC_CLKSRC
+	case VDSO_CLOCK_EXTCC:
+		cycle_now = read_extcc();
 		break;
 #endif
 	default:
