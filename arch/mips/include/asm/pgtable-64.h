@@ -84,7 +84,7 @@
  * of virtual address space.
  */
 #ifdef CONFIG_PAGE_SIZE_4KB
-# ifdef CONFIG_MIPS_VA_BITS_48
+# ifdef CONFIG_MIPS_LARGE_VA
 #  define PGD_ORDER		0
 #  define PUD_ORDER		0
 # else
@@ -101,7 +101,7 @@
 #define PTE_ORDER		0
 #endif
 #ifdef CONFIG_PAGE_SIZE_16KB
-#ifdef CONFIG_MIPS_VA_BITS_48
+#ifdef CONFIG_MIPS_LARGE_VA
 #define PGD_ORDER               1
 #else
 #define PGD_ORDER               0
@@ -119,7 +119,7 @@
 #ifdef CONFIG_PAGE_SIZE_64KB
 #define PGD_ORDER		0
 #define PUD_ORDER		aieeee_attempt_to_allocate_pud
-#ifdef CONFIG_MIPS_VA_BITS_48
+#ifdef CONFIG_MIPS_LARGE_VA
 #define PMD_ORDER		0
 #else
 #define PMD_ORDER		aieeee_attempt_to_allocate_pmd
