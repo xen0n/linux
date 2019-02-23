@@ -2166,18 +2166,38 @@ config KVM_GUEST_TIMER_FREQ
 	  emulation when determining guest CPU Frequency. Instead, the guest's
 	  timer frequency is specified directly.
 
+choice
+	prompt "Virtual address size"
+	default MIPS_VA_BITS_DEFAULT
+
+config MIPS_VA_BITS_DEFAULT
+	bool "40 bits or less virtual memory"
+	help
+	  This is the default setting on MIPS platforms since antiquity,
+	  which gives 40 bits or less of virtual address space, depending on
+	  the CPU.
+
+	  If unsure, say Y.
+
 config MIPS_VA_BITS_48
 	bool "48 bits virtual memory"
 	depends on 64BIT
+	select MIPS_LARGE_VA
 	help
 	  Support a maximum at least 48 bits of application virtual
-	  memory.  Default is 40 bits or less, depending on the CPU.
+	  memory.
+
 	  For page sizes 16k and above, this option results in a small
 	  memory overhead for page tables.  For 4k page size, a fourth
 	  level of page tables is added which imposes both a memory
 	  overhead as well as slower TLB fault handling.
 
 	  If unsure, say N.
+
+endchoice
+
+config MIPS_LARGE_VA
+	bool
 
 choice
 	prompt "Kernel page size"
@@ -2195,7 +2215,7 @@ config PAGE_SIZE_4KB
 config PAGE_SIZE_8KB
 	bool "8kB"
 	depends on CPU_CAVIUM_OCTEON
-	depends on !MIPS_VA_BITS_48
+	depends on !MIPS_LARGE_VA
 	help
 	  Using 8kB page size will result in higher performance kernel at
 	  the price of higher memory consumption.  This option is available
@@ -2214,7 +2234,7 @@ config PAGE_SIZE_16KB
 config PAGE_SIZE_32KB
 	bool "32kB"
 	depends on CPU_CAVIUM_OCTEON
-	depends on !MIPS_VA_BITS_48
+	depends on !MIPS_LARGE_VA
 	help
 	  Using 32kB page size will result in higher performance kernel at
 	  the price of higher memory consumption.  This option is available
@@ -3075,7 +3095,7 @@ config STACKTRACE_SUPPORT
 
 config PGTABLE_LEVELS
 	int
-	default 4 if PAGE_SIZE_4KB && MIPS_VA_BITS_48
+	default 4 if PAGE_SIZE_4KB && MIPS_LARGE_VA
 	default 3 if 64BIT && !PAGE_SIZE_64KB
 	default 2
 
