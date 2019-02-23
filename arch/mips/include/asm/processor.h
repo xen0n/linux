@@ -13,6 +13,7 @@
 
 #include <linux/atomic.h>
 #include <linux/cpumask.h>
+#include <linux/kernel.h>
 #include <linux/sizes.h>
 #include <linux/threads.h>
 
@@ -57,7 +58,7 @@ extern unsigned int vced_count, vcei_count;
  */
 #define TASK_SIZE32	0x7fff8000UL
 #ifdef CONFIG_MIPS_VA_BITS_48
-#define TASK_SIZE64     (0x1UL << ((cpu_data[0].vmbits>48)?48:cpu_data[0].vmbits))
+#define TASK_SIZE64     (0x1UL << min(cpu_data[0].vmbits, 48))
 #else
 #define TASK_SIZE64     0x10000000000UL
 #endif
