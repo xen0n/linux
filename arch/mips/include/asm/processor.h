@@ -58,7 +58,7 @@ extern unsigned int vced_count, vcei_count;
  */
 #define TASK_SIZE32	0x7fff8000UL
 #ifdef CONFIG_MIPS_LARGE_VA
-#define TASK_SIZE64     (0x1UL << min(cpu_data[0].vmbits, 48))
+#define TASK_SIZE64     (0x1UL << min(cpu_data[0].vmbits, CONFIG_MIPS_VA_BITS))
 #else
 #define TASK_SIZE64     0x10000000000UL
 #endif

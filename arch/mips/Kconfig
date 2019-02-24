@@ -2199,6 +2199,11 @@ endchoice
 config MIPS_LARGE_VA
 	bool
 
+config MIPS_VA_BITS
+	int
+	default 48 if MIPS_VA_BITS_48
+	default 40
+
 choice
 	prompt "Kernel page size"
 	default PAGE_SIZE_4KB
