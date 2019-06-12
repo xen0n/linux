@@ -1150,6 +1150,9 @@ config DMA_NONCOHERENT
 	select ARCH_HAS_DMA_COHERENT_TO_PFN
 	select DMA_NONCOHERENT_CACHE_SYNC
 
+config SYS_HAS_DMI
+	bool
+
 config SYS_HAS_EARLY_PRINTK
 	bool
 
@@ -2958,6 +2961,17 @@ config HZ
 
 config SCHED_HRTICK
 	def_bool HIGH_RES_TIMERS
+
+config DMI
+	bool "Enable support for SMBIOS (DMI) tables"
+	depends on SYS_HAS_DMI
+	select DMI_SCAN_MACHINE_NON_EFI_FALLBACK
+	default y
+	help
+	  This enables SMBIOS/DMI feature for supported systems.
+
+	  Note that this does not enable early handling of platform quirks
+	  via DMI, unlike on x86.
 
 config KEXEC
 	bool "Kexec system call"

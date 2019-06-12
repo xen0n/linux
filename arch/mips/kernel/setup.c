@@ -25,6 +25,7 @@
 #include <linux/sizes.h>
 #include <linux/device.h>
 #include <linux/dma-contiguous.h>
+#include <linux/dmi.h>
 #include <linux/decompress/generic.h>
 #include <linux/of_fdt.h>
 #include <linux/of_reserved_mem.h>
@@ -852,4 +853,13 @@ static int __init setnocoherentio(char *str)
 	return 0;
 }
 early_param("nocoherentio", setnocoherentio);
+#endif
+
+#ifdef CONFIG_DMI
+static int __init run_dmi_scan(void)
+{
+	dmi_setup();
+	return 0;
+}
+core_initcall(run_dmi_scan);
 #endif
