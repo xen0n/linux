@@ -304,6 +304,8 @@ static void dump_fsinfo_generic_mount_info(void *reply, unsigned int size)
 	printf("\tmnt_uniq: %llx\n", (unsigned long long)r->mnt_unique_id);
 	printf("\tmnt_id  : %x\n", r->mnt_id);
 	printf("\tattr    : %x\n", r->attr);
+	printf("\tmnt_nfy : attr=%u topology=%u subtree=%u\n",
+	       r->mnt_attr_changes, r->mnt_topology_changes, r->mnt_subtree_notifications);
 }
 
 static void dump_fsinfo_generic_mount_topology(void *reply, unsigned int size)
@@ -332,6 +334,7 @@ static void dump_fsinfo_generic_mount_topology(void *reply, unsigned int size)
 		break;
 	}
 
+	printf("\tmnt_nfy : topology=%u\n", r->mnt_topology_changes);
 }
 
 static void dump_fsinfo_generic_mount_children(void *reply, unsigned int size)
@@ -354,8 +357,9 @@ static void dump_fsinfo_generic_mount_children(void *reply, unsigned int size)
 		mp = "<this>";
 	}
 
-	printf("%8x %16llx %s\n",
-	       r->mnt_id, (unsigned long long)r->mnt_unique_id, mp);
+	printf("%8x %16llx %10u %s\n",
+	       r->mnt_id, (unsigned long long)r->mnt_unique_id,
+	       r->mnt_notify_sum, mp);
 }
 
 static void dump_string(void *reply, unsigned int size)
