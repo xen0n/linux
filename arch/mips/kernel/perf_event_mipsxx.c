@@ -850,6 +850,7 @@ static void loongson3_reset_counters(void *arg)
 		mipspmu.write_counter(3, 0);
 		mipsxx_pmu_write_control(3, 575<<5);
 		mipspmu.write_counter(3, 0);
+		/* fall through */
 	case 3:
 		mipsxx_pmu_write_control(2, 0);
 		mipspmu.write_counter(2, 0);
@@ -865,6 +866,7 @@ static void loongson3_reset_counters(void *arg)
 		mipspmu.write_counter(2, 0);
 		mipsxx_pmu_write_control(2, 575<<5);
 		mipspmu.write_counter(2, 0);
+		/* fall through */
 	case 2:
 		mipsxx_pmu_write_control(1, 0);
 		mipspmu.write_counter(1, 0);
@@ -880,6 +882,7 @@ static void loongson3_reset_counters(void *arg)
 		mipspmu.write_counter(1, 0);
 		mipsxx_pmu_write_control(1, 575<<5);
 		mipspmu.write_counter(1, 0);
+		/* fall through */
 	case 1:
 		mipsxx_pmu_write_control(0, 0);
 		mipspmu.write_counter(0, 0);
