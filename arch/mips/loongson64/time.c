@@ -12,6 +12,10 @@
 
 #include <loongson.h>
 
+#ifdef CONFIG_LOONGSON_EXTCC_CLKSRC
+#include <extcc.h>
+#endif
+
 void __init plat_time_init(void)
 {
 	/* setup mips r4k timer */
@@ -19,6 +23,10 @@ void __init plat_time_init(void)
 
 #ifdef CONFIG_RS780_HPET
 	setup_hpet_timer();
+#endif
+
+#ifdef CONFIG_LOONGSON_EXTCC_CLKSRC
+	extcc_clocksource_init();
 #endif
 }
 

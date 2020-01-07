@@ -12,3 +12,4 @@ obj-$(CONFIG_RS780_HPET) += hpet.o
 obj-$(CONFIG_PCI) += pci.o
 obj-$(CONFIG_LOONGSON_MC146818) += rtc.o
 obj-$(CONFIG_SUSPEND) += pm.o
+obj-$(CONFIG_LOONGSON_EXTCC_CLKSRC) += extcc.o

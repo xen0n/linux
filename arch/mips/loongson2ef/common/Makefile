@@ -24,8 +24,3 @@ obj-$(CONFIG_CS5536) += cs5536/
 #
 
 obj-$(CONFIG_SUSPEND) += pm.o
-
-#
-# ExtCC clocksource support
-#
-obj-$(CONFIG_LOONGSON_EXTCC_CLKSRC) += extcc.o
