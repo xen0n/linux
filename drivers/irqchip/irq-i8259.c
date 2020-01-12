@@ -309,7 +309,7 @@ static const struct irq_domain_ops i8259A_ops = {
  * driver compatibility reasons interrupts 0 - 15 to be the i8259
  * interrupts even if the hardware uses a different interrupt numbering.
  */
-struct irq_domain * __init __init_i8259_irqs(struct device_node *node)
+struct irq_domain * __init of_init_i8259_irqs(struct device_node *node)
 {
 	struct irq_domain *domain;
 
@@ -330,7 +330,7 @@ struct irq_domain * __init __init_i8259_irqs(struct device_node *node)
 
 void __init init_i8259_irqs(void)
 {
-	__init_i8259_irqs(NULL);
+	of_init_i8259_irqs(NULL);
 }
 
 static void i8259_irq_dispatch(struct irq_desc *desc)
@@ -351,7 +351,7 @@ int __init i8259_of_init(struct device_node *node, struct device_node *parent)
 	struct irq_domain *domain;
 	unsigned int parent_irq;
 
-	domain = __init_i8259_irqs(node);
+	domain = of_init_i8259_irqs(node);
 
 	parent_irq = irq_of_parse_and_map(node, 0);
 	if (!parent_irq) {
