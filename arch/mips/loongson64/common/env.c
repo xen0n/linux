@@ -22,6 +22,7 @@
 #include <loongson-pch.h>
 #include <workarounds.h>
 
+void ls3a4000_oc_2g(void);
 u32 cpu_clock_freq;
 EXPORT_SYMBOL(cpu_clock_freq);
 char cpu_full_name[64];
@@ -254,6 +255,14 @@ void __init prom_init_env(void)
 			break;
 		}
 	}
+
+	if (strstr(eboard->name,"LEMOTE") && strstr(eboard->name,"LS3A4000")
+		&& strstr(eboard->name,"1w-V01-pc")) {
+		pr_info("Lemote A1901: Overclock to 2GHz, Have Fun!\n");
+		ls3a4000_oc_2g();
+		cpu_clock_freq = 2000000000;
+	}
+
 	mips_cpu_frequency = cpu_clock_freq;
 	pr_info("CpuClock = %u\n", cpu_clock_freq);
 
