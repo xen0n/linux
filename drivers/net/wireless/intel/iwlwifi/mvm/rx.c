@@ -115,7 +115,7 @@ static void iwl_mvm_pass_packet_to_mac80211(struct iwl_mvm *mvm,
 	 * on a 2-byte boundary so we can just take hdrlen & 3 and pad by
 	 * the result.
 	 */
-	skb_reserve(skb, hdrlen & 3);
+	skb_reserve(skb, hdrlen & 3 + NET_IP_ALIGN);
 
 	/* If frame is small enough to fit in skb->head, pull it completely.
 	 * If not, only pull ieee80211_hdr (including crypto if present, and
