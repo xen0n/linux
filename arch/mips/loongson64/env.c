@@ -23,6 +23,8 @@
 
 #define HOST_BRIDGE_CONFIG_ADDR	((void __iomem *)TO_UNCAC(0x1a000000))
 
+void ls3a4000_oc(void);
+
 u32 cpu_clock_freq;
 EXPORT_SYMBOL(cpu_clock_freq);
 struct efi_memory_map_loongson *loongson_memmap;
@@ -160,6 +162,8 @@ void __init prom_lefi_init_env(void)
 		loongson_sysconf.vgabios_addr);
 
 	loongson_sysconf.workarounds |= esys->workarounds;
+
+	ls3a4000_oc();
 
 	pr_info("CpuClock = %u\n", cpu_clock_freq);
 
