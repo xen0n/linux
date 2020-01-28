@@ -23,6 +23,8 @@
 
 #define HOST_BRIDGE_CONFIG_ADDR	((void __iomem *)TO_UNCAC(0x1a000000))
 
+void ls3a4000_oc(void);
+
 u32 cpu_clock_freq;
 EXPORT_SYMBOL(cpu_clock_freq);
 struct efi_memory_map_loongson *loongson_memmap;
@@ -160,6 +162,7 @@ void __init prom_init_env(void)
 	if (loongson_sysconf.nr_sensors)
 		memcpy(loongson_sysconf.sensors, esys->sensors,
 			sizeof(struct sensor_device) * loongson_sysconf.nr_sensors);
+	ls3a4000_oc();
 	pr_info("CpuClock = %u\n", cpu_clock_freq);
 
 	/* Read the ID of PCI host bridge to detect bridge type */
