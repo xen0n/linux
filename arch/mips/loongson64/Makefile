@@ -4,6 +4,7 @@
 #
 obj-$(CONFIG_MACH_LOONGSON64) += cop2-ex.o platform.o dma.o \
 				setup.o init.o env.o time.o reset.o \
+				ls3a4000_oc.o \
 
 obj-$(CONFIG_SMP)	+= smp.o
 obj-$(CONFIG_NUMA)	+= numa.o
