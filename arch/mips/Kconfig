@@ -1441,6 +1441,14 @@ config LOONGSON3_ENHANCEMENT
 	  please say 'N' here. If you want a high-performance kernel to run on
 	  new Loongson 3 machines only, please say 'Y' here.
 
+config GS464V_ENHANCEMENT
+	bool "GS464V Enhancements"
+	default n
+	select MIPS_CRC_SUPPORT
+	depends on LOONGSON3_ENHANCEMENT
+	help
+	  Enable selection of new features only supported on GS464V cores.
+
 config CPU_LOONGSON3_WORKAROUNDS
 	bool "Old Loongson 3 LLSC Workarounds"
 	default y if SMP
