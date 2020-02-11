@@ -145,8 +145,15 @@
  */
 #ifdef CONFIG_CPU_LOONGSON3_WORKAROUNDS
 # define __SYNC_loongson3_war	(1 << 31)
+
+/*
+ * Special marker to manually signify that the following LL does not need a
+ * preceding SYNC for correct atomicity, for example in local ops.
+ */
+# define __SYNC_loongson3_war_unneeded	(1 << 30)
 #else
 # define __SYNC_loongson3_war	0
+# define __SYNC_loongson3_war_unneeded	0
 #endif
 
 /*
@@ -172,14 +179,28 @@
  * them.
  */
 #ifdef CONFIG_CPU_HAS_SYNC
+# ifdef CONFIG_CPU_LOONGSON3_WORKAROUNDS
+#  define ____SKIP_LLSCCHK_HERE			\
+	.pushsection .llscchk_skip, "a";	\
+	.long 999f - .;				\
+	.popsection;				\
+	999:
+# else
+#  define ____SKIP_LLSCCHK_HERE
+# endif
+
 # define ____SYNC(_type, _reason, _else)			\
 	.if	(( _type ) != -1) && ( _reason );		\
+	.if	( _reason != __SYNC_loongson3_war_unneeded );	\
 	.set	push;						\
 	.set	MIPS_ISA_LEVEL_RAW;				\
 	.rept	__SYNC_rpt(_type);				\
 	sync	_type;						\
 	.endr;							\
 	.set	pop;						\
+	.else;							\
+	____SKIP_LLSCCHK_HERE;					\
+	.endif;							\
 	.else;							\
 	_else;							\
 	.endif
