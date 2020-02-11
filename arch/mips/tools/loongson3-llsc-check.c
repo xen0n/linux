@@ -138,7 +138,37 @@ static bool is_branch(uint32_t insn, int *off)
 	}
 }
 
-static int check_ll(uint64_t pc, uint32_t *code, size_t sz)
+static bool is_ll_exempt_from_prefix_check(void *addr,
+		uintptr_t *skip_table, size_t skip_table_sz)
+{
+	uintptr_t needle = (uintptr_t)addr;
+	ssize_t left, right, mid;
+
+	if (skip_table == NULL || skip_table_sz == 0) {
+		return false;
+	}
+
+	/* binary search for the insn address */
+	left = 0;
+	right = (ssize_t)(skip_table_sz - 1);
+	while (left <= right) {
+		mid = (left + right) / 2;
+		uintptr_t val = skip_table[mid];
+		if (needle == val) {
+			return true;
+		}
+		if (needle < val) {
+			right = mid - 1;
+		} else {
+			left = mid + 1;
+		}
+	}
+
+	return false;
+}
+
+static int check_ll(uint64_t pc, uint32_t *code, size_t sz,
+		uintptr_t *skip_table, size_t skip_table_sz)
 {
 	ssize_t i, max, sc_pos;
 	int off;
@@ -149,8 +179,10 @@ static int check_ll(uint64_t pc, uint32_t *code, size_t sz)
 	 * execute after the LL & cause erroneous results.
 	 */
 	if (!is_sync(le32toh(code[-1]))) {
-		fprintf(stderr, "%" PRIx64 ": LL not preceded by sync\n", pc);
-		return -EINVAL;
+		if (!is_ll_exempt_from_prefix_check(code, skip_table, skip_table_sz)) {
+			fprintf(stderr, "%" PRIx64 ": LL not preceded by sync\n", pc);
+			return -EINVAL;
+		}
 	}
 
 	/* Find the matching SC instruction */
@@ -193,7 +225,8 @@ static int check_ll(uint64_t pc, uint32_t *code, size_t sz)
 	return 0;
 }
 
-static int check_code(uint64_t pc, uint32_t *code, size_t sz)
+static int check_code(uint64_t pc, uint32_t *code, size_t sz,
+		uintptr_t *skip_table, size_t skip_table_sz)
 {
 	int err = 0;
 
@@ -205,9 +238,11 @@ static int check_code(uint64_t pc, uint32_t *code, size_t sz)
 	}
 
 	if (is_ll(le32toh(code[0]))) {
-		fprintf(stderr, "%" PRIx64 ": First instruction in section is an LL\n",
-			pc);
-		err = -EINVAL;
+		if (!is_ll_exempt_from_prefix_check(code, skip_table, skip_table_sz)) {
+			fprintf(stderr, "%" PRIx64 ": First instruction in section is an LL\n",
+				pc);
+			err = -EINVAL;
+		}
 	}
 
 #define advance() (	\
@@ -225,10 +260,17 @@ static int check_code(uint64_t pc, uint32_t *code, size_t sz)
 	/* Now scan through the code looking for LL instructions */
 	for (; sz; advance()) {
 		if (is_ll(le32toh(code[0])))
-			err |= check_ll(pc, code, sz);
+			err |= check_ll(pc, code, sz, skip_table, skip_table_sz);
 	}
 
 	return err;
+}
+
+static int pointer_compare(const void *a, const void *b)
+{
+	const uintptr_t *x = a;
+	const uintptr_t *y = b;
+	return *x - *y;
 }
 
 int main(int argc, char *argv[])
@@ -239,6 +281,11 @@ int main(int argc, char *argv[])
 	Elf64_Ehdr *eh;
 	Elf64_Shdr *sh;
 	void *vmlinux;
+	const char *shstrtab;
+	const char *section_name;
+	Elf64_Shdr *sh_llscchk_skip = NULL;
+	uintptr_t *skip_table = NULL;
+	size_t skip_table_sz = 0;
 
 	status = EXIT_FAILURE;
 
@@ -282,6 +329,42 @@ int main(int argc, char *argv[])
 		goto out_munmap;
 	}
 
+	/* Get pointer to .shstrtab content. */
+	sh = vmlinux + le64toh(eh->e_shoff) + (eh->e_shstrndx * le16toh(eh->e_shentsize));
+	shstrtab = vmlinux + sh->sh_offset;
+
+	/* Get the .llscchk_skip section for excluding certain "safe" LLs. */
+	for (i = 0; i < le16toh(eh->e_shnum); i++) {
+		sh = vmlinux + le64toh(eh->e_shoff) + (i * le16toh(eh->e_shentsize));
+		section_name = shstrtab + le16toh(sh->sh_name);
+		if (!strcmp(section_name, ".llscchk_skip")) {
+			sh_llscchk_skip = sh;
+			break;
+		}
+	}
+
+	/* Make skip table of sorted pointers to LLs that are exempt from SYNC
+	 * prefix check. */
+	if (sh_llscchk_skip != NULL) {
+		uint64_t sh_offset = le64toh(sh->sh_offset);
+		int32_t *llscchk_skip_table = vmlinux + sh_offset;
+
+		skip_table_sz = le16toh(sh->sh_size) / 4;
+		skip_table = (uintptr_t *)malloc(sizeof(uintptr_t) * skip_table_sz);
+		if (!skip_table) {
+			fprintf(stderr, "allocation of skip offsets table failed\n");
+			goto out_munmap;
+		}
+
+		for (i = 0; i < skip_table_sz; i++) {
+			int32_t file_offset = le32toh(llscchk_skip_table[i]);
+			uintptr_t t = (uintptr_t)(vmlinux + sh_offset + 4 * i + file_offset);
+			skip_table[i] = t;
+		}
+
+		qsort(skip_table, skip_table_sz, sizeof(uintptr_t), pointer_compare);
+	}
+
 	for (i = 0; i < le16toh(eh->e_shnum); i++) {
 		sh = vmlinux + le64toh(eh->e_shoff) + (i * le16toh(eh->e_shentsize));
 
@@ -292,13 +375,18 @@ int main(int argc, char *argv[])
 
 		err = check_code(le64toh(sh->sh_addr),
 				 vmlinux + le64toh(sh->sh_offset),
-				 le64toh(sh->sh_size));
+				 le64toh(sh->sh_size),
+				 skip_table,
+				 skip_table_sz);
 		if (err)
 			goto out_munmap;
 	}
 
 	status = EXIT_SUCCESS;
 out_munmap:
+	if (skip_table != NULL) {
+		free(skip_table);
+	}
 	munmap(vmlinux, st.st_size);
 out_close:
 	close(vmlinux_fd);
