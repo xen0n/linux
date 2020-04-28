@@ -1381,6 +1381,7 @@ config CPU_LOONGSON64
 	depends on SYS_HAS_CPU_LOONGSON64
 	select ARCH_HAS_PHYS_TO_DMA
 	select CPU_MIPSR2
+	select CPU_HAS_LOONGEXT1
 	select CPU_HAS_PREFETCH
 	select CPU_SUPPORTS_64BIT_KERNEL
 	select CPU_SUPPORTS_HIGHMEM
@@ -2139,6 +2140,9 @@ config EVA
 	bool
 
 config XPA
+	bool
+
+config CPU_HAS_LOONGEXT1
 	bool
 
 config SYS_SUPPORTS_32BIT_KERNEL
