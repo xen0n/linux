@@ -28,6 +28,11 @@
 #include <asm/spram.h>
 #include <linux/uaccess.h>
 
+#ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
+#include <asm/mach-loongson64/cpucfg-emul.h>
+#include <asm/mach-loongson64/loongson_regs.h>
+#endif
+
 /* Hardware capabilities */
 unsigned int elf_hwcap __read_mostly;
 EXPORT_SYMBOL_GPL(elf_hwcap);
@@ -2004,6 +2009,27 @@ static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
 		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
 		c->ases |= (MIPS_ASE_LOONGSON_MMI | MIPS_ASE_LOONGSON_CAM |
 			MIPS_ASE_LOONGSON_EXT | MIPS_ASE_LOONGSON_EXT2);
+#ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
+		/* Add CPUCFG features non-discoverable otherwise. */
+		c->loongson_cpucfg_data[0] |= (LOONGSON_CFG1_CNT64 |
+			LOONGSON_CFG1_LSLDR0 | LOONGSON_CFG1_LSPREF |
+			LOONGSON_CFG1_LSPREFX | LOONGSON_CFG1_LSSYNCI |
+			LOONGSON_CFG1_LSUCA | LOONGSON_CFG1_LLSYNC |
+			LOONGSON_CFG1_TGTSYNC | LOONGSON_CFG1_LLEXC |
+			LOONGSON_CFG1_SCRAND | LOONGSON_CFG1_SFBP);
+		c->loongson_cpucfg_data[1] |= (LOONGSON_CFG2_LBT1 |
+			LOONGSON_CFG2_LBT2 | LOONGSON_CFG2_LBTMMU |
+			LOONGSON_CFG2_LPMP | LOONGSON_CFG2_LPM_REV1 |
+			LOONGSON_CFG2_LVZ_REV1);
+		c->loongson_cpucfg_data[2] |= (LOONGSON_CFG3_LCAM_REV1 |
+			LOONGSON_CFG3_LCAMNUM_REV1 |
+			LOONGSON_CFG3_LCAMKW_REV1 |
+			LOONGSON_CFG3_LCAMVW_REV1);
+
+		if ((c->processor_id & PRID_REV_MASK) ==
+				PRID_REV_LOONGSON3A_R3_1)
+			c->loongson_cpucfg_data[0] |= LOONGSON_CFG1_CDMAP;
+#endif
 		break;
 	case PRID_IMP_LOONGSON_64G:
 		c->cputype = CPU_LOONGSON64;
@@ -2197,6 +2223,12 @@ void cpu_probe(void)
 	c->fpu_csr31	= FPU_CSR_RN;
 	c->fpu_msk31	= FPU_CSR_RSVD | FPU_CSR_ABS2008 | FPU_CSR_NAN2008;
 
+#ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
+	c->loongson_cpucfg_data[0] = 0;
+	c->loongson_cpucfg_data[1] = 0;
+	c->loongson_cpucfg_data[2] = 0;
+#endif
+
 	c->processor_id = read_c0_prid();
 	switch (c->processor_id & PRID_COMP_MASK) {
 	case PRID_COMP_LEGACY:
@@ -2329,6 +2361,10 @@ void cpu_probe(void)
 
 	if (cpu_has_vz)
 		cpu_probe_vz(c);
+
+#ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
+	loongson_cpucfg_finish_synthesis(c);
+#endif
 
 	cpu_probe_vmbits(c);
 
