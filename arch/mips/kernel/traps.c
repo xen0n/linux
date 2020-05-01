@@ -71,6 +71,8 @@
 #include <asm/tlbex.h>
 #include <asm/uasm.h>
 
+#include <asm/mach-loongson64/cpucfg-emul.h>
+
 extern void check_wait(void);
 extern asmlinkage void rollback_handle_int(void);
 extern asmlinkage void handle_int(void);
@@ -693,6 +695,56 @@ static int simulate_sync(struct pt_regs *regs, unsigned int opcode)
 	return -1;			/* Must be something else ... */
 }
 
+/*
+ * Loongson-3 CSR instructions emulation
+ */
+
+#ifdef CONFIG_CPU_LOONGSON3_CPUCFG_EMULATION
+
+#define LWC2             0xc8000000
+#define RS               BASE
+#define CSR_OPCODE2      0x00000118
+#define CSR_OPCODE2_MASK 0x000007ff
+#define CSR_FUNC_MASK    RT
+#define CSR_FUNC_CPUCFG  0x8
+
+static int simulate_loongson3_csr_cpucfg(struct pt_regs *regs,
+					unsigned int opcode)
+{
+	int rd = (opcode & RD) >> 11;
+	int rs = (opcode & RS) >> 21;
+	__u64 sel = regs->regs[rs];
+
+	perf_sw_event(PERF_COUNT_SW_EMULATION_FAULTS, 1, regs, 0);
+
+	regs->regs[rd] = loongson3_cpucfg_read_synthesized(&current_cpu_data,
+		sel);
+
+	return 0;
+}
+
+static int simulate_loongson3_csr(struct pt_regs *regs, unsigned int opcode)
+{
+	int op = opcode & OPCODE;
+	int op2 = opcode & CSR_OPCODE2_MASK;
+
+	if (op == LWC2 && op2 == CSR_OPCODE2) {
+		int csr_func = (opcode & CSR_FUNC_MASK) >> 16;
+
+		switch (csr_func) {
+		case CSR_FUNC_CPUCFG:
+			return simulate_loongson3_csr_cpucfg(regs, opcode);
+		}
+
+		/* Unrecognized Loongson-3 CSR instruction. */
+		return -1;
+	}
+
+	/* Not ours.  */
+	return -1;
+}
+#endif /* CONFIG_CPU_LOONGSON3_CPUCFG_EMULATION */
+
 asmlinkage void do_ov(struct pt_regs *regs)
 {
 	enum ctx_state prev_state;
@@ -1166,6 +1218,11 @@ no_r2_instr:
 
 		if (status < 0)
 			status = simulate_fp(regs, opcode, old_epc, old31);
+
+#ifdef CONFIG_CPU_LOONGSON3_CPUCFG_EMULATION
+		if (status < 0)
+			status = simulate_loongson3_csr(regs, opcode);
+#endif
 	} else if (cpu_has_mmips) {
 		unsigned short mmop[2] = { 0 };
 
