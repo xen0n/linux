@@ -28,6 +28,11 @@
 #include <asm/spram.h>
 #include <linux/uaccess.h>
 
+#ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
+#include <asm/mach-loongson64/cpucfg-emul.h>
+#include <asm/mach-loongson64/loongson_regs.h>
+#endif
+
 /* Hardware capabilities */
 unsigned int elf_hwcap __read_mostly;
 EXPORT_SYMBOL_GPL(elf_hwcap);
@@ -1580,6 +1585,24 @@ static inline void cpu_probe_legacy(struct cpuinfo_mips *c, unsigned int cpu)
 			set_isa(c, MIPS_CPU_ISA_M64R1);
 			c->ases |= (MIPS_ASE_LOONGSON_MMI | MIPS_ASE_LOONGSON_CAM |
 				MIPS_ASE_LOONGSON_EXT);
+#ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
+			/* Add CPUCFG features non-discoverable otherwise. */
+			c->loongson_cpucfg_data[0] |= (LOONGSON_CFG1_LSLDR0 |
+				LOONGSON_CFG1_LSSYNCI | LOONGSON_CFG1_LSUCA |
+				LOONGSON_CFG1_LLSYNC | LOONGSON_CFG1_TGTSYNC);
+			c->loongson_cpucfg_data[1] |= (LOONGSON_CFG2_LBT1 |
+				LOONGSON_CFG2_LPMP | LOONGSON_CFG2_LPM_REV1);
+			c->loongson_cpucfg_data[2] |= (
+				LOONGSON_CFG3_LCAM_REV1 |
+				LOONGSON_CFG3_LCAMNUM_REV1 |
+				LOONGSON_CFG3_LCAMKW_REV1 |
+				LOONGSON_CFG3_LCAMVW_REV1);
+
+			/* This feature is set by firmware, but all known
+			 * Loongson-3A Legacy systems are configured this way.
+			 */
+			c->loongson_cpucfg_data[0] |= LOONGSON_CFG1_CDMAP;
+#endif
 			break;
 		case PRID_REV_LOONGSON3B_R1:
 		case PRID_REV_LOONGSON3B_R2:
@@ -1589,6 +1612,24 @@ static inline void cpu_probe_legacy(struct cpuinfo_mips *c, unsigned int cpu)
 			set_isa(c, MIPS_CPU_ISA_M64R1);
 			c->ases |= (MIPS_ASE_LOONGSON_MMI | MIPS_ASE_LOONGSON_CAM |
 				MIPS_ASE_LOONGSON_EXT);
+#ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
+			/* Add CPUCFG features non-discoverable otherwise. */
+			c->loongson_cpucfg_data[0] |= (LOONGSON_CFG1_LSLDR0 |
+				LOONGSON_CFG1_LSSYNCI | LOONGSON_CFG1_LSUCA |
+				LOONGSON_CFG1_LLSYNC | LOONGSON_CFG1_TGTSYNC);
+			c->loongson_cpucfg_data[1] |= (LOONGSON_CFG2_LBT1 |
+				LOONGSON_CFG2_LPMP | LOONGSON_CFG2_LPM_REV1);
+			c->loongson_cpucfg_data[2] |= (
+				LOONGSON_CFG3_LCAM_REV1 |
+				LOONGSON_CFG3_LCAMNUM_REV1 |
+				LOONGSON_CFG3_LCAMKW_REV1 |
+				LOONGSON_CFG3_LCAMVW_REV1);
+
+			/* This feature is set by firmware, but all known
+			 * Loongson-3B Legacy systems are configured this way.
+			 */
+			c->loongson_cpucfg_data[0] |= LOONGSON_CFG1_CDMAP;
+#endif
 			break;
 		}
 
@@ -1957,9 +1998,47 @@ static inline void decode_cpucfg(struct cpuinfo_mips *c)
 		c->ases |= MIPS_ASE_LOONGSON_CAM;
 }
 
+static int probe_uca(void)
+{
+	u32 diag = read_c0_diag();
+	u32 new_diag;
+
+	if (diag & LOONGSON_DIAG_UCAC)
+		/* UCA is already enabled. */
+		return 1;
+
+	/* See if UCAC bit can be flipped on. This should be safe. */
+	new_diag = diag | LOONGSON_DIAG_UCAC;
+	write_c0_diag(new_diag);
+	new_diag = read_c0_diag();
+	write_c0_diag(diag);
+
+	return (new_diag & LOONGSON_DIAG_UCAC) != 0;
+}
+
+#ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
+static inline void decode_gsconfig(struct cpuinfo_mips *c)
+{
+	u32 config6 = read_c0_config6();
+
+	if (config6 & MIPS_CONF6_STFILL)
+		c->loongson_cpucfg_data[0] |= LOONGSON_CFG1_SFBP;
+	if (config6 & MIPS_CONF6_LLEXC)
+		c->loongson_cpucfg_data[0] |= LOONGSON_CFG1_LLEXC;
+	if (config6 & MIPS_CONF6_SCRAND)
+		c->loongson_cpucfg_data[0] |= LOONGSON_CFG1_SCRAND;
+}
+#endif
+
 static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
 {
 	decode_configs(c);
+#ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
+	decode_gsconfig(c);
+
+	if (probe_uca())
+		c->loongson_cpucfg_data[0] |= LOONGSON_CFG1_LSUCA;
+#endif
 
 	switch (c->processor_id & PRID_IMP_MASK) {
 	case PRID_IMP_LOONGSON_64R: /* Loongson-64 Reduced */
@@ -1977,6 +2056,21 @@ static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
 		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
 		c->ases |= (MIPS_ASE_LOONGSON_MMI | MIPS_ASE_LOONGSON_EXT |
 				MIPS_ASE_LOONGSON_EXT2);
+#ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
+		/* Add CPUCFG features non-discoverable otherwise. */
+		c->loongson_cpucfg_data[0] |= (LOONGSON_CFG1_LSLDR0 |
+			LOONGSON_CFG1_LSSYNCI | LOONGSON_CFG1_LLSYNC |
+			LOONGSON_CFG1_TGTSYNC);
+		c->loongson_cpucfg_data[1] |= (LOONGSON_CFG2_LBT1 |
+			LOONGSON_CFG2_LBT2 | LOONGSON_CFG2_LPMP |
+			LOONGSON_CFG2_LPM_REV2);
+		c->loongson_cpucfg_data[2] = 0;
+
+		/* This feature is set by firmware, but all known Loongson-2K
+		 * systems are configured this way.
+		 */
+		c->loongson_cpucfg_data[0] |= LOONGSON_CFG1_CDMAP;
+#endif
 		break;
 	case PRID_IMP_LOONGSON_64C:  /* Loongson-3 Classic */
 		switch (c->processor_id & PRID_REV_MASK) {
@@ -2004,6 +2098,26 @@ static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
 		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
 		c->ases |= (MIPS_ASE_LOONGSON_MMI | MIPS_ASE_LOONGSON_CAM |
 			MIPS_ASE_LOONGSON_EXT | MIPS_ASE_LOONGSON_EXT2);
+#ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
+		/* Add CPUCFG features non-discoverable otherwise. */
+		c->loongson_cpucfg_data[0] |= (LOONGSON_CFG1_CNT64 |
+			LOONGSON_CFG1_LSLDR0 | LOONGSON_CFG1_LSPREF |
+			LOONGSON_CFG1_LSPREFX | LOONGSON_CFG1_LSSYNCI |
+			LOONGSON_CFG1_LLSYNC | LOONGSON_CFG1_TGTSYNC);
+		c->loongson_cpucfg_data[1] |= (LOONGSON_CFG2_LBT1 |
+			LOONGSON_CFG2_LBT2 | LOONGSON_CFG2_LBTMMU |
+			LOONGSON_CFG2_LPMP | LOONGSON_CFG2_LPM_REV1 |
+			LOONGSON_CFG2_LVZ_REV1);
+		c->loongson_cpucfg_data[2] |= (LOONGSON_CFG3_LCAM_REV1 |
+			LOONGSON_CFG3_LCAMNUM_REV1 |
+			LOONGSON_CFG3_LCAMKW_REV1 |
+			LOONGSON_CFG3_LCAMVW_REV1);
+
+		/* This feature is set by firmware, but all known Loongson-3
+		 * systems are configured this way.
+		 */
+		c->loongson_cpucfg_data[0] |= LOONGSON_CFG1_CDMAP;
+#endif
 		break;
 	case PRID_IMP_LOONGSON_64G:
 		c->cputype = CPU_LOONGSON64;
@@ -2197,6 +2311,12 @@ void cpu_probe(void)
 	c->fpu_csr31	= FPU_CSR_RN;
 	c->fpu_msk31	= FPU_CSR_RSVD | FPU_CSR_ABS2008 | FPU_CSR_NAN2008;
 
+#ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
+	c->loongson_cpucfg_data[0] = 0;
+	c->loongson_cpucfg_data[1] = 0;
+	c->loongson_cpucfg_data[2] = 0;
+#endif
+
 	c->processor_id = read_c0_prid();
 	switch (c->processor_id & PRID_COMP_MASK) {
 	case PRID_COMP_LEGACY:
@@ -2329,6 +2449,10 @@ void cpu_probe(void)
 
 	if (cpu_has_vz)
 		cpu_probe_vz(c);
+
+#ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
+	loongson_cpucfg_finish_synthesis(c);
+#endif
 
 	cpu_probe_vmbits(c);
 

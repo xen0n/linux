@@ -1493,6 +1493,17 @@ config LOONGSON3_ENHANCEMENT
 	  please say 'N' here. If you want a high-performance kernel to run on
 	  new Loongson-3 machines only, please say 'Y' here.
 
+config CPU_LOONGSON_CPUCFG_EMULATION
+	bool "Emulate the CPUCFG instruction on older cores"
+	default y
+	depends on CPU_LOONGSON64
+	help
+	  Loongson-3A R4 and newer have the CPUCFG instruction available for
+	  userland to query CPU capabilities, much like CPUID on x86. This
+	  option provides emulation of the instruction on older cores.
+
+	  If unsure, please say Y.
+
 config CPU_LOONGSON3_WORKAROUNDS
 	bool "Old Loongson-3 LLSC Workarounds"
 	default y if SMP
