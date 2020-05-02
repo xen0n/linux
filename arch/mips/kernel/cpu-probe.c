@@ -1962,9 +1962,26 @@ static inline void decode_cpucfg(struct cpuinfo_mips *c)
 		c->ases |= MIPS_ASE_LOONGSON_CAM;
 }
 
+#ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
+static inline void decode_gsconfig(struct cpuinfo_mips *c)
+{
+	u32 config6 = read_c0_config6();
+
+	if (config6 & MIPS_CONF6_STFILL)
+		c->loongson_cpucfg_data[0] |= LOONGSON_CFG1_SFBP;
+	if (config6 & MIPS_CONF6_LLEXC)
+		c->loongson_cpucfg_data[0] |= LOONGSON_CFG1_LLEXC;
+	if (config6 & MIPS_CONF6_SCRAND)
+		c->loongson_cpucfg_data[0] |= LOONGSON_CFG1_SCRAND;
+}
+#endif
+
 static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
 {
 	decode_configs(c);
+#ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
+	decode_gsconfig(c);
+#endif
 
 	switch (c->processor_id & PRID_IMP_MASK) {
 	case PRID_IMP_LOONGSON_64R: /* Loongson-64 Reduced */
@@ -2015,8 +2032,7 @@ static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
 			LOONGSON_CFG1_LSLDR0 | LOONGSON_CFG1_LSPREF |
 			LOONGSON_CFG1_LSPREFX | LOONGSON_CFG1_LSSYNCI |
 			LOONGSON_CFG1_LSUCA | LOONGSON_CFG1_LLSYNC |
-			LOONGSON_CFG1_TGTSYNC | LOONGSON_CFG1_LLEXC |
-			LOONGSON_CFG1_SCRAND | LOONGSON_CFG1_SFBP);
+			LOONGSON_CFG1_TGTSYNC);
 		c->loongson_cpucfg_data[1] |= (LOONGSON_CFG2_LBT1 |
 			LOONGSON_CFG2_LBT2 | LOONGSON_CFG2_LBTMMU |
 			LOONGSON_CFG2_LPMP | LOONGSON_CFG2_LPM_REV1 |
