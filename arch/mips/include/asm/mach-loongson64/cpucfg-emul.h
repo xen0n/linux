@@ -4,6 +4,8 @@
 
 #include <asm/cpu-info.h>
 
+#include <loongson_regs.h>
+
 #define LOONGSON_FPREV_MASK 0x7
 
 #ifdef CONFIG_CPU_LOONGSON_CPUCFG_EMULATION
@@ -17,22 +19,22 @@ void loongson_cpucfg_finish_synthesis(struct cpuinfo_mips *c);
 static inline int read_cpucfg_val(struct cpuinfo_mips *c, __u64 sel)
 {
 	switch (sel) {
-	case 0:
+	case LOONGSON_CFG0:
 		return c->processor_id;
-	case 1:
-	case 2:
-	case 3:
+	case LOONGSON_CFG1:
+	case LOONGSON_CFG2:
+	case LOONGSON_CFG3:
 		return c->loongson_cpucfg_data[sel - 1];
-	case 4:
-	case 5:
+	case LOONGSON_CFG4:
+	case LOONGSON_CFG5:
 		/* CPUCFG selects 4 and 5 are related to the processor clock.
 		 * Unimplemented for now.
 		 */
 		return 0;
-	case 6:
+	case LOONGSON_CFG6:
 		/* CPUCFG select 6 is for the undocumented Safe Extension. */
 		return 0;
-	case 7:
+	case LOONGSON_CFG7:
 		/* CPUCFG select 7 is for the virtualization extension.
 		 * We don't know if the two currently known features are
 		 * supported on older cores according to the public
