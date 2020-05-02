@@ -682,6 +682,10 @@
 #define MIPS_CONF6_FTLBDIS	(_ULCAST_(1) << 22)
 /* FTLB probability bits */
 #define MIPS_CONF6_FTLBP_SHIFT	(16)
+/* Loongson-3 feature bits */
+#define MIPS_CONF6_SCRAND	(_ULCAST_(1) << 17)
+#define MIPS_CONF6_LLEXC	(_ULCAST_(1) << 16)
+#define MIPS_CONF6_STFILL	(_ULCAST_(1) << 8)
 
 #define MIPS_CONF7_WII		(_ULCAST_(1) << 31)
 
