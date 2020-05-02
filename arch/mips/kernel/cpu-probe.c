@@ -2042,9 +2042,10 @@ static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
 			LOONGSON_CFG3_LCAMKW_REV1 |
 			LOONGSON_CFG3_LCAMVW_REV1);
 
-		if ((c->processor_id & PRID_REV_MASK) ==
-				PRID_REV_LOONGSON3A_R3_1)
-			c->loongson_cpucfg_data[0] |= LOONGSON_CFG1_CDMAP;
+		/* This feature is set by firmware, but all known Loongson-3
+		 * systems are configured this way.
+		 */
+		c->loongson_cpucfg_data[0] |= LOONGSON_CFG1_CDMAP;
 #endif
 		break;
 	case PRID_IMP_LOONGSON_64G:
