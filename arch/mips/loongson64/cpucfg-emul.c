@@ -4,6 +4,7 @@
 #include <linux/types.h>
 #include <asm/cpu.h>
 #include <asm/cpu-info.h>
+#include <asm/elf.h>
 
 #include <loongson_regs.h>
 #include <cpucfg-emul.h>
@@ -217,4 +218,7 @@ void loongson3_cpucfg_synthesize_data(struct cpuinfo_mips *c)
 	patch_cpucfg_sel1(c);
 	patch_cpucfg_sel2(c);
 	patch_cpucfg_sel3(c);
+
+	/* Announce CPUCFG availability to userspace via hwcap. */
+	elf_hwcap |= HWCAP_LOONGSON_CPUCFG;
 }
