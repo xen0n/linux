@@ -10,4 +10,6 @@
 
 extern u32 __dtb_loongson3_4core_rs780e_begin[];
 extern u32 __dtb_loongson3_8core_rs780e_begin[];
+extern u32 __dtb_loongson3_4core_ls7a_begin[];
+extern u32 __dtb_loongson3_r4_ls7a_begin[];
 #endif
