@@ -52,6 +52,7 @@ struct ls2x_rtc_priv {
 static const struct regmap_config ls2x_rtc_regmap_config = {
 	.reg_bits = 32,
 	.val_bits = 32,
+	.reg_stride = 4,
 };
 
 static int ls2x_rtc_read_time(struct device *dev, struct rtc_time *tm)
