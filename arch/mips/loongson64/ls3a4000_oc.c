@@ -47,7 +47,7 @@
 void __iomem *i2c_base_addr;
 unsigned char word_offset = 0;
 
-static void ls_i2c_stop(void)
+static void __init ls_i2c_stop(void)
 {
 	do {
 		writeb(CR_STOP, i2c_base_addr + CR_REG);
@@ -55,7 +55,7 @@ static void ls_i2c_stop(void)
 	} while(readb(i2c_base_addr + SR_REG) & SR_BUSY);
 }
 
-void ls_i2c_init(void)
+void __init ls_i2c_init(void)
 {
 	u8 val;
 	val = readb(i2c_base_addr + CTR_REG);
@@ -68,7 +68,7 @@ void ls_i2c_init(void)
 	writeb(val, i2c_base_addr + CTR_REG);
 }
 
-static int ls_i2c_tx_byte(unsigned char data, unsigned char opt)
+static int __init ls_i2c_tx_byte(unsigned char data, unsigned char opt)
 {
 	int times = 1000000;
 	writeb(data, i2c_base_addr + TXR_REG);
@@ -89,7 +89,7 @@ static int ls_i2c_tx_byte(unsigned char data, unsigned char opt)
 	return 0;
 }
 
-static int ls_i2c_send_addr(unsigned char dev_addr,unsigned int data_addr)
+static int __init ls_i2c_send_addr(unsigned char dev_addr,unsigned int data_addr)
 {
 	if (ls_i2c_tx_byte(dev_addr, CR_START | CR_WRITE) < 0)
 		return 0;
@@ -113,7 +113,7 @@ static int ls_i2c_send_addr(unsigned char dev_addr,unsigned int data_addr)
  * buf : the write data buffer
  * count : size will be write
   */
-int ls_i2c_write_seq(unsigned char dev_addr,unsigned int data_addr, unsigned char *buf, int count)
+int __init ls_i2c_write_seq(unsigned char dev_addr,unsigned int data_addr, unsigned char *buf, int count)
 {
 	int i;
 	if (!ls_i2c_send_addr(dev_addr,data_addr))
@@ -133,7 +133,7 @@ int ls_i2c_write_seq(unsigned char dev_addr,unsigned int data_addr, unsigned cha
  * data_addr : offset
  * buf : the write data
   */
-int ls_i2c_write_byte(unsigned char dev_addr,unsigned int data_addr, unsigned char *buf)
+int __init ls_i2c_write_byte(unsigned char dev_addr,unsigned int data_addr, unsigned char *buf)
 {
 	if (ls_i2c_write_seq(dev_addr, data_addr, buf, 1) == 1)
 		return 0;
@@ -146,7 +146,7 @@ int ls_i2c_write_byte(unsigned char dev_addr,unsigned int data_addr, unsigned ch
  * buf : the write data buffer
  * count : size will be write
   */
-static int ls_i2c_read_seq_cur(unsigned char dev_addr,unsigned char *buf, int count)
+static int __init ls_i2c_read_seq_cur(unsigned char dev_addr,unsigned char *buf, int count)
 {
 	int i;
 	dev_addr |= 0x1;
@@ -164,7 +164,7 @@ static int ls_i2c_read_seq_cur(unsigned char dev_addr,unsigned char *buf, int co
 	return i;
 }
 
-int ls_i2c_read_seq_rand(unsigned char dev_addr,unsigned int data_addr,
+int __init ls_i2c_read_seq_rand(unsigned char dev_addr,unsigned int data_addr,
 				unsigned char *buf, int count)
 {
 	if (!ls_i2c_send_addr(dev_addr,data_addr))
@@ -174,7 +174,7 @@ int ls_i2c_read_seq_rand(unsigned char dev_addr,unsigned int data_addr,
 }
 
 
-void ls3a4000_vctrl(u8 vid)
+void __init ls3a4000_vctrl(u8 vid)
 {
 	u8 buf;
 	i2c_base_addr = (void __iomem *)LS3A4000_I2C0_REG_BASE;
@@ -214,7 +214,7 @@ void ls3a4000_vctrl(u8 vid)
 #define STABLE_SCALE_F	12
 #define STABLE_SCALE_MASK	GENMASK(14, 12)
 
-void main_pll_sel(uint8_t refc, uint16_t loopc, uint8_t div)
+void __init main_pll_sel(uint8_t refc, uint16_t loopc, uint8_t div)
 {
 	uint32_t low, hi;
 	int i = 0;
@@ -251,7 +251,7 @@ void main_pll_sel(uint8_t refc, uint16_t loopc, uint8_t div)
 }
 
 
-static char *get_cmdline(char *envname)
+static char *__init get_cmdline(char *envname)
 {
 	char *env = &arcs_cmdline[0];
 	int i, j = 0;
@@ -268,7 +268,7 @@ static char *get_cmdline(char *envname)
 	return 0;
 }
 
-static bool is_a1901(void) {
+static bool __init is_a1901(void) {
 	struct boot_params *boot_p;
 	struct loongson_params *loongson_p;
 	struct board_devices *eboard;
@@ -285,7 +285,7 @@ static bool is_a1901(void) {
 	return false;
 }
 
-void ls3a4000_oc(void)
+void __init ls3a4000_oc(void)
 {
 	u8 vid;
 	u32 mv = 1350, freq = 2000;
