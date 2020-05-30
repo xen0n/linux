@@ -1304,8 +1304,11 @@ config RTC_DRV_LS2X
 	tristate "Loongson LS2X RTC"
 	depends on CPU_LOONGSON64
 	help
-         If you say yes here you get support for the RTC on the
-         Loongson's LS2H/LS2K/LS7A Platform-Bridge.
+	  If you say yes here you get support for the RTC on the Loongson-2K
+	  SoC and LS7A bridge, which first appeared on the Loongson-2H.
+
+	  This driver can also be built as a module. If so, the module
+	  will be called rtc-ls2x.
 
 comment "on-CPU RTC drivers"
 

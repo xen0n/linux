@@ -3,7 +3,7 @@
  * Loongson-2H Real Time Clock interface for Linux
  *
  * Author: Shaozong Liu <liushaozong@loongson.cn>
- *	   Huacai Chen <chenhc@lemote.com>
+ *         Huacai Chen <chenhc@lemote.com>
  *
  */
 
@@ -42,7 +42,7 @@
 #define RTC_MATCH2_REG 0x74
 
 /**
- * shift bits and filed mask
+ * shift bits and field mask
  */
 #define TOY_MON_MASK   0x3f
 #define TOY_DAY_MASK   0x1f
@@ -194,7 +194,6 @@ static int ls2x_rtc_remove(struct platform_device *pdev)
 
 #ifdef CONFIG_OF
 static struct of_device_id ls2x_rtc_id_table[] = {
-	{.compatible = "loongson,ls2h-rtc"},
 	{.compatible = "loongson,ls2k-rtc"},
 	{.compatible = "loongson,ls7a-rtc"},
 	{},
