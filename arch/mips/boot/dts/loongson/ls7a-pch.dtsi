@@ -172,6 +172,13 @@
 			};
 		};
 
+		rtc0: rtc@100d0100 {
+			compatible = "loongson,ls7a-rtc";
+			reg = <0 0x100d0100 0 0x78>;
+			interrupts = <116 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-parent = <&pic>;
+		};
+
 		msi: msi-controller@2ff00000 {
 			compatible = "loongson,pch-msi-1.0";
 			reg = <0 0x2ff00000 0 0x8>;
