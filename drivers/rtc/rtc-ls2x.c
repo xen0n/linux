@@ -9,6 +9,7 @@
 
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/regmap.h>
 #include <linux/rtc.h>
 #include <linux/spinlock.h>
 
@@ -44,32 +45,31 @@
 #define LS2X_TIMESTAMP_END 454861871999LL /* 16383-12-31T23:59:59Z */
 
 struct ls2x_rtc_priv {
+	struct regmap *regmap;
 	spinlock_t lock;
-	struct rtc_device *rtc_dev;
-	void __iomem *rtc_base;
 };
 
-static inline u32 ls2x_rtc_read(struct ls2x_rtc_priv *priv, unsigned int addr)
-{
-	return readl(priv->rtc_base + addr);
-}
-
-static inline void ls2x_rtc_write(struct ls2x_rtc_priv *priv,
-				  u32 val, unsigned int addr)
-{
-	writel(val, priv->rtc_base + addr);
-}
+static const struct regmap_config ls2x_rtc_regmap_config = {
+	.reg_bits = 32,
+	.val_bits = 32,
+};
 
 static int ls2x_rtc_read_time(struct device *dev, struct rtc_time *tm)
 {
 	struct ls2x_rtc_priv *priv = dev_get_drvdata(dev);
 	unsigned int read0;
 	unsigned int read1;
+	int ret;
 
 	spin_lock_irq(&priv->lock);
-	read1 = ls2x_rtc_read(priv, TOY_READ1_REG);
-	read0 = ls2x_rtc_read(priv, TOY_READ0_REG);
+	ret = regmap_read(priv->regmap, TOY_READ1_REG, &read1);
+	ret |= regmap_read(priv->regmap, TOY_READ0_REG, &read0);
 	spin_unlock_irq(&priv->lock);
+
+	if (unlikely(ret)) {
+		dev_err(dev, "Failed to read time\n");
+		return -EIO;
+	}
 
 	tm->tm_year = read1;
 	tm->tm_sec = (read0 & TOY_SEC) >> TOY_SEC_SHIFT;
@@ -86,6 +86,7 @@ static int ls2x_rtc_set_time(struct device *dev, struct rtc_time *tm)
 	struct ls2x_rtc_priv *priv = dev_get_drvdata(dev);
 	unsigned int write0;
 	unsigned int write1;
+	int ret;
 
 	write0 = (tm->tm_sec << TOY_SEC_SHIFT) & TOY_SEC;
 	write0 |= (tm->tm_min << TOY_MIN_SHIFT) & TOY_MIN;
@@ -95,9 +96,14 @@ static int ls2x_rtc_set_time(struct device *dev, struct rtc_time *tm)
 	write1 = tm->tm_year;
 
 	spin_lock_irq(&priv->lock);
-	ls2x_rtc_write(priv, write0, TOY_WRITE0_REG);
-	ls2x_rtc_write(priv, write1, TOY_WRITE1_REG);
+	ret = regmap_write(priv->regmap, TOY_WRITE0_REG, write0);
+	ret |= regmap_write(priv->regmap, TOY_WRITE1_REG, write1);
 	spin_unlock_irq(&priv->lock);
+
+	if (unlikely(ret)) {
+		dev_err(dev, "Failed to set time\n");
+		return -EIO;
+	}
 
 	return 0;
 }
@@ -112,6 +118,7 @@ static int ls2x_rtc_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct rtc_device *rtc;
 	struct ls2x_rtc_priv *priv;
+	void __iomem *regs;
 	int ret;
 
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
@@ -121,10 +128,18 @@ static int ls2x_rtc_probe(struct platform_device *pdev)
 	spin_lock_init(&priv->lock);
 	platform_set_drvdata(pdev, priv);
 
-	priv->rtc_base = devm_platform_ioremap_resource(pdev, 0);
-	if (IS_ERR(priv->rtc_base)) {
+	regs = devm_platform_ioremap_resource(pdev, 0);
+	if (IS_ERR(regs)) {
 		dev_err(dev, "Failed to map rtc registers\n");
-		return PTR_ERR(priv->rtc_base);
+		return PTR_ERR(regs);
+	}
+
+	priv->regmap = devm_regmap_init_mmio(dev, regs,
+					     &ls2x_rtc_regmap_config);
+	if (IS_ERR(priv->regmap)) {
+		ret = PTR_ERR(priv->regmap);
+		dev_err(dev, "Failed to init regmap: %d\n", ret);
+		return ret;
 	}
 
 	rtc = devm_rtc_allocate_device(dev);
@@ -137,7 +152,6 @@ static int ls2x_rtc_probe(struct platform_device *pdev)
 	rtc->ops = &ls2x_rtc_ops;
 	rtc->range_min = RTC_TIMESTAMP_BEGIN_0000;
 	rtc->range_max = LS2X_TIMESTAMP_END;
-	priv->rtc_dev = rtc;
 
 	return rtc_register_device(rtc);
 }
