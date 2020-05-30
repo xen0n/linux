@@ -139,47 +139,27 @@ static int ls2x_rtc_probe(struct platform_device *pdev)
 	rtc->range_max = LS2X_TIMESTAMP_END;
 	priv->rtc_dev = rtc;
 
-	ret = rtc_register_device(rtc);
-	if (unlikely(ret)) {
-		dev_err(dev, "Failed to register rtc device: %d\n", ret);
-		return ret;
-	}
-
-	return 0;
+	return rtc_register_device(rtc);
 }
 
-#ifdef CONFIG_OF
-static struct of_device_id ls2x_rtc_id_table[] = {
-	{.compatible = "loongson,ls2k-rtc"},
-	{.compatible = "loongson,ls7a-rtc"},
-	{},
+static const struct of_device_id ls2x_rtc_of_match[] = {
+	{ .compatible = "loongson,ls2k-rtc" },
+	{ .compatible = "loongson,ls7a-rtc" },
+	{ /* sentinel */ },
 };
-#endif
+MODULE_DEVICE_TABLE(of, ls2x_rtc_of_match);
 
 static struct platform_driver ls2x_rtc_driver = {
 	.probe		= ls2x_rtc_probe,
 	.driver		= {
 		.name	= "ls2x-rtc",
-		.owner	= THIS_MODULE,
-#ifdef CONFIG_OF
-		.of_match_table = of_match_ptr(ls2x_rtc_id_table),
-#endif
+		.of_match_table = of_match_ptr(ls2x_rtc_of_match),
 	},
 };
 
-static int __init rtc_init(void)
-{
-	return platform_driver_register(&ls2x_rtc_driver);
-}
+module_platform_driver(ls2x_rtc_driver);
 
-static void __exit rtc_exit(void)
-{
-	platform_driver_unregister(&ls2x_rtc_driver);
-}
-
-module_init(rtc_init);
-module_exit(rtc_exit);
-
+MODULE_DESCRIPTION("LS2X RTC driver");
 MODULE_AUTHOR("Liu Shaozong");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("platform:ls2x-rtc");
