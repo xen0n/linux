@@ -42,7 +42,8 @@
 #define TOY_MSEC       GENMASK(3, 0)
 #define TOY_MSEC_SHIFT 0
 
-#define LS2X_TIMESTAMP_END 454861871999LL /* 16383-12-31T23:59:59Z */
+/* 18283-12-31T23:59:59Z; 18283 = 1900 + 16383 */
+#define LS2X_TIMESTAMP_END 514820102399LL
 
 struct ls2x_rtc_priv {
 	struct regmap *regmap;
@@ -151,7 +152,7 @@ static int ls2x_rtc_probe(struct platform_device *pdev)
 	}
 
 	rtc->ops = &ls2x_rtc_ops;
-	rtc->range_min = RTC_TIMESTAMP_BEGIN_0000;
+	rtc->range_min = RTC_TIMESTAMP_BEGIN_1900;
 	rtc->range_max = LS2X_TIMESTAMP_END;
 
 	return rtc_register_device(rtc);
