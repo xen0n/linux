@@ -42,9 +42,6 @@
 #define TOY_MSEC       GENMASK(3, 0)
 #define TOY_MSEC_SHIFT 0
 
-/* 18283-12-31T23:59:59Z; 18283 = 1900 + 16383 */
-#define LS2X_TIMESTAMP_END 514820102399LL
-
 struct ls2x_rtc_priv {
 	struct regmap *regmap;
 	spinlock_t lock;
@@ -167,8 +164,16 @@ static int ls2x_rtc_probe(struct platform_device *pdev)
 	}
 
 	rtc->ops = &ls2x_rtc_ops;
-	rtc->range_min = RTC_TIMESTAMP_BEGIN_1900;
-	rtc->range_max = LS2X_TIMESTAMP_END;
+
+	/* Due to hardware erratum, all years multiple of 4 are considered
+	 * leap year, so only years 2000 through 2099 are usable.
+	 *
+	 * Previous out-of-tree versions of this driver wrote tm_year directly
+	 * into the year register, so epoch 2000 must be used to preserve
+	 * semantics on shipped systems.
+	 */
+	rtc->range_min = RTC_TIMESTAMP_BEGIN_2000;
+	rtc->range_max = RTC_TIMESTAMP_END_2099;
 
 	return rtc_register_device(rtc);
 }
