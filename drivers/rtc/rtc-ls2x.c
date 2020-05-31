@@ -56,16 +56,42 @@ static const struct regmap_config ls2x_rtc_regmap_config = {
 	.reg_stride = 4,
 };
 
+struct ls2x_rtc_regs {
+	u32 reg0;
+	u32 reg1;
+};
+
+static inline void ls2x_rtc_regs_to_time(struct ls2x_rtc_regs *regs,
+					 struct rtc_time *tm)
+{
+	tm->tm_year = regs->reg1;
+	tm->tm_sec = (regs->reg0 & TOY_SEC) >> TOY_SEC_SHIFT;
+	tm->tm_min = (regs->reg0 & TOY_MIN) >> TOY_MIN_SHIFT;
+	tm->tm_hour = (regs->reg0 & TOY_HOUR) >> TOY_HOUR_SHIFT;
+	tm->tm_mday = (regs->reg0 & TOY_DAY) >> TOY_DAY_SHIFT;
+	tm->tm_mon = ((regs->reg0 & TOY_MON) >> TOY_MON_SHIFT) - 1;
+}
+
+static inline void ls2x_rtc_time_to_regs(struct rtc_time *tm,
+					 struct ls2x_rtc_regs *regs)
+{
+	regs->reg0 = (tm->tm_sec << TOY_SEC_SHIFT) & TOY_SEC;
+	regs->reg0 |= (tm->tm_min << TOY_MIN_SHIFT) & TOY_MIN;
+	regs->reg0 |= (tm->tm_hour << TOY_HOUR_SHIFT) & TOY_HOUR;
+	regs->reg0 |= (tm->tm_mday << TOY_DAY_SHIFT) & TOY_DAY;
+	regs->reg0 |= ((tm->tm_mon + 1) << TOY_MON_SHIFT) & TOY_MON;
+	regs->reg1 = tm->tm_year;
+}
+
 static int ls2x_rtc_read_time(struct device *dev, struct rtc_time *tm)
 {
 	struct ls2x_rtc_priv *priv = dev_get_drvdata(dev);
-	unsigned int read0;
-	unsigned int read1;
+	struct ls2x_rtc_regs regs;
 	int ret;
 
 	spin_lock_irq(&priv->lock);
-	ret = regmap_read(priv->regmap, TOY_READ1_REG, &read1);
-	ret |= regmap_read(priv->regmap, TOY_READ0_REG, &read0);
+	ret = regmap_read(priv->regmap, TOY_READ1_REG, &regs.reg1);
+	ret |= regmap_read(priv->regmap, TOY_READ0_REG, &regs.reg0);
 	spin_unlock_irq(&priv->lock);
 
 	if (unlikely(ret)) {
@@ -73,12 +99,7 @@ static int ls2x_rtc_read_time(struct device *dev, struct rtc_time *tm)
 		return -EIO;
 	}
 
-	tm->tm_year = read1;
-	tm->tm_sec = (read0 & TOY_SEC) >> TOY_SEC_SHIFT;
-	tm->tm_min = (read0 & TOY_MIN) >> TOY_MIN_SHIFT;
-	tm->tm_hour = (read0 & TOY_HOUR) >> TOY_HOUR_SHIFT;
-	tm->tm_mday = (read0 & TOY_DAY) >> TOY_DAY_SHIFT;
-	tm->tm_mon = ((read0 & TOY_MON) >> TOY_MON_SHIFT) - 1;
+	ls2x_rtc_regs_to_time(&regs, tm);
 
 	return 0;
 }
@@ -86,20 +107,14 @@ static int ls2x_rtc_read_time(struct device *dev, struct rtc_time *tm)
 static int ls2x_rtc_set_time(struct device *dev, struct rtc_time *tm)
 {
 	struct ls2x_rtc_priv *priv = dev_get_drvdata(dev);
-	unsigned int write0;
-	unsigned int write1;
+	struct ls2x_rtc_regs regs;
 	int ret;
 
-	write0 = (tm->tm_sec << TOY_SEC_SHIFT) & TOY_SEC;
-	write0 |= (tm->tm_min << TOY_MIN_SHIFT) & TOY_MIN;
-	write0 |= (tm->tm_hour << TOY_HOUR_SHIFT) & TOY_HOUR;
-	write0 |= (tm->tm_mday << TOY_DAY_SHIFT) & TOY_DAY;
-	write0 |= ((tm->tm_mon + 1) << TOY_MON_SHIFT) & TOY_MON;
-	write1 = tm->tm_year;
+	ls2x_rtc_time_to_regs(tm, &regs);
 
 	spin_lock_irq(&priv->lock);
-	ret = regmap_write(priv->regmap, TOY_WRITE0_REG, write0);
-	ret |= regmap_write(priv->regmap, TOY_WRITE1_REG, write1);
+	ret = regmap_write(priv->regmap, TOY_WRITE0_REG, regs.reg0);
+	ret |= regmap_write(priv->regmap, TOY_WRITE1_REG, regs.reg1);
 	spin_unlock_irq(&priv->lock);
 
 	if (unlikely(ret)) {
