@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Loongson-2H Real Time Clock interface for Linux
+ * Loongson-2K/7A RTC driver
  *
- * Author: Shaozong Liu <liushaozong@loongson.cn>
+ * Author: WANG Xuerui <git@xen0n.name>
  *         Huacai Chen <chenhc@lemote.com>
  *
+ * Based on the out-of-tree Loongson-2H RTC driver by
+ * Shaozong Liu <liushaozong@loongson.cn>, rewritten for mainline.
  */
 
 #include <linux/module.h>
@@ -196,6 +198,7 @@ static struct platform_driver ls2x_rtc_driver = {
 module_platform_driver(ls2x_rtc_driver);
 
 MODULE_DESCRIPTION("LS2X RTC driver");
-MODULE_AUTHOR("Liu Shaozong");
+MODULE_AUTHOR("WANG Xuerui");
+MODULE_AUTHOR("Huacai Chen");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("platform:ls2x-rtc");
