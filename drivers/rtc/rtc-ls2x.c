@@ -88,15 +88,22 @@ static int ls2x_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	struct ls2x_rtc_regs regs;
 	int ret;
 
-	spin_lock_irq(&priv->lock);
+	spin_lock_irqsave(&priv->lock);
+
 	ret = regmap_read(priv->regmap, TOY_READ1_REG, &regs.reg1);
-	ret |= regmap_read(priv->regmap, TOY_READ0_REG, &regs.reg0);
+	if (unlikely(ret)) {
+		dev_err(dev, "Failed to read time: %d\n", ret);
+		return ret;
+	}
+
+	ret = regmap_read(priv->regmap, TOY_READ0_REG, &regs.reg0);
+	if (unlikely(ret)) {
+		dev_err(dev, "Failed to read time: %d\n", ret);
+		return ret;
+	}
+
 	spin_unlock_irq(&priv->lock);
 
-	if (unlikely(ret)) {
-		dev_err(dev, "Failed to read time\n");
-		return -EIO;
-	}
 
 	ls2x_rtc_regs_to_time(&regs, tm);
 
@@ -112,14 +119,20 @@ static int ls2x_rtc_set_time(struct device *dev, struct rtc_time *tm)
 	ls2x_rtc_time_to_regs(tm, &regs);
 
 	spin_lock_irq(&priv->lock);
-	ret = regmap_write(priv->regmap, TOY_WRITE0_REG, regs.reg0);
-	ret |= regmap_write(priv->regmap, TOY_WRITE1_REG, regs.reg1);
-	spin_unlock_irq(&priv->lock);
 
+	ret = regmap_write(priv->regmap, TOY_WRITE0_REG, regs.reg0);
 	if (unlikely(ret)) {
-		dev_err(dev, "Failed to set time\n");
-		return -EIO;
+		dev_err(dev, "Failed to set time: %d\n", ret);
+		return ret;
 	}
+
+	ret = regmap_write(priv->regmap, TOY_WRITE1_REG, regs.reg1);
+	if (unlikely(ret)) {
+		dev_err(dev, "Failed to set time: %d\n", ret);
+		return ret;
+	}
+
+	spin_unlock_irq(&priv->lock);
 
 	return 0;
 }
