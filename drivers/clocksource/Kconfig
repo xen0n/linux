@@ -715,4 +715,17 @@ config MICROCHIP_PIT64B
 	  modes and high resolution. It is used as a clocksource
 	  and a clockevent.
 
+config LOONGSON_CONST_TIMER
+	bool "Loongson constant timer"
+	depends on GENERIC_SCHED_CLOCK && CPU_LOONGSON64
+	default y
+	select TIMER_OF
+	help
+	  This option enables the constant timer found on Loongson-3A R4 and
+	  newer cores.
+
+	  The constant timer is an internal cycle counter immune to cpufreq
+	  variations, and reasonably synchronized among packages. It provides
+	  very good (nanosecond-scale) time resolution.
+
 endmenu

@@ -167,6 +167,24 @@ static __always_inline u64 read_gic_count(const struct vdso_data *data)
 
 #endif
 
+#ifdef CONFIG_LOONGSON_CONST_TIMER
+
+static __always_inline u64 read_loongson_const_timer(void)
+{
+	u64 result;
+
+	__asm__ __volatile__(
+	"	.set push\n"
+	"	.set mips32r2\n"
+	"	rdhwr	%0, $30\n"
+	"	.set pop\n"
+	: "=r" (result));
+
+	return result;
+}
+
+#endif
+
 static __always_inline u64 __arch_get_hw_counter(s32 clock_mode)
 {
 #ifdef CONFIG_CSRC_R4K
@@ -176,6 +194,10 @@ static __always_inline u64 __arch_get_hw_counter(s32 clock_mode)
 #ifdef CONFIG_CLKSRC_MIPS_GIC
 	if (clock_mode == VDSO_CLOCKMODE_GIC)
 		return read_gic_count(get_vdso_data());
+#endif
+#ifdef CONFIG_LOONGSON_CONST_TIMER
+	if (clock_mode == VDSO_CLOCKMODE_LOONGSON_CONST)
+		return read_loongson_const_timer();
 #endif
 	/*
 	 * Core checks mode already. So this raced against a concurrent
@@ -188,7 +210,8 @@ static __always_inline u64 __arch_get_hw_counter(s32 clock_mode)
 static inline bool mips_vdso_hres_capable(void)
 {
 	return IS_ENABLED(CONFIG_CSRC_R4K) ||
-	       IS_ENABLED(CONFIG_CLKSRC_MIPS_GIC);
+	       IS_ENABLED(CONFIG_CLKSRC_MIPS_GIC) ||
+	       IS_ENABLED(CONFIG_LOONGSON_CONST_TIMER);
 }
 #define __arch_vdso_hres_capable mips_vdso_hres_capable
 
