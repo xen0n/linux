@@ -6,6 +6,10 @@
 	#address-cells = <2>;
 	#size-cells = <2>;
 
+	timer {
+		compatible = "loongson,const-timer";
+	};
+
 	cpuintc: interrupt-controller {
 		#address-cells = <0>;
 		#interrupt-cells = <1>;
