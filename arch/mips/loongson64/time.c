@@ -7,6 +7,7 @@
  * Author: Wu Zhangjin, wuzhangjin@gmail.com
  */
 
+#include <linux/clocksource.h>
 #include <asm/time.h>
 #include <asm/hpet.h>
 
@@ -20,4 +21,6 @@ void __init plat_time_init(void)
 #ifdef CONFIG_RS780_HPET
 	setup_hpet_timer();
 #endif
+
+	timer_probe();
 }
