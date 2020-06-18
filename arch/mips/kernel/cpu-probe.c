@@ -1655,7 +1655,7 @@ static inline void cpu_probe_legacy(struct cpuinfo_mips *c, unsigned int cpu)
 
 		c->options = R4K_OPTS |
 			     MIPS_CPU_FPU | MIPS_CPU_LLSC |
-			     MIPS_CPU_32FPR;
+			     MIPS_CPU_32FPR | MIPS_CPU_GSEXCEX;
 		c->tlbsize = 64;
 		set_cpu_asid_mask(c, MIPS_ENTRYHI_ASID);
 		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
@@ -2042,6 +2042,9 @@ static inline void decode_cpucfg(struct cpuinfo_mips *c)
 static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
 {
 	decode_configs(c);
+
+	/* All Loongson processors covered here define ExcCode 16 as GSExc. */
+	c->options |= MIPS_CPU_GSEXCEX;
 
 	switch (c->processor_id & PRID_IMP_MASK) {
 	case PRID_IMP_LOONGSON_64R: /* Loongson-64 Reduced */

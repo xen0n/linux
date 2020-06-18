@@ -475,6 +475,9 @@
 /* Implementation specific trap codes used by MIPS cores */
 #define MIPS_EXCCODE_TLBPAR	16	/* TLB parity error exception */
 
+/* Implementation specific trap codes used by Loongson cores */
+#define LOONGSON_EXCCODE_GSEXC	16	/* Loongson-specific exception */
+
 /*
  * Bits in the coprocessor 0 config register.
  */
@@ -1052,6 +1055,13 @@
 #define LOONGSON_DIAG_VTLB	(_ULCAST_(1) << 12)
 /* Flush FTLB */
 #define LOONGSON_DIAG_FTLB	(_ULCAST_(1) << 13)
+
+/*
+ * Diag1 (GSCause in Loongson-speak) fields
+ */
+/* Loongson-specific exception code (GSExcCode) */
+#define LOONGSON_DIAG1_EXCCODE_SHIFT	2
+#define LOONGSON_DIAG1_EXCCODE		GENMASK(6, 2)
 
 /* CvmCtl register field definitions */
 #define CVMCTL_IPPCI_SHIFT	7
