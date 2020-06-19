@@ -572,6 +572,12 @@
 # define cpu_has_ftlbparex	__opt(MIPS_CPU_FTLBPAREX)
 #endif
 
+#if defined(CONFIG_CPU_LOONGSON64) && !defined(cpu_has_gsexcex)
+# define cpu_has_gsexcex	__opt(MIPS_CPU_GSEXCEX)
+#elif !defined(cpu_has_gsexcex)
+# define cpu_has_gsexcex	0
+#endif
+
 #ifdef CONFIG_SMP
 /*
  * Some systems share FTLB RAMs between threads within a core (siblings in
