@@ -4243,10 +4243,11 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 			return do_wp_page(vmf);
 	}
 
-	if ((vmf->flags & FAULT_FLAG_WRITE) && !(vmf->flags & FAULT_FLAG_TRIED))
-		entry = pte_mkdirty(entry);
-	else if (vmf->flags & FAULT_FLAG_TRIED)
+	if (vmf->flags & FAULT_FLAG_TRIED)
 		goto unlock;
+
+	if (vmf->flags & FAULT_FLAG_WRITE)
+		entry = pte_mkdirty(entry);
 
 	entry = pte_mkyoung(entry);
 	if (ptep_set_access_flags(vmf->vma, vmf->address, vmf->pte, entry,
