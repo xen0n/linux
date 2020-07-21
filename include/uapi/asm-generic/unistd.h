@@ -861,8 +861,10 @@ __SYSCALL(__NR_pidfd_getfd, sys_pidfd_getfd)
 __SYSCALL(__NR_faccessat2, sys_faccessat2)
 #define __NR_watch_mount 440
 __SYSCALL(__NR_watch_mount, sys_watch_mount)
-#define __NR_fsinfo 442
+#define __NR_fsinfo 441
 __SYSCALL(__NR_fsinfo, sys_fsinfo)
+#define __NR_fsinfo 442
+__SC_COMP(__NR_process_madvise, sys_process_madvise, compat_sys_process_madvise)
 
 #undef __NR_syscalls
 #define __NR_syscalls 443
