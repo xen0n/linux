@@ -29,6 +29,7 @@
 #include <linux/numa.h>
 #include <linux/llist.h>
 #include <linux/cma.h>
+#include <linux/migrate.h>
 
 #include <asm/page.h>
 #include <asm/pgalloc.h>
@@ -1212,9 +1213,26 @@ static int hstate_next_node_to_free(struct hstate *h, nodemask_t *nodes_allowed)
 		((node = hstate_next_node_to_free(hs, mask)) || 1);	\
 		nr_nodes--)
 
-#ifdef CONFIG_ARCH_HAS_GIGANTIC_PAGE
-static void destroy_compound_gigantic_page(struct page *page,
-					unsigned int order)
+static inline bool PageHugePoisoned(struct page *page)
+{
+	if (!PageHuge(page))
+		return false;
+
+	return (unsigned long)page[3].mapping == -1U;
+}
+
+static inline void SetPageHugePoisoned(struct page *page)
+{
+	page[3].mapping = (void *)-1U;
+}
+
+static inline void ClearPageHugePoisoned(struct page *page)
+{
+	page[3].mapping = NULL;
+}
+
+static void destroy_compound_gigantic_page(struct hstate *h, struct page *page,
+					   unsigned int order)
 {
 	int i;
 	int nr_pages = 1 << order;
@@ -1225,14 +1243,19 @@ static void destroy_compound_gigantic_page(struct page *page,
 		atomic_set(compound_pincount_ptr(page), 0);
 
 	for (i = 1; i < nr_pages; i++, p = mem_map_next(p, page, i)) {
+		if (!hstate_is_gigantic(h))
+			 p->mapping = NULL;
 		clear_compound_head(p);
 		set_page_refcounted(p);
 	}
 
+	if (PageHugePoisoned(page))
+		ClearPageHugePoisoned(page);
 	set_compound_order(page, 0);
 	__ClearPageHead(page);
 }
 
+#ifdef CONFIG_ARCH_HAS_GIGANTIC_PAGE
 static void free_gigantic_page(struct page *page, unsigned int order)
 {
 	/*
@@ -1290,13 +1313,16 @@ static struct page *alloc_gigantic_page(struct hstate *h, gfp_t gfp_mask,
 	return NULL;
 }
 static inline void free_gigantic_page(struct page *page, unsigned int order) { }
-static inline void destroy_compound_gigantic_page(struct page *page,
-						unsigned int order) { }
+static inline void destroy_compound_gigantic_page(struct hstate *h,
+						  struct page *page,
+						  unsigned int order) { }
 #endif
 
 static void update_and_free_page(struct hstate *h, struct page *page)
 {
 	int i;
+	bool poisoned = PageHugePoisoned(page);
+	unsigned int order = huge_page_order(h);
 
 	if (hstate_is_gigantic(h) && !gigantic_page_runtime_supported())
 		return;
@@ -1319,11 +1345,21 @@ static void update_and_free_page(struct hstate *h, struct page *page)
 		 * we might block in free_gigantic_page().
 		 */
 		spin_unlock(&hugetlb_lock);
-		destroy_compound_gigantic_page(page, huge_page_order(h));
-		free_gigantic_page(page, huge_page_order(h));
+		destroy_compound_gigantic_page(h, page, order);
+		free_gigantic_page(page, order);
 		spin_lock(&hugetlb_lock);
 	} else {
-		__free_pages(page, huge_page_order(h));
+		if (unlikely(poisoned)) {
+			/*
+			 * If the hugepage is poisoned, do as we do for
+			 * gigantic pages and free the pages as order-0.
+			 * free_pages_prepare will skip over the poisoned ones.
+			 */
+			destroy_compound_gigantic_page(h, page, order);
+			free_contig_range(page_to_pfn(page), 1 << order);
+		} else {
+			__free_pages(page, huge_page_order(h));
+		}
 	}
 }
 
@@ -1432,6 +1468,11 @@ static void __free_huge_page(struct page *page)
 					  pages_per_huge_page(h), page);
 	if (restore_reserve)
 		h->resv_huge_pages++;
+
+	if (PageHugePoisoned(page)) {
+		spin_unlock(&hugetlb_lock);
+		return;
+	}
 
 	if (PageHugeTemporary(page)) {
 		list_del(&page->lru);
@@ -5633,6 +5674,9 @@ void move_hugetlb_state(struct page *oldpage, struct page *newpage, int reason)
 
 	hugetlb_cgroup_migrate(oldpage, newpage);
 	set_page_owner_migrate_reason(newpage, reason);
+
+	if (reason == MR_MEMORY_FAILURE)
+		SetPageHugePoisoned(oldpage);
 
 	/*
 	 * transfer temporary state of the new huge page. This is
