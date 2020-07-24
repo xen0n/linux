@@ -11,6 +11,8 @@ arm/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci tags/davinci-for-v5.9/soc
 	mvebu/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-arm-5.9-1
+	patch
+		MAINTAINERS: arm/amlogic: add designated reviewers
 
 arm/dt
 	renesas/dt
@@ -132,6 +134,8 @@ arm/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/qcom/linux tags/qcom-drivers-for-5.9
 	mvebu/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/gclement/mvebu tags/mvebu-drivers-5.9-1
+	drivers/memory
+		git://git.kernel.org/pub/scm/linux/kernel/git/krzk/linux tags/memory-controller-drv-5.9
 
 arm/defconfig
 	renesas/defconfig
