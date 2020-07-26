@@ -1,32 +1,32 @@
 // SPDX-License-Identifier: GPL-2.0
 /dts-v1/;
 
-#include "x1000.dtsi"
+#include "x1830.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/clock/ingenic,tcu.h>
 #include <dt-bindings/interrupt-controller/irq.h>
 
 / {
-	compatible = "yna,cu1000-neo", "ingenic,x1000e";
-	model = "YSH & ATIL General Board CU1000-Neo";
+	compatible = "yna,cu1830-neo", "ingenic,x1830";
+	model = "YSH & ATIL General Board CU1830-Neo";
 
 	aliases {
-		serial2 = &uart2;
+		serial1 = &uart1;
 	};
 
 	chosen {
-		stdout-path = "serial2:115200n8";
+		stdout-path = "serial1:115200n8";
 	};
 
 	memory {
 		device_type = "memory";
-		reg = <0x0 0x04000000>;
+		reg = <0x0 0x08000000>;
 	};
 
 	leds {
 		compatible = "gpio-leds";
 		led-0 {
-			gpios = <&gpb 21 GPIO_ACTIVE_HIGH>;
+			gpios = <&gpc 17 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "mmc0";
 		};
 	};
@@ -34,7 +34,7 @@
 	wlan_pwrseq: msc1-pwrseq {
 		compatible = "mmc-pwrseq-simple";
 
-		reset-gpios = <&gpc 17 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&gpc 13 GPIO_ACTIVE_LOW>;
 		post-power-on-delay-ms = <200>;
 	};
 };
@@ -52,11 +52,11 @@
 	ingenic,pwm-channels-mask = <0xfa>;
 };
 
-&uart2 {
+&uart1 {
 	status = "okay";
 
 	pinctrl-names = "default";
-	pinctrl-0 = <&pins_uart2>;
+	pinctrl-0 = <&pins_uart1>;
 };
 
 &i2c0 {
@@ -76,7 +76,7 @@
 &msc0 {
 	status = "okay";
 
-	bus-width = <8>;
+	bus-width = <4>;
 	max-frequency = <50000000>;
 
 	pinctrl-names = "default";
@@ -105,7 +105,7 @@
 		reg = <1>;
 
 		interrupt-parent = <&gpc>;
-		interrupts = <16 IRQ_TYPE_EDGE_FALLING>;
+		interrupts = <25 IRQ_TYPE_EDGE_FALLING>;
 		interrupt-names = "host-wake";
 
 		brcm,drive-strength = <10>;
@@ -116,12 +116,12 @@
 	status = "okay";
 
 	phy-mode = "rmii";
-	phy-handle = <&lan8720a>;
+	phy-handle = <&ip101gr>;
 
 	pinctrl-names = "default";
 	pinctrl-0 = <&pins_mac>;
 
-	snps,reset-gpio = <&gpc 23 GPIO_ACTIVE_LOW>; /* PC23 */
+	snps,reset-gpio = <&gpb 28 GPIO_ACTIVE_LOW>; /* PB28 */
 	snps,reset-active-low;
 	snps,reset-delays-us = <0 10000 30000>;
 };
@@ -129,16 +129,16 @@
 &mdio {
 	status = "okay";
 
-	lan8720a: ethernet-phy@0 {
-		compatible = "ethernet-phy-id0007.c0f0", "ethernet-phy-ieee802.3-c22";
+	ip101gr: ethernet-phy@0 {
+		compatible = "ethernet-phy-id0243.0c54", "ethernet-phy-ieee802.3-c22";
 		reg = <0>;
 	};
 };
 
 &pinctrl {
-	pins_uart2: uart2 {
-		function = "uart2";
-		groups = "uart2-data-d";
+	pins_uart1: uart1 {
+		function = "uart1";
+		groups = "uart1-data";
 		bias-pull-up;
 	};
 
@@ -150,7 +150,7 @@
 
 	pins_msc0: msc0 {
 		function = "mmc0";
-		groups = "mmc0-1bit", "mmc0-4bit", "mmc0-8bit";
+		groups = "mmc0-1bit", "mmc0-4bit";
 		bias-disable;
 	};
 
