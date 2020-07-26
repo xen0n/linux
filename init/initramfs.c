@@ -576,16 +576,6 @@ static inline bool kexec_free_initrd(void)
 #endif /* CONFIG_KEXEC_CORE */
 
 #ifdef CONFIG_BLK_DEV_RAM
-static void __init clean_rootfs(void)
-{
-	struct path path;
-
-	if (kern_path("/", 0, &path))
-		return;
-	d_genocide(path.dentry);
-	path_put(&path);
-}
-
 static void __init populate_initrd_image(char *err)
 {
 	ssize_t written;
@@ -625,7 +615,6 @@ static int __init populate_rootfs(void)
 	err = unpack_to_rootfs((char *)initrd_start, initrd_end - initrd_start);
 	if (err) {
 #ifdef CONFIG_BLK_DEV_RAM
-		clean_rootfs();
 		populate_initrd_image(err);
 #else
 		printk(KERN_EMERG "Initramfs unpacking failed: %s\n", err);
