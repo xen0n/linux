@@ -611,7 +611,7 @@ static int ipv6_flowlabel_get(struct sock *sk, struct in6_flowlabel_req *freq,
 	struct ip6_flowlabel *fl, *fl1 = NULL;
 	struct ipv6_pinfo *np = inet6_sk(sk);
 	struct net *net = sock_net(sk);
-	int uninitialized_var(err);
+	int err;
 
 	if (freq->flr_flags & IPV6_FL_F_REFLECT) {
 		if (net->ipv6.sysctl.flowlabel_consistency) {
