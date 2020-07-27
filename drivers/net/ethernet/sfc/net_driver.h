@@ -189,6 +189,8 @@ struct efx_tx_buffer {
  *
  * @efx: The associated Efx NIC
  * @queue: DMA queue number
+ * @label: Label for TX completion events.
+ *	Is our index within @channel->tx_queue array.
  * @tso_version: Version of TSO in use for this queue.
  * @channel: The associated channel
  * @core_txq: The networking core TX queue structure
@@ -250,7 +252,8 @@ struct efx_tx_buffer {
 struct efx_tx_queue {
 	/* Members which don't change on the fast path */
 	struct efx_nic *efx ____cacheline_aligned_in_smp;
-	unsigned queue;
+	unsigned int queue;
+	unsigned int label;
 	unsigned int tso_version;
 	struct efx_channel *channel;
 	struct netdev_queue *core_txq;
@@ -606,8 +609,6 @@ extern const unsigned int efx_reset_type_max;
 #define RESET_TYPE(type) \
 	STRING_TABLE_LOOKUP(type, efx_reset_type)
 
-void efx_get_udp_tunnel_type_name(u16 type, char *buf, size_t buflen);
-
 enum efx_int_mode {
 	/* Be careful if altering to correct macro below */
 	EFX_INT_MODE_MSIX = 0,
@@ -867,6 +868,7 @@ struct efx_async_filter_insertion {
  * @n_rx_channels: Number of channels used for RX (= number of RX queues)
  * @n_tx_channels: Number of channels used for TX
  * @n_extra_tx_channels: Number of extra channels with TX queues
+ * @tx_queues_per_channel: number of TX queues probed on each channel
  * @n_xdp_channels: Number of channels used for XDP TX
  * @xdp_channel_offset: Offset of zeroth channel used for XPD TX.
  * @xdp_tx_per_channel: Max number of TX queues on an XDP TX channel.
@@ -961,6 +963,7 @@ struct efx_async_filter_insertion {
  * @vpd_sn: Serial number read from VPD
  * @xdp_rxq_info_failed: Have any of the rx queues failed to initialise their
  *      xdp_rxq_info structures?
+ * @mem_bar: The BAR that is mapped into membase.
  * @monitor_work: Hardware monitor workitem
  * @biu_lock: BIU (bus interface unit) lock
  * @last_irq_cpu: Last CPU to handle a possible test interrupt.  This
@@ -1022,6 +1025,7 @@ struct efx_nic {
 	unsigned next_buffer_table;
 
 	unsigned int max_channels;
+	unsigned int max_vis;
 	unsigned int max_tx_channels;
 	unsigned n_channels;
 	unsigned n_rx_channels;
@@ -1029,6 +1033,7 @@ struct efx_nic {
 	unsigned tx_channel_offset;
 	unsigned n_tx_channels;
 	unsigned n_extra_tx_channels;
+	unsigned int tx_queues_per_channel;
 	unsigned int n_xdp_channels;
 	unsigned int xdp_channel_offset;
 	unsigned int xdp_tx_per_channel;
@@ -1136,6 +1141,8 @@ struct efx_nic {
 	char *vpd_sn;
 	bool xdp_rxq_info_failed;
 
+	unsigned int mem_bar;
+
 	/* The following fields may be written more often */
 
 	struct delayed_work monitor_work ____cacheline_aligned_in_smp;
@@ -1164,12 +1171,9 @@ struct efx_mtd_partition {
 };
 
 struct efx_udp_tunnel {
+#define TUNNEL_ENCAP_UDP_PORT_ENTRY_INVALID	0xffff
 	u16 type; /* TUNNEL_ENCAP_UDP_PORT_ENTRY_foo, see mcdi_pcol.h */
 	__be16 port;
-	/* Count of repeated adds of the same port.  Used only inside the list,
-	 * not in request arguments.
-	 */
-	u16 count;
 };
 
 /**
@@ -1293,9 +1297,7 @@ struct efx_udp_tunnel {
  * @tso_versions: Returns mask of firmware-assisted TSO versions supported.
  *	If %NULL, then device does not support any TSO version.
  * @udp_tnl_push_ports: Push the list of UDP tunnel ports to the NIC if required.
- * @udp_tnl_add_port: Add a UDP tunnel port
  * @udp_tnl_has_port: Check if a port has been added as UDP tunnel
- * @udp_tnl_del_port: Remove a UDP tunnel port
  * @print_additional_fwver: Dump NIC-specific additional FW version info
  * @revision: Hardware architecture revision
  * @txd_ptr_tbl_base: TX descriptor ring base address
@@ -1312,8 +1314,6 @@ struct efx_udp_tunnel {
  * @always_rx_scatter: NIC will always scatter packets to multiple buffers
  * @option_descriptors: NIC supports TX option descriptors
  * @min_interrupt_mode: Lowest capability interrupt mode supported
- *	from &enum efx_int_mode.
- * @max_interrupt_mode: Highest capability interrupt mode supported
  *	from &enum efx_int_mode.
  * @timer_period_max: Maximum period of interrupt timer (in ticks)
  * @offload_features: net_device feature flags for protocol offload
@@ -1352,7 +1352,7 @@ struct efx_nic_type {
 	void (*push_irq_moderation)(struct efx_channel *channel);
 	int (*reconfigure_port)(struct efx_nic *efx);
 	void (*prepare_enable_fc_tx)(struct efx_nic *efx);
-	int (*reconfigure_mac)(struct efx_nic *efx);
+	int (*reconfigure_mac)(struct efx_nic *efx, bool mtu_only);
 	bool (*check_mac_fault)(struct efx_nic *efx);
 	void (*get_wol)(struct efx_nic *efx, struct ethtool_wolinfo *wol);
 	int (*set_wol)(struct efx_nic *efx, u32 type);
@@ -1467,9 +1467,7 @@ struct efx_nic_type {
 	int (*set_mac_address)(struct efx_nic *efx);
 	u32 (*tso_versions)(struct efx_nic *efx);
 	int (*udp_tnl_push_ports)(struct efx_nic *efx);
-	int (*udp_tnl_add_port)(struct efx_nic *efx, struct efx_udp_tunnel tnl);
 	bool (*udp_tnl_has_port)(struct efx_nic *efx, __be16 port);
-	int (*udp_tnl_del_port)(struct efx_nic *efx, struct efx_udp_tunnel tnl);
 	size_t (*print_additional_fwver)(struct efx_nic *efx, char *buf,
 					 size_t len);
 
@@ -1488,7 +1486,6 @@ struct efx_nic_type {
 	bool always_rx_scatter;
 	bool option_descriptors;
 	unsigned int min_interrupt_mode;
-	unsigned int max_interrupt_mode;
 	unsigned int timer_period_max;
 	netdev_features_t offload_features;
 	int mcdi_max_ver;
@@ -1528,7 +1525,7 @@ static inline struct efx_tx_queue *
 efx_get_tx_queue(struct efx_nic *efx, unsigned index, unsigned type)
 {
 	EFX_WARN_ON_ONCE_PARANOID(index >= efx->n_tx_channels ||
-				  type >= EFX_TXQ_TYPES);
+				  type >= efx->tx_queues_per_channel);
 	return &efx->channel[efx->tx_channel_offset + index]->tx_queue[type];
 }
 
@@ -1550,18 +1547,18 @@ static inline bool efx_channel_has_tx_queues(struct efx_channel *channel)
 	return true;
 }
 
+static inline unsigned int efx_channel_num_tx_queues(struct efx_channel *channel)
+{
+	if (efx_channel_is_xdp_tx(channel))
+		return channel->efx->xdp_tx_per_channel;
+	return channel->efx->tx_queues_per_channel;
+}
+
 static inline struct efx_tx_queue *
 efx_channel_get_tx_queue(struct efx_channel *channel, unsigned type)
 {
-	EFX_WARN_ON_ONCE_PARANOID(!efx_channel_has_tx_queues(channel) ||
-				  type >= EFX_TXQ_TYPES);
+	EFX_WARN_ON_ONCE_PARANOID(type >= efx_channel_num_tx_queues(channel));
 	return &channel->tx_queue[type];
-}
-
-static inline bool efx_tx_queue_used(struct efx_tx_queue *tx_queue)
-{
-	return !(tx_queue->efx->net_dev->num_tc < 2 &&
-		 tx_queue->queue & EFX_TXQ_TYPE_HIGHPRI);
 }
 
 /* Iterate over all TX queues belonging to a channel */
@@ -1570,18 +1567,8 @@ static inline bool efx_tx_queue_used(struct efx_tx_queue *tx_queue)
 		;							\
 	else								\
 		for (_tx_queue = (_channel)->tx_queue;			\
-		     _tx_queue < (_channel)->tx_queue + EFX_TXQ_TYPES && \
-			     (efx_tx_queue_used(_tx_queue) ||            \
-			      efx_channel_is_xdp_tx(_channel));		\
-		     _tx_queue++)
-
-/* Iterate over all possible TX queues belonging to a channel */
-#define efx_for_each_possible_channel_tx_queue(_tx_queue, _channel)	\
-	if (!efx_channel_has_tx_queues(_channel))			\
-		;							\
-	else								\
-		for (_tx_queue = (_channel)->tx_queue;			\
-		     _tx_queue < (_channel)->tx_queue + EFX_TXQ_TYPES;	\
+		     _tx_queue < (_channel)->tx_queue +			\
+				 efx_channel_num_tx_queues(_channel);		\
 		     _tx_queue++)
 
 static inline bool efx_channel_has_rx_queue(struct efx_channel *channel)
