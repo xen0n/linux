@@ -29,6 +29,7 @@ static struct usb_endpoint_descriptor cdns3_gadget_ep0_desc = {
  * @length: data length
  * @erdy: set it to 1 when ERDY packet should be sent -
  *        exit from flow control state
+ * @zlp: add zero length packet
  */
 static void cdns3_ep0_run_transfer(struct cdns3_device *priv_dev,
 				   dma_addr_t dma_addr,
@@ -227,7 +228,7 @@ static int cdns3_req_ep0_set_address(struct cdns3_device *priv_dev,
 /**
  * cdns3_req_ep0_get_status - Handling of GET_STATUS standard USB request
  * @priv_dev: extended gadget object
- * @ctrl_req: pointer to received setup packet
+ * @ctrl: pointer to received setup packet
  *
  * Returns 0 if success, error code on error
  */
@@ -329,10 +330,10 @@ static int cdns3_ep0_feature_handle_device(struct cdns3_device *priv_dev,
 
 		tmode >>= 8;
 		switch (tmode) {
-		case TEST_J:
-		case TEST_K:
-		case TEST_SE0_NAK:
-		case TEST_PACKET:
+		case USB_TEST_J:
+		case USB_TEST_K:
+		case USB_TEST_SE0_NAK:
+		case USB_TEST_PACKET:
 			cdns3_set_register_bit(&priv_dev->regs->usb_cmd,
 					       USB_CMD_STMODE |
 					       USB_STS_TMODE_SEL(tmode - 1));
@@ -401,7 +402,7 @@ static int cdns3_ep0_feature_handle_endpoint(struct cdns3_device *priv_dev,
  * Handling of GET/SET_FEATURE standard USB request
  *
  * @priv_dev: extended gadget object
- * @ctrl_req: pointer to received setup packet
+ * @ctrl: pointer to received setup packet
  * @set: must be set to 1 for SET_FEATURE request
  *
  * Returns 0 if success, error code on error
@@ -610,7 +611,7 @@ static bool cdns3_check_new_setup(struct cdns3_device *priv_dev)
 {
 	u32 ep_sts_reg;
 
-	cdns3_select_ep(priv_dev, 0 | USB_DIR_OUT);
+	cdns3_select_ep(priv_dev, USB_DIR_OUT);
 	ep_sts_reg = readl(&priv_dev->regs->ep_sts);
 
 	return !!(ep_sts_reg & (EP_STS_SETUP | EP_STS_STPWAIT));
@@ -654,6 +655,9 @@ void cdns3_check_ep0_interrupt_proceed(struct cdns3_device *priv_dev, int dir)
 
 /**
  * cdns3_gadget_ep0_enable
+ * @ep: pointer to endpoint zero object
+ * @desc: pointer to usb endpoint descriptor
+ *
  * Function shouldn't be called by gadget driver,
  * endpoint 0 is allways active
  */
@@ -665,6 +669,8 @@ static int cdns3_gadget_ep0_enable(struct usb_ep *ep,
 
 /**
  * cdns3_gadget_ep0_disable
+ * @ep: pointer to endpoint zero object
+ *
  * Function shouldn't be called by gadget driver,
  * endpoint 0 is allways active
  */
@@ -860,7 +866,7 @@ void cdns3_ep0_config(struct cdns3_device *priv_dev)
 /**
  * cdns3_init_ep0 Initializes software endpoint 0 of gadget
  * @priv_dev: extended gadget object
- * @ep_priv: extended endpoint object
+ * @priv_ep: extended endpoint object
  *
  * Returns 0 on success else error code.
  */

@@ -421,7 +421,7 @@ static int cdns3_start_all_request(struct cdns3_device *priv_dev,
 		if ((priv_req->flags & REQUEST_INTERNAL) ||
 		    (priv_ep->flags & EP_TDLCHK_EN) ||
 			priv_ep->use_streams) {
-			trace_printk("Blocking external request\n");
+			dev_dbg(priv_dev->dev, "Blocking external request\n");
 			return ret;
 		}
 	}
@@ -644,7 +644,7 @@ static void cdns3_wa2_remove_old_request(struct cdns3_endpoint *priv_ep)
 
 /**
  * cdns3_wa2_descmissing_packet - handles descriptor missing event.
- * @priv_dev: extended gadget object
+ * @priv_ep: extended gadget object
  *
  * This function is used only for WA2. For more information see Work around 2
  * description.
@@ -1080,6 +1080,7 @@ static int cdns3_ep_run_stream_transfer(struct cdns3_endpoint *priv_ep,
 /**
  * cdns3_ep_run_transfer - start transfer on no-default endpoint hardware
  * @priv_ep: endpoint object
+ * @request: request object
  *
  * Returns zero on success or negative value on failure
  */
@@ -1809,8 +1810,8 @@ static irqreturn_t cdns3_device_thread_irq_handler(int irq, void *data)
 	struct cdns3_device *priv_dev = data;
 	irqreturn_t ret = IRQ_NONE;
 	unsigned long flags;
-	int bit;
-	u32 reg;
+	unsigned int bit;
+	unsigned long reg;
 
 	spin_lock_irqsave(&priv_dev->lock, flags);
 
@@ -1841,7 +1842,7 @@ static irqreturn_t cdns3_device_thread_irq_handler(int irq, void *data)
 	if (!reg)
 		goto irqend;
 
-	for_each_set_bit(bit, (unsigned long *)&reg,
+	for_each_set_bit(bit, &reg,
 			 sizeof(u32) * BITS_PER_BYTE) {
 		cdns3_check_ep_interrupt_proceed(priv_dev->eps[bit]);
 		ret = IRQ_HANDLED;
@@ -2568,7 +2569,7 @@ not_found:
 /**
  * __cdns3_gadget_ep_set_halt Sets stall on selected endpoint
  * Should be called after acquiring spin_lock and selecting ep
- * @ep: endpoint object to set stall on.
+ * @priv_ep: endpoint object to set stall on.
  */
 void __cdns3_gadget_ep_set_halt(struct cdns3_endpoint *priv_ep)
 {
@@ -2589,7 +2590,7 @@ void __cdns3_gadget_ep_set_halt(struct cdns3_endpoint *priv_ep)
 /**
  * __cdns3_gadget_ep_clear_halt Clears stall on selected endpoint
  * Should be called after acquiring spin_lock and selecting ep
- * @ep: endpoint object to clear stall on
+ * @priv_ep: endpoint object to clear stall on
  */
 int __cdns3_gadget_ep_clear_halt(struct cdns3_endpoint *priv_ep)
 {
@@ -2814,7 +2815,7 @@ static int cdns3_gadget_udc_start(struct usb_gadget *gadget,
 		dev_err(priv_dev->dev,
 			"invalid maximum_speed parameter %d\n",
 			max_speed);
-		/* fall through */
+		fallthrough;
 	case USB_SPEED_UNKNOWN:
 		/* default to superspeed */
 		max_speed = USB_SPEED_SUPER;
@@ -2890,7 +2891,7 @@ static void cdns3_free_all_eps(struct cdns3_device *priv_dev)
 
 /**
  * cdns3_init_eps Initializes software endpoints of gadget
- * @cdns3: extended gadget object
+ * @priv_dev: extended gadget object
  *
  * Returns 0 on success, error code elsewhere
  */
@@ -3055,7 +3056,7 @@ static int cdns3_gadget_start(struct cdns3 *cdns)
 	default:
 		dev_err(cdns->dev, "invalid maximum_speed parameter %d\n",
 			max_speed);
-		/* fall through */
+		fallthrough;
 	case USB_SPEED_UNKNOWN:
 		/* default to superspeed */
 		max_speed = USB_SPEED_SUPER;
@@ -3202,7 +3203,7 @@ static int cdns3_gadget_resume(struct cdns3 *cdns, bool hibernated)
 /**
  * cdns3_gadget_init - initialize device structure
  *
- * cdns: cdns3 instance
+ * @cdns: cdns3 instance
  *
  * This function initializes the gadget.
  */
