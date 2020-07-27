@@ -264,6 +264,7 @@ static int setregs_set(struct task_struct *target,
 {
 	struct pt_regs *regs = target->thread.kregs;
 	u32 v[4];
+	int ret;
 
 	if (target == current)
 		flush_user_windows();
