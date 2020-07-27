@@ -1158,7 +1158,7 @@ setxattr() because of the special semantics of the encryption xattr.
 were to be added to or removed from anything other than an empty
 directory.)  These structs are defined as follows::
 
-    #define FS_KEY_DERIVATION_NONCE_SIZE 16
+    #define FSCRYPT_FILE_NONCE_SIZE 16
 
     #define FSCRYPT_KEY_DESCRIPTOR_SIZE  8
     struct fscrypt_context_v1 {
@@ -1167,7 +1167,7 @@ directory.)  These structs are defined as follows::
             u8 filenames_encryption_mode;
             u8 flags;
             u8 master_key_descriptor[FSCRYPT_KEY_DESCRIPTOR_SIZE];
-            u8 nonce[FS_KEY_DERIVATION_NONCE_SIZE];
+            u8 nonce[FSCRYPT_FILE_NONCE_SIZE];
     };
 
     #define FSCRYPT_KEY_IDENTIFIER_SIZE  16
@@ -1178,7 +1178,7 @@ directory.)  These structs are defined as follows::
             u8 flags;
             u8 __reserved[4];
             u8 master_key_identifier[FSCRYPT_KEY_IDENTIFIER_SIZE];
-            u8 nonce[FS_KEY_DERIVATION_NONCE_SIZE];
+            u8 nonce[FSCRYPT_FILE_NONCE_SIZE];
     };
 
 The context structs contain the same information as the corresponding
@@ -1255,6 +1255,7 @@ f2fs encryption using `kvm-xfstests
 <https://github.com/tytso/xfstests-bld/blob/master/Documentation/kvm-quickstart.md>`_::
 
     kvm-xfstests -c ext4,f2fs -g encrypt
+    kvm-xfstests -c ext4,f2fs -g encrypt -m inlinecrypt
 
 UBIFS encryption can also be tested this way, but it should be done in
 a separate command, and it takes some time for kvm-xfstests to set up
@@ -1276,6 +1277,7 @@ This tests the encrypted I/O paths more thoroughly.  To do this with
 kvm-xfstests, use the "encrypt" filesystem configuration::
 
     kvm-xfstests -c ext4/encrypt,f2fs/encrypt -g auto
+    kvm-xfstests -c ext4/encrypt,f2fs/encrypt -g auto -m inlinecrypt
 
 Because this runs many more tests than "-g encrypt" does, it takes
 much longer to run; so also consider using `gce-xfstests
@@ -1283,3 +1285,4 @@ much longer to run; so also consider using `gce-xfstests
 instead of kvm-xfstests::
 
     gce-xfstests -c ext4/encrypt,f2fs/encrypt -g auto
+    gce-xfstests -c ext4/encrypt,f2fs/encrypt -g auto -m inlinecrypt
