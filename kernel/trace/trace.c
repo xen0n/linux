@@ -4613,7 +4613,7 @@ loff_t tracing_lseek(struct file *file, loff_t offset, int whence)
 
 static const struct file_operations tracing_fops = {
 	.open		= tracing_open,
-	.read		= seq_read,
+	.read_iter		= seq_read_iter,
 	.write		= tracing_write_stub,
 	.llseek		= tracing_lseek,
 	.release	= tracing_release,
@@ -4621,7 +4621,7 @@ static const struct file_operations tracing_fops = {
 
 static const struct file_operations show_traces_fops = {
 	.open		= show_traces_open,
-	.read		= seq_read,
+	.read_iter		= seq_read_iter,
 	.llseek		= seq_lseek,
 	.release	= show_traces_release,
 };
@@ -4959,7 +4959,7 @@ static int tracing_trace_options_open(struct inode *inode, struct file *file)
 
 static const struct file_operations tracing_iter_fops = {
 	.open		= tracing_trace_options_open,
-	.read		= seq_read,
+	.read_iter		= seq_read_iter,
 	.llseek		= seq_lseek,
 	.release	= tracing_single_release_tr,
 	.write		= tracing_trace_options_write,
@@ -5299,7 +5299,7 @@ static int tracing_saved_tgids_open(struct inode *inode, struct file *filp)
 
 static const struct file_operations tracing_saved_tgids_fops = {
 	.open		= tracing_saved_tgids_open,
-	.read		= seq_read,
+	.read_iter		= seq_read_iter,
 	.llseek		= seq_lseek,
 	.release	= seq_release,
 };
@@ -5378,7 +5378,7 @@ static int tracing_saved_cmdlines_open(struct inode *inode, struct file *filp)
 
 static const struct file_operations tracing_saved_cmdlines_fops = {
 	.open		= tracing_saved_cmdlines_open,
-	.read		= seq_read,
+	.read_iter		= seq_read_iter,
 	.llseek		= seq_lseek,
 	.release	= seq_release,
 };
@@ -5544,7 +5544,7 @@ static int tracing_eval_map_open(struct inode *inode, struct file *filp)
 
 static const struct file_operations tracing_eval_map_fops = {
 	.open		= tracing_eval_map_open,
-	.read		= seq_read,
+	.read_iter		= seq_read_iter,
 	.llseek		= seq_lseek,
 	.release	= seq_release,
 };
@@ -7121,7 +7121,7 @@ static const struct file_operations tracing_mark_raw_fops = {
 
 static const struct file_operations trace_clock_fops = {
 	.open		= tracing_clock_open,
-	.read		= seq_read,
+	.read_iter		= seq_read_iter,
 	.llseek		= seq_lseek,
 	.release	= tracing_single_release_tr,
 	.write		= tracing_clock_write,
@@ -7129,7 +7129,7 @@ static const struct file_operations trace_clock_fops = {
 
 static const struct file_operations trace_time_stamp_mode_fops = {
 	.open		= tracing_time_stamp_mode_open,
-	.read		= seq_read,
+	.read_iter		= seq_read_iter,
 	.llseek		= seq_lseek,
 	.release	= tracing_single_release_tr,
 };
@@ -7137,7 +7137,7 @@ static const struct file_operations trace_time_stamp_mode_fops = {
 #ifdef CONFIG_TRACER_SNAPSHOT
 static const struct file_operations snapshot_fops = {
 	.open		= tracing_snapshot_open,
-	.read		= seq_read,
+	.read_iter		= seq_read_iter,
 	.write		= tracing_snapshot_write,
 	.llseek		= tracing_lseek,
 	.release	= tracing_snapshot_release,
@@ -7393,7 +7393,7 @@ static int tracing_err_log_release(struct inode *inode, struct file *file)
 static const struct file_operations tracing_err_log_fops = {
 	.open           = tracing_err_log_open,
 	.write		= tracing_err_log_write,
-	.read           = seq_read,
+	.read_iter           = seq_read_iter,
 	.llseek         = seq_lseek,
 	.release        = tracing_err_log_release,
 };
