@@ -1033,6 +1033,7 @@ struct kvm_ppc_resize_hpt {
 #define KVM_CAP_HALT_POLL 182
 #define KVM_CAP_ASYNC_PF_INT 183
 #define KVM_CAP_LAST_CPU 184
+#define KVM_CAP_S390_DIAG318 185
 
 #ifdef KVM_CAP_IRQ_ROUTING
 
