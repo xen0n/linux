@@ -47,6 +47,10 @@ extern struct class rproc_class;
 int rproc_init_sysfs(void);
 void rproc_exit_sysfs(void);
 
+/* from remoteproc_coredump.c */
+void rproc_coredump_cleanup(struct rproc *rproc);
+void rproc_coredump(struct rproc *rproc);
+
 void rproc_free_vring(struct rproc_vring *rvring);
 int rproc_alloc_vring(struct rproc_vdev *rvdev, int i);
 
@@ -75,6 +79,14 @@ static inline int rproc_unprepare_device(struct rproc *rproc)
 {
 	if (rproc->ops->unprepare)
 		return rproc->ops->unprepare(rproc);
+
+	return 0;
+}
+
+static inline int rproc_attach_device(struct rproc *rproc)
+{
+	if (rproc->ops->attach)
+		return rproc->ops->attach(rproc);
 
 	return 0;
 }
