@@ -14,6 +14,8 @@
 
 #include <linux/decompress/generic.h>
 
+static struct file *in_file, *out_file;
+static loff_t in_pos, out_pos;
 
 static int __init prompt_ramdisk(char *str)
 {
@@ -31,8 +33,7 @@ static int __init ramdisk_start_setup(char *str)
 }
 __setup("ramdisk_start=", ramdisk_start_setup);
 
-static int __init crd_load(struct file *in_file, struct file *out_file,
-		decompress_fn deco);
+static int __init crd_load(decompress_fn deco);
 
 /*
  * This routine tries to find a RAM disk image to load, and returns the
@@ -54,7 +55,7 @@ static int __init crd_load(struct file *in_file, struct file *out_file,
  *	lz4
  */
 static int __init
-identify_ramdisk_image(struct file *file, int start_block,
+identify_ramdisk_image(struct file *file, loff_t pos,
 		decompress_fn *decompressor)
 {
 	const int size = 512;
@@ -66,7 +67,7 @@ identify_ramdisk_image(struct file *file, int start_block,
 	unsigned char *buf;
 	const char *compress_name;
 	unsigned long n;
-	loff_t pos;
+	int start_block = rd_image_start;
 
 	buf = kmalloc(size, GFP_KERNEL);
 	if (!buf)
@@ -185,7 +186,6 @@ static unsigned long nr_blocks(struct file *file)
 int __init rd_load_image(char *from)
 {
 	int res = 0;
-	struct file *in_file, *out_file;
 	unsigned long rd_blocks, devblocks;
 	int nblocks, i;
 	char *buf = NULL;
@@ -203,12 +203,13 @@ int __init rd_load_image(char *from)
 	if (IS_ERR(in_file))
 		goto noclose_input;
 
-	nblocks = identify_ramdisk_image(in_file, rd_image_start, &decompressor);
+	in_pos = rd_image_start * BLOCK_SIZE;
+	nblocks = identify_ramdisk_image(in_file, in_pos, &decompressor);
 	if (nblocks < 0)
 		goto done;
 
 	if (nblocks == 0) {
-		if (crd_load(in_file, out_file, decompressor) == 0)
+		if (crd_load(decompressor) == 0)
 			goto successful_load;
 		goto done;
 	}
@@ -252,8 +253,8 @@ int __init rd_load_image(char *from)
 			fput(in_file);
 			break;
 		}
-		kernel_read(in_file, buf, BLOCK_SIZE, &in_file->f_pos);
-		kernel_write(out_file, buf, BLOCK_SIZE, &out_file->f_pos);
+		kernel_read(in_file, buf, BLOCK_SIZE, &in_pos);
+		kernel_write(out_file, buf, BLOCK_SIZE, &out_pos);
 #if !defined(CONFIG_S390)
 		if (!(i % 16)) {
 			pr_cont("%c\b", rotator[rotate & 0x3]);
@@ -284,11 +285,10 @@ int __init rd_load_disk(int n)
 
 static int exit_code;
 static int decompress_error;
-static struct file *crd_infile, *crd_outfile;
 
 static long __init compr_fill(void *buf, unsigned long len)
 {
-	long r = kernel_read(crd_infile, buf, len, &crd_infile->f_pos);
+	long r = kernel_read(in_file, buf, len, &in_pos);
 	if (r < 0)
 		printk(KERN_ERR "RAMDISK: error while reading compressed data");
 	else if (r == 0)
@@ -298,7 +298,7 @@ static long __init compr_fill(void *buf, unsigned long len)
 
 static long __init compr_flush(void *window, unsigned long outcnt)
 {
-	long written = kernel_write(crd_outfile, window, outcnt, &crd_outfile->f_pos);
+	long written = kernel_write(out_file, window, outcnt, &out_pos);
 	if (written != outcnt) {
 		if (decompress_error == 0)
 			printk(KERN_ERR
@@ -317,12 +317,9 @@ static void __init error(char *x)
 	decompress_error = 1;
 }
 
-static int __init crd_load(struct file *in_file, struct file *out_file,
-		decompress_fn deco)
+static int __init crd_load(decompress_fn deco)
 {
 	int result;
-	crd_infile = in_file;
-	crd_outfile = out_file;
 
 	if (!deco) {
 		pr_emerg("Invalid ramdisk decompression routine.  "
