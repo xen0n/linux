@@ -335,27 +335,97 @@ out:
  * FS_ATTRIB reports the child inode even if reported on a watched parent.
  * FS_CREATE reports the modified dir inode and not the created inode.
  */
-static struct inode *fanotify_fid_inode(struct inode *to_tell, u32 event_mask,
-					const void *data, int data_type)
+static struct inode *fanotify_fid_inode(u32 event_mask, const void *data,
+					int data_type, struct inode *dir)
 {
 	if (event_mask & ALL_FSNOTIFY_DIRENT_EVENTS)
-		return to_tell;
+		return dir;
 
-	return (struct inode *)fsnotify_data_inode(data, data_type);
+	return fsnotify_data_inode(data, data_type);
 }
 
-struct fanotify_event *fanotify_alloc_event(struct fsnotify_group *group,
-					    struct inode *inode, u32 mask,
-					    const void *data, int data_type,
-					    const struct qstr *file_name,
-					    __kernel_fsid_t *fsid)
+static struct fanotify_event *fanotify_alloc_path_event(const struct path *path,
+							gfp_t gfp)
+{
+	struct fanotify_path_event *pevent;
+
+	pevent = kmem_cache_alloc(fanotify_path_event_cachep, gfp);
+	if (!pevent)
+		return NULL;
+
+	pevent->fae.type = FANOTIFY_EVENT_TYPE_PATH;
+	pevent->path = *path;
+	path_get(path);
+
+	return &pevent->fae;
+}
+
+static struct fanotify_event *fanotify_alloc_perm_event(const struct path *path,
+							gfp_t gfp)
+{
+	struct fanotify_perm_event *pevent;
+
+	pevent = kmem_cache_alloc(fanotify_perm_event_cachep, gfp);
+	if (!pevent)
+		return NULL;
+
+	pevent->fae.type = FANOTIFY_EVENT_TYPE_PATH_PERM;
+	pevent->response = 0;
+	pevent->state = FAN_EVENT_INIT;
+	pevent->path = *path;
+	path_get(path);
+
+	return &pevent->fae;
+}
+
+static struct fanotify_event *fanotify_alloc_fid_event(struct inode *id,
+						       __kernel_fsid_t *fsid,
+						       gfp_t gfp)
+{
+	struct fanotify_fid_event *ffe;
+
+	ffe = kmem_cache_alloc(fanotify_fid_event_cachep, gfp);
+	if (!ffe)
+		return NULL;
+
+	ffe->fae.type = FANOTIFY_EVENT_TYPE_FID;
+	ffe->fsid = *fsid;
+	fanotify_encode_fh(&ffe->object_fh, id, gfp);
+
+	return &ffe->fae;
+}
+
+static struct fanotify_event *fanotify_alloc_name_event(struct inode *id,
+							__kernel_fsid_t *fsid,
+							const struct qstr *file_name,
+							gfp_t gfp)
+{
+	struct fanotify_name_event *fne;
+
+	fne = kmalloc(sizeof(*fne) + file_name->len + 1, gfp);
+	if (!fne)
+		return NULL;
+
+	fne->fae.type = FANOTIFY_EVENT_TYPE_FID_NAME;
+	fne->fsid = *fsid;
+	fanotify_encode_fh(&fne->dir_fh, id, gfp);
+	fne->name_len = file_name->len;
+	strcpy(fne->name, file_name->name);
+
+	return &fne->fae;
+}
+
+static struct fanotify_event *fanotify_alloc_event(struct fsnotify_group *group,
+						   u32 mask, const void *data,
+						   int data_type, struct inode *dir,
+						   const struct qstr *file_name,
+						   __kernel_fsid_t *fsid)
 {
 	struct fanotify_event *event = NULL;
-	struct fanotify_fid_event *ffe = NULL;
-	struct fanotify_name_event *fne = NULL;
 	gfp_t gfp = GFP_KERNEL_ACCOUNT;
-	struct inode *id = fanotify_fid_inode(inode, mask, data, data_type);
+	struct inode *id = fanotify_fid_inode(mask, data, data_type, dir);
 	const struct path *path = fsnotify_data_path(data, data_type);
+	bool name_event = false;
 
 	/*
 	 * For queues with unlimited length lost events are not expected and
@@ -372,87 +442,29 @@ struct fanotify_event *fanotify_alloc_event(struct fsnotify_group *group,
 	memalloc_use_memcg(group->memcg);
 
 	if (fanotify_is_perm_event(mask)) {
-		struct fanotify_perm_event *pevent;
-
-		pevent = kmem_cache_alloc(fanotify_perm_event_cachep, gfp);
-		if (!pevent)
-			goto out;
-
-		event = &pevent->fae;
-		event->type = FANOTIFY_EVENT_TYPE_PATH_PERM;
-		pevent->response = 0;
-		pevent->state = FAN_EVENT_INIT;
-		goto init;
-	}
-
-	/*
-	 * For FAN_DIR_MODIFY event, we report the fid of the directory and
-	 * the name of the modified entry.
-	 * Allocate an fanotify_name_event struct and copy the name.
-	 */
-	if (mask & FAN_DIR_MODIFY && !(WARN_ON_ONCE(!file_name))) {
-		fne = kmalloc(sizeof(*fne) + file_name->len + 1, gfp);
-		if (!fne)
-			goto out;
-
-		event = &fne->fae;
-		event->type = FANOTIFY_EVENT_TYPE_FID_NAME;
-		fne->name_len = file_name->len;
-		strcpy(fne->name, file_name->name);
-		goto init;
-	}
-
-	if (FAN_GROUP_FLAG(group, FAN_REPORT_FID)) {
-		ffe = kmem_cache_alloc(fanotify_fid_event_cachep, gfp);
-		if (!ffe)
-			goto out;
-
-		event = &ffe->fae;
-		event->type = FANOTIFY_EVENT_TYPE_FID;
+		event = fanotify_alloc_perm_event(path, gfp);
+	} else if (name_event && file_name) {
+		event = fanotify_alloc_name_event(id, fsid, file_name, gfp);
+	} else if (FAN_GROUP_FLAG(group, FAN_REPORT_FID)) {
+		event = fanotify_alloc_fid_event(id, fsid, gfp);
 	} else {
-		struct fanotify_path_event *pevent;
-
-		pevent = kmem_cache_alloc(fanotify_path_event_cachep, gfp);
-		if (!pevent)
-			goto out;
-
-		event = &pevent->fae;
-		event->type = FANOTIFY_EVENT_TYPE_PATH;
+		event = fanotify_alloc_path_event(path, gfp);
 	}
 
-init:
+	if (!event)
+		goto out;
+
 	/*
 	 * Use the victim inode instead of the watching inode as the id for
 	 * event queue, so event reported on parent is merged with event
 	 * reported on child when both directory and child watches exist.
 	 */
-	fsnotify_init_event(&event->fse, (unsigned long)id);
-	event->mask = mask;
+	fanotify_init_event(event, (unsigned long)id, mask);
 	if (FAN_GROUP_FLAG(group, FAN_REPORT_TID))
 		event->pid = get_pid(task_pid(current));
 	else
 		event->pid = get_pid(task_tgid(current));
 
-	if (fsid && fanotify_event_fsid(event))
-		*fanotify_event_fsid(event) = *fsid;
-
-	if (fanotify_event_object_fh(event))
-		fanotify_encode_fh(fanotify_event_object_fh(event), id, gfp);
-
-	if (fanotify_event_dir_fh(event))
-		fanotify_encode_fh(fanotify_event_dir_fh(event), id, gfp);
-
-	if (fanotify_event_has_path(event)) {
-		struct path *p = fanotify_event_path(event);
-
-		if (path) {
-			*p = *path;
-			path_get(path);
-		} else {
-			p->mnt = NULL;
-			p->dentry = NULL;
-		}
-	}
 out:
 	memalloc_unuse_memcg();
 	return event;
@@ -491,9 +503,9 @@ static __kernel_fsid_t fanotify_get_fsid(struct fsnotify_iter_info *iter_info)
 	return fsid;
 }
 
-static int fanotify_handle_event(struct fsnotify_group *group,
-				 struct inode *inode,
-				 u32 mask, const void *data, int data_type,
+static int fanotify_handle_event(struct fsnotify_group *group, u32 mask,
+				 const void *data, int data_type,
+				 struct inode *dir,
 				 const struct qstr *file_name, u32 cookie,
 				 struct fsnotify_iter_info *iter_info)
 {
@@ -512,7 +524,6 @@ static int fanotify_handle_event(struct fsnotify_group *group,
 	BUILD_BUG_ON(FAN_MOVED_FROM != FS_MOVED_FROM);
 	BUILD_BUG_ON(FAN_CREATE != FS_CREATE);
 	BUILD_BUG_ON(FAN_DELETE != FS_DELETE);
-	BUILD_BUG_ON(FAN_DIR_MODIFY != FS_DIR_MODIFY);
 	BUILD_BUG_ON(FAN_DELETE_SELF != FS_DELETE_SELF);
 	BUILD_BUG_ON(FAN_MOVE_SELF != FS_MOVE_SELF);
 	BUILD_BUG_ON(FAN_EVENT_ON_CHILD != FS_EVENT_ON_CHILD);
@@ -530,8 +541,7 @@ static int fanotify_handle_event(struct fsnotify_group *group,
 	if (!mask)
 		return 0;
 
-	pr_debug("%s: group=%p inode=%p mask=%x\n", __func__, group, inode,
-		 mask);
+	pr_debug("%s: group=%p mask=%x\n", __func__, group, mask);
 
 	if (fanotify_is_perm_event(mask)) {
 		/*
@@ -549,7 +559,7 @@ static int fanotify_handle_event(struct fsnotify_group *group,
 			return 0;
 	}
 
-	event = fanotify_alloc_event(group, inode, mask, data, data_type,
+	event = fanotify_alloc_event(group, mask, data, data_type, dir,
 				     file_name, &fsid);
 	ret = -ENOMEM;
 	if (unlikely(!event)) {
@@ -639,6 +649,9 @@ static void fanotify_free_event(struct fsnotify_event *fsn_event)
 		break;
 	case FANOTIFY_EVENT_TYPE_FID_NAME:
 		fanotify_free_name_event(event);
+		break;
+	case FANOTIFY_EVENT_TYPE_OVERFLOW:
+		kfree(event);
 		break;
 	default:
 		WARN_ON_ONCE(1);

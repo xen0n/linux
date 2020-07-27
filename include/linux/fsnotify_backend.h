@@ -47,7 +47,6 @@
 #define FS_OPEN_PERM		0x00010000	/* open event in an permission hook */
 #define FS_ACCESS_PERM		0x00020000	/* access event in a permissions hook */
 #define FS_OPEN_EXEC_PERM	0x00040000	/* open/exec event in a permission hook */
-#define FS_DIR_MODIFY		0x00080000	/* Directory entry was modified */
 
 #define FS_EXCL_UNLINK		0x04000000	/* do not send events if object is unlinked */
 /* This inode cares about things that happen to its children.  Always set for
@@ -67,8 +66,7 @@
  * The watching parent may get an FS_ATTRIB|FS_EVENT_ON_CHILD event
  * when a directory entry inside a child subdir changes.
  */
-#define ALL_FSNOTIFY_DIRENT_EVENTS	(FS_CREATE | FS_DELETE | FS_MOVE | \
-					 FS_DIR_MODIFY)
+#define ALL_FSNOTIFY_DIRENT_EVENTS	(FS_CREATE | FS_DELETE | FS_MOVE)
 
 #define ALL_FSNOTIFY_PERM_EVENTS (FS_OPEN_PERM | FS_ACCESS_PERM | \
 				  FS_OPEN_EXEC_PERM)
@@ -108,6 +106,19 @@ struct mem_cgroup;
  * these operations for each relevant group.
  *
  * handle_event - main call for a group to handle an fs event
+ * @group:	group to notify
+ * @mask:	event type and flags
+ * @data:	object that event happened on
+ * @data_type:	type of object for fanotify_data_XXX() accessors
+ * @dir:	optional directory associated with event -
+ *		if @file_name is not NULL, this is the directory that
+ *		@file_name is relative to. Otherwise, @dir is the object
+ *		inode if event happened on directory and NULL if event
+ *		happenned on a non-directory.
+ * @file_name:	optional file name associated with event
+ * @cookie:	inotify rename cookie
+ * @iter_info:	array of marks from this group that are interested in the event
+ *
  * free_group_priv - called when a group refcnt hits 0 to clean up the private union
  * freeing_mark - called when a mark is being destroyed for some reason.  The group
  * 		MUST be holding a reference on each mark and that reference must be
@@ -115,9 +126,8 @@ struct mem_cgroup;
  * 		userspace messages that marks have been removed.
  */
 struct fsnotify_ops {
-	int (*handle_event)(struct fsnotify_group *group,
-			    struct inode *inode,
-			    u32 mask, const void *data, int data_type,
+	int (*handle_event)(struct fsnotify_group *group, u32 mask,
+			    const void *data, int data_type, struct inode *dir,
 			    const struct qstr *file_name, u32 cookie,
 			    struct fsnotify_iter_info *iter_info);
 	void (*free_group_priv)(struct fsnotify_group *group);
@@ -220,12 +230,11 @@ enum fsnotify_data_type {
 	FSNOTIFY_EVENT_INODE,
 };
 
-static inline const struct inode *fsnotify_data_inode(const void *data,
-						      int data_type)
+static inline struct inode *fsnotify_data_inode(const void *data, int data_type)
 {
 	switch (data_type) {
 	case FSNOTIFY_EVENT_INODE:
-		return data;
+		return (struct inode *)data;
 	case FSNOTIFY_EVENT_PATH:
 		return d_inode(((const struct path *)data)->dentry);
 	default:
@@ -379,7 +388,7 @@ struct fsnotify_mark {
 /* main fsnotify call to send events */
 extern int fsnotify(struct inode *to_tell, __u32 mask, const void *data,
 		    int data_type, const struct qstr *name, u32 cookie);
-extern int fsnotify_parent(struct dentry *dentry, __u32 mask, const void *data,
+extern int __fsnotify_parent(struct dentry *dentry, __u32 mask, const void *data,
 			   int data_type);
 extern void __fsnotify_inode_delete(struct inode *inode);
 extern void __fsnotify_vfsmount_delete(struct vfsmount *mnt);
@@ -541,7 +550,7 @@ static inline int fsnotify(struct inode *to_tell, __u32 mask, const void *data,
 	return 0;
 }
 
-static inline int fsnotify_parent(struct dentry *dentry, __u32 mask,
+static inline int __fsnotify_parent(struct dentry *dentry, __u32 mask,
 				  const void *data, int data_type)
 {
 	return 0;

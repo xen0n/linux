@@ -30,12 +30,6 @@ static inline void fsnotify_name(struct inode *dir, __u32 mask,
 				 const struct qstr *name, u32 cookie)
 {
 	fsnotify(dir, mask, child, FSNOTIFY_EVENT_INODE, name, cookie);
-	/*
-	 * Send another flavor of the event without child inode data and
-	 * without the specific event type (e.g. FS_CREATE|FS_IS_DIR).
-	 * The name is relative to the dir inode the event is reported to.
-	 */
-	fsnotify(dir, FS_DIR_MODIFY, dir, FSNOTIFY_EVENT_INODE, name, 0);
 }
 
 static inline void fsnotify_dirent(struct inode *dir, struct dentry *dentry,
@@ -44,38 +38,41 @@ static inline void fsnotify_dirent(struct inode *dir, struct dentry *dentry,
 	fsnotify_name(dir, mask, d_inode(dentry), &dentry->d_name, 0);
 }
 
-/*
- * Simple wrappers to consolidate calls fsnotify_parent()/fsnotify() when
- * an event is on a file/dentry.
- */
-static inline void fsnotify_dentry(struct dentry *dentry, __u32 mask)
+/* Notify this dentry's parent about a child's events. */
+static inline int fsnotify_parent(struct dentry *dentry, __u32 mask,
+				  const void *data, int data_type)
 {
 	struct inode *inode = d_inode(dentry);
 
 	if (S_ISDIR(inode->i_mode))
 		mask |= FS_ISDIR;
 
-	fsnotify_parent(dentry, mask, inode, FSNOTIFY_EVENT_INODE);
-	fsnotify(inode, mask, inode, FSNOTIFY_EVENT_INODE, NULL, 0);
+	if (!(dentry->d_flags & DCACHE_FSNOTIFY_PARENT_WATCHED))
+		goto notify_child;
+
+	return __fsnotify_parent(dentry, mask, data, data_type);
+
+notify_child:
+	return fsnotify(inode, mask, data, data_type, NULL, 0);
+}
+
+/*
+ * Simple wrappers to consolidate calls to fsnotify_parent() when an event
+ * is on a file/dentry.
+ */
+static inline void fsnotify_dentry(struct dentry *dentry, __u32 mask)
+{
+	fsnotify_parent(dentry, mask, d_inode(dentry), FSNOTIFY_EVENT_INODE);
 }
 
 static inline int fsnotify_file(struct file *file, __u32 mask)
 {
 	const struct path *path = &file->f_path;
-	struct inode *inode = file_inode(file);
-	int ret;
 
 	if (file->f_mode & FMODE_NONOTIFY)
 		return 0;
 
-	if (S_ISDIR(inode->i_mode))
-		mask |= FS_ISDIR;
-
-	ret = fsnotify_parent(path->dentry, mask, path, FSNOTIFY_EVENT_PATH);
-	if (ret)
-		return ret;
-
-	return fsnotify(inode, mask, path, FSNOTIFY_EVENT_PATH, NULL, 0);
+	return fsnotify_parent(path->dentry, mask, path, FSNOTIFY_EVENT_PATH);
 }
 
 /* Simple call site for access decisions */

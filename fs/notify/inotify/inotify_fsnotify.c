@@ -39,7 +39,7 @@ static bool event_compare(struct fsnotify_event *old_fsn,
 	if (old->mask & FS_IN_IGNORED)
 		return false;
 	if ((old->mask == new->mask) &&
-	    (old_fsn->objectid == new_fsn->objectid) &&
+	    (old->wd == new->wd) &&
 	    (old->name_len == new->name_len) &&
 	    (!old->name_len || !strcmp(old->name, new->name)))
 		return true;
@@ -55,9 +55,8 @@ static int inotify_merge(struct list_head *list,
 	return event_compare(last_event, event);
 }
 
-int inotify_handle_event(struct fsnotify_group *group,
-			 struct inode *inode,
-			 u32 mask, const void *data, int data_type,
+int inotify_handle_event(struct fsnotify_group *group, u32 mask,
+			 const void *data, int data_type, struct inode *dir,
 			 const struct qstr *file_name, u32 cookie,
 			 struct fsnotify_iter_info *iter_info)
 {
@@ -82,7 +81,7 @@ int inotify_handle_event(struct fsnotify_group *group,
 		alloc_len += len + 1;
 	}
 
-	pr_debug("%s: group=%p inode=%p mask=%x\n", __func__, group, inode,
+	pr_debug("%s: group=%p mark=%p mask=%x\n", __func__, group, inode_mark,
 		 mask);
 
 	i_mark = container_of(inode_mark, struct inotify_inode_mark,
@@ -116,7 +115,7 @@ int inotify_handle_event(struct fsnotify_group *group,
 		mask &= ~IN_ISDIR;
 
 	fsn_event = &event->fse;
-	fsnotify_init_event(fsn_event, (unsigned long)inode);
+	fsnotify_init_event(fsn_event, 0);
 	event->mask = mask;
 	event->wd = i_mark->wd;
 	event->sync_cookie = cookie;
