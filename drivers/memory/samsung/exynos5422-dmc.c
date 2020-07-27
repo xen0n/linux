@@ -1404,7 +1404,7 @@ static int exynos5_dmc_probe(struct platform_device *pdev)
 		return PTR_ERR(dmc->base_drexi1);
 
 	dmc->clk_regmap = syscon_regmap_lookup_by_phandle(np,
-				"samsung,syscon-clk");
+							  "samsung,syscon-clk");
 	if (IS_ERR(dmc->clk_regmap))
 		return PTR_ERR(dmc->clk_regmap);
 
@@ -1482,7 +1482,6 @@ static int exynos5_dmc_probe(struct platform_device *pdev)
 
 		exynos5_dmc_df_profile.polling_ms = 100;
 	}
-
 
 	dmc->df = devm_devfreq_add_device(dev, &exynos5_dmc_df_profile,
 					  DEVFREQ_GOV_SIMPLE_ONDEMAND,
