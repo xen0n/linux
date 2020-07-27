@@ -34,6 +34,7 @@
 #include "sienna_cichlid_ppt.h"
 #include "renoir_ppt.h"
 #include "amd_pcie.h"
+#include "smu_cmn.h"
 
 /*
  * DO NOT use these for err/warn/info/debug messages.
@@ -734,7 +735,7 @@ static int smu_smc_hw_setup(struct smu_context *smu)
 	uint32_t pcie_gen = 0, pcie_width = 0;
 	int ret;
 
-	if (smu_is_dpm_running(smu) && adev->in_suspend) {
+	if (adev->in_suspend && smu_is_dpm_running(smu)) {
 		dev_info(adev->dev, "dpm has been enabled\n");
 		return 0;
 	}
@@ -1589,7 +1590,18 @@ int smu_set_mp1_state(struct smu_context *smu,
 		return 0;
 	}
 
+	/* some asics may not support those messages */
+	if (smu_cmn_to_asic_specific_index(smu,
+					   CMN2ASIC_MAPPING_MSG,
+					   msg) < 0) {
+		mutex_unlock(&smu->mutex);
+		return 0;
+	}
+
 	ret = smu_send_smc_msg(smu, msg, NULL);
+	/* some asics may not support those messages */
+	if (ret == -EINVAL)
+		ret = 0;
 	if (ret)
 		dev_err(smu->adev->dev, "[PrepareMp1] Failed!\n");
 
