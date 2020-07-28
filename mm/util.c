@@ -439,7 +439,7 @@ int __account_locked_vm(struct mm_struct *mm, unsigned long pages, bool inc,
 
 	mmap_assert_write_locked(mm);
 
-	locked_vm = mm->locked_vm;
+	locked_vm = atomic64_read(&mm->locked_vm);
 	if (inc) {
 		if (!bypass_rlim) {
 			limit = task_rlimit(task, RLIMIT_MEMLOCK) >> PAGE_SHIFT;
@@ -447,10 +447,10 @@ int __account_locked_vm(struct mm_struct *mm, unsigned long pages, bool inc,
 				ret = -ENOMEM;
 		}
 		if (!ret)
-			mm->locked_vm = locked_vm + pages;
+			atomic64_add(pages, &mm->locked_vm);
 	} else {
 		WARN_ON_ONCE(pages > locked_vm);
-		mm->locked_vm = locked_vm - pages;
+		atomic64_sub(pages, &mm->locked_vm);
 	}
 
 	pr_debug("%s: [%d] caller %ps %c%lu %lu/%lu%s\n", __func__, task->pid,
