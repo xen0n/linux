@@ -368,24 +368,6 @@
 #define SOC_ENUM_SINGLE_VIRT_DECL(name, xtexts) \
 	const struct soc_enum name = SOC_ENUM_SINGLE_VIRT(ARRAY_SIZE(xtexts), xtexts)
 
-/*
- * Bias levels
- *
- * @ON:      Bias is fully on for audio playback and capture operations.
- * @PREPARE: Prepare for audio operations. Called before DAPM switching for
- *           stream start and stop operations.
- * @STANDBY: Low power standby state when no playback/capture operations are
- *           in progress. NOTE: The transition time between STANDBY and ON
- *           should be as fast as possible and no longer than 10ms.
- * @OFF:     Power Off. No restrictions on transition times.
- */
-enum snd_soc_bias_level {
-	SND_SOC_BIAS_OFF = 0,
-	SND_SOC_BIAS_STANDBY = 1,
-	SND_SOC_BIAS_PREPARE = 2,
-	SND_SOC_BIAS_ON = 3,
-};
-
 struct device_node;
 struct snd_jack;
 struct snd_soc_card;
@@ -801,6 +783,9 @@ struct snd_soc_dai_link {
 	/* codec/machine specific init - e.g. add machine controls */
 	int (*init)(struct snd_soc_pcm_runtime *rtd);
 
+	/* codec/machine specific exit - dual of init() */
+	void (*exit)(struct snd_soc_pcm_runtime *rtd);
+
 	/* optional hw_params re-writing for BE and FE sync */
 	int (*be_hw_params_fixup)(struct snd_soc_pcm_runtime *rtd,
 			struct snd_pcm_hw_params *params);
@@ -1183,6 +1168,8 @@ struct snd_soc_pcm_runtime {
 /* see soc_new_pcm_runtime()  */
 #define asoc_rtd_to_cpu(rtd, n)   (rtd)->dais[n]
 #define asoc_rtd_to_codec(rtd, n) (rtd)->dais[n + (rtd)->num_cpus]
+#define asoc_substream_to_rtd(substream) \
+	(struct snd_soc_pcm_runtime *)snd_pcm_substream_chip(substream)
 
 #define for_each_rtd_components(rtd, i, component)			\
 	for ((i) = 0, component = NULL;					\
