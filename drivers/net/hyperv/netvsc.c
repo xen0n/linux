@@ -50,7 +50,7 @@ void netvsc_switch_datapath(struct net_device *ndev, bool vf)
 
 	vmbus_sendpacket(dev->channel, init_pkt,
 			       sizeof(struct nvsp_message),
-			       (unsigned long)init_pkt,
+			       VMBUS_RQST_ID_NO_RESPONSE,
 			       VM_PKT_DATA_INBAND, 0);
 }
 
@@ -163,7 +163,7 @@ static void netvsc_revoke_recv_buf(struct hv_device *device,
 		ret = vmbus_sendpacket(device->channel,
 				       revoke_packet,
 				       sizeof(struct nvsp_message),
-				       (unsigned long)revoke_packet,
+				       VMBUS_RQST_ID_NO_RESPONSE,
 				       VM_PKT_DATA_INBAND, 0);
 		/* If the failure is because the channel is rescinded;
 		 * ignore the failure since we cannot send on a rescinded
@@ -213,7 +213,7 @@ static void netvsc_revoke_send_buf(struct hv_device *device,
 		ret = vmbus_sendpacket(device->channel,
 				       revoke_packet,
 				       sizeof(struct nvsp_message),
-				       (unsigned long)revoke_packet,
+				       VMBUS_RQST_ID_NO_RESPONSE,
 				       VM_PKT_DATA_INBAND, 0);
 
 		/* If the failure is because the channel is rescinded;
@@ -304,6 +304,7 @@ static int netvsc_init_buf(struct hv_device *device,
 	unsigned int buf_size;
 	size_t map_words;
 	int ret = 0;
+	u64 rqst_id;
 
 	/* Get receive buffer area. */
 	buf_size = device_info->recv_sections * device_info->recv_section_size;
@@ -350,13 +351,22 @@ static int netvsc_init_buf(struct hv_device *device,
 
 	trace_nvsp_send(ndev, init_packet);
 
+	rqst_id = vmbus_next_request_id(&device->channel->requestor,
+					(unsigned long)init_packet);
+	if (rqst_id == VMBUS_RQST_ERROR) {
+		netdev_err(ndev, "No request id available\n");
+		goto cleanup;
+	}
+
 	/* Send the gpadl notification request */
 	ret = vmbus_sendpacket(device->channel, init_packet,
 			       sizeof(struct nvsp_message),
-			       (unsigned long)init_packet,
+			       rqst_id,
 			       VM_PKT_DATA_INBAND,
 			       VMBUS_DATA_PACKET_FLAG_COMPLETION_REQUESTED);
 	if (ret != 0) {
+		/* Reclaim request ID to avoid leak of IDs */
+		vmbus_request_addr(&device->channel->requestor, rqst_id);
 		netdev_err(ndev,
 			"unable to send receive buffer's gpadl to netvsp\n");
 		goto cleanup;
@@ -432,13 +442,22 @@ static int netvsc_init_buf(struct hv_device *device,
 
 	trace_nvsp_send(ndev, init_packet);
 
+	rqst_id = vmbus_next_request_id(&device->channel->requestor,
+					(unsigned long)init_packet);
+	if (rqst_id == VMBUS_RQST_ERROR) {
+		netdev_err(ndev, "No request id available\n");
+		goto cleanup;
+	}
+
 	/* Send the gpadl notification request */
 	ret = vmbus_sendpacket(device->channel, init_packet,
 			       sizeof(struct nvsp_message),
-			       (unsigned long)init_packet,
+			       rqst_id,
 			       VM_PKT_DATA_INBAND,
 			       VMBUS_DATA_PACKET_FLAG_COMPLETION_REQUESTED);
 	if (ret != 0) {
+		/* Reclaim request ID to avoid leak of IDs */
+		vmbus_request_addr(&device->channel->requestor, rqst_id);
 		netdev_err(ndev,
 			   "unable to send send buffer's gpadl to netvsp\n");
 		goto cleanup;
@@ -496,6 +515,7 @@ static int negotiate_nvsp_ver(struct hv_device *device,
 {
 	struct net_device *ndev = hv_get_drvdata(device);
 	int ret;
+	u64 rqst_id;
 
 	memset(init_packet, 0, sizeof(struct nvsp_message));
 	init_packet->hdr.msg_type = NVSP_MSG_TYPE_INIT;
@@ -503,15 +523,25 @@ static int negotiate_nvsp_ver(struct hv_device *device,
 	init_packet->msg.init_msg.init.max_protocol_ver = nvsp_ver;
 	trace_nvsp_send(ndev, init_packet);
 
+	rqst_id = vmbus_next_request_id(&device->channel->requestor,
+					(unsigned long)init_packet);
+	if (rqst_id == VMBUS_RQST_ERROR) {
+		netdev_err(ndev, "No request id available\n");
+		return -EAGAIN;
+	}
+
 	/* Send the init request */
 	ret = vmbus_sendpacket(device->channel, init_packet,
 			       sizeof(struct nvsp_message),
-			       (unsigned long)init_packet,
+			       rqst_id,
 			       VM_PKT_DATA_INBAND,
 			       VMBUS_DATA_PACKET_FLAG_COMPLETION_REQUESTED);
 
-	if (ret != 0)
+	if (ret != 0) {
+		/* Reclaim request ID to avoid leak of IDs */
+		vmbus_request_addr(&device->channel->requestor, rqst_id);
 		return ret;
+	}
 
 	wait_for_completion(&net_device->channel_init_wait);
 
@@ -542,7 +572,7 @@ static int negotiate_nvsp_ver(struct hv_device *device,
 
 	ret = vmbus_sendpacket(device->channel, init_packet,
 				sizeof(struct nvsp_message),
-				(unsigned long)init_packet,
+				VMBUS_RQST_ID_NO_RESPONSE,
 				VM_PKT_DATA_INBAND, 0);
 
 	return ret;
@@ -599,7 +629,7 @@ static int netvsc_connect_vsp(struct hv_device *device,
 	/* Send the init request */
 	ret = vmbus_sendpacket(device->channel, init_packet,
 				sizeof(struct nvsp_message),
-				(unsigned long)init_packet,
+				VMBUS_RQST_ID_NO_RESPONSE,
 				VM_PKT_DATA_INBAND, 0);
 	if (ret != 0)
 		goto cleanup;
@@ -680,10 +710,19 @@ static void netvsc_send_tx_complete(struct net_device *ndev,
 				    const struct vmpacket_descriptor *desc,
 				    int budget)
 {
-	struct sk_buff *skb = (struct sk_buff *)(unsigned long)desc->trans_id;
+	struct sk_buff *skb;
 	struct net_device_context *ndev_ctx = netdev_priv(ndev);
 	u16 q_idx = 0;
 	int queue_sends;
+	u64 cmd_rqst;
+
+	cmd_rqst = vmbus_request_addr(&channel->requestor, (u64)desc->trans_id);
+	if (cmd_rqst == VMBUS_RQST_ERROR) {
+		netdev_err(ndev, "Incorrect transaction id\n");
+		return;
+	}
+
+	skb = (struct sk_buff *)(unsigned long)cmd_rqst;
 
 	/* Notify the layer above us */
 	if (likely(skb)) {
@@ -822,7 +861,7 @@ static inline int netvsc_send_pkt(
 	struct net_device *ndev = hv_get_drvdata(device);
 	struct net_device_context *ndev_ctx = netdev_priv(ndev);
 	struct netdev_queue *txq = netdev_get_tx_queue(ndev, packet->q_idx);
-	u64 req_id;
+	u64 rqst_id;
 	int ret;
 	u32 ring_avail = hv_get_avail_to_write_percent(&out_channel->outbound);
 
@@ -838,12 +877,18 @@ static inline int netvsc_send_pkt(
 	else
 		rpkt->send_buf_section_size = packet->total_data_buflen;
 
-	req_id = (ulong)skb;
 
 	if (out_channel->rescind)
 		return -ENODEV;
 
 	trace_nvsp_send_pkt(ndev, out_channel, rpkt);
+
+	rqst_id = vmbus_next_request_id(&out_channel->requestor,
+					(unsigned long)skb);
+	if (rqst_id == VMBUS_RQST_ERROR) {
+		ret = -EAGAIN;
+		goto ret_check;
+	}
 
 	if (packet->page_buf_cnt) {
 		if (packet->cp_partial)
@@ -852,14 +897,15 @@ static inline int netvsc_send_pkt(
 		ret = vmbus_sendpacket_pagebuffer(out_channel,
 						  pb, packet->page_buf_cnt,
 						  &nvmsg, sizeof(nvmsg),
-						  req_id);
+						  rqst_id);
 	} else {
 		ret = vmbus_sendpacket(out_channel,
 				       &nvmsg, sizeof(nvmsg),
-				       req_id, VM_PKT_DATA_INBAND,
+				       rqst_id, VM_PKT_DATA_INBAND,
 				       VMBUS_DATA_PACKET_FLAG_COMPLETION_REQUESTED);
 	}
 
+ret_check:
 	if (ret == 0) {
 		atomic_inc_return(&nvchan->queue_sends);
 
@@ -868,9 +914,13 @@ static inline int netvsc_send_pkt(
 			ndev_ctx->eth_stats.stop_queue++;
 		}
 	} else if (ret == -EAGAIN) {
+		/* Reclaim request ID to avoid leak of IDs */
+		vmbus_request_addr(&out_channel->requestor, rqst_id);
 		netif_tx_stop_queue(txq);
 		ndev_ctx->eth_stats.stop_queue++;
 	} else {
+		/* Reclaim request ID to avoid leak of IDs */
+		vmbus_request_addr(&out_channel->requestor, rqst_id);
 		netdev_err(ndev,
 			   "Unable to send packet pages %u len %u, ret %d\n",
 			   packet->page_buf_cnt, packet->total_data_buflen,
@@ -1422,6 +1472,7 @@ struct netvsc_device *netvsc_device_add(struct hv_device *device,
 		       netvsc_poll, NAPI_POLL_WEIGHT);
 
 	/* Open the channel */
+	device->channel->rqstor_size = netvsc_rqstor_size(netvsc_ring_bytes);
 	ret = vmbus_open(device->channel, netvsc_ring_bytes,
 			 netvsc_ring_bytes,  NULL, 0,
 			 netvsc_channel_cb, net_device->chan_table);
