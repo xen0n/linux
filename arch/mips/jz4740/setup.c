@@ -49,6 +49,8 @@ static void __init jz4740_detect_mem(void)
 
 static unsigned long __init get_board_mach_type(const void *fdt)
 {
+	if (!fdt_node_check_compatible(fdt, 0, "ingenic,x2000"))
+		return MACH_INGENIC_X2000;
 	if (!fdt_node_check_compatible(fdt, 0, "ingenic,x1830"))
 		return MACH_INGENIC_X1830;
 	if (!fdt_node_check_compatible(fdt, 0, "ingenic,x1000"))
@@ -57,6 +59,8 @@ static unsigned long __init get_board_mach_type(const void *fdt)
 		return MACH_INGENIC_JZ4780;
 	if (!fdt_node_check_compatible(fdt, 0, "ingenic,jz4770"))
 		return MACH_INGENIC_JZ4770;
+	if (!fdt_node_check_compatible(fdt, 0, "ingenic,jz4725b"))
+		return MACH_INGENIC_JZ4725B;
 
 	return MACH_INGENIC_JZ4740;
 }
@@ -91,6 +95,8 @@ void __init device_tree_init(void)
 const char *get_system_type(void)
 {
 	switch (mips_machtype) {
+	case MACH_INGENIC_X2000:
+		return "X2000";
 	case MACH_INGENIC_X1830:
 		return "X1830";
 	case MACH_INGENIC_X1000:
@@ -99,6 +105,8 @@ const char *get_system_type(void)
 		return "JZ4780";
 	case MACH_INGENIC_JZ4770:
 		return "JZ4770";
+	case MACH_INGENIC_JZ4725B:
+		return "JZ4725B";
 	default:
 		return "JZ4740";
 	}
