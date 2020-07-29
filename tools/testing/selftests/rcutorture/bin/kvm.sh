@@ -46,6 +46,7 @@ jitter="-1"
 
 usage () {
 	echo "Usage: $scriptname optional arguments:"
+	echo "       --allcpus"
 	echo "       --bootargs kernel-boot-arguments"
 	echo "       --bootimage relative-path-to-kernel-boot-image"
 	echo "       --buildonly"
@@ -55,17 +56,18 @@ usage () {
 	echo "       --defconfig string"
 	echo "       --dryrun sched|script"
 	echo "       --duration minutes"
+	echo "       --help"
 	echo "       --interactive"
 	echo "       --jitter N [ maxsleep (us) [ maxspin (us) ] ]"
 	echo "       --kconfig Kconfig-options"
 	echo "       --kmake-arg kernel-make-arguments"
 	echo "       --mac nn:nn:nn:nn:nn:nn"
-	echo "       --memory megabytes | nnnG"
+	echo "       --memory megabytes|nnnG"
 	echo "       --no-initrd"
 	echo "       --qemu-args qemu-arguments"
 	echo "       --qemu-cmd qemu-system-..."
 	echo "       --results absolute-pathname"
-	echo "       --torture rcu"
+	echo "       --torture lock|rcu|rcuperf|refscale|scf"
 	echo "       --trust-make"
 	exit 1
 }
@@ -73,6 +75,10 @@ usage () {
 while test $# -gt 0
 do
 	case "$1" in
+	--allcpus)
+		cpus=$TORTURE_ALLOTED_CPUS
+		max_cpus=$TORTURE_ALLOTED_CPUS
+		;;
 	--bootargs|--bootarg)
 		checkarg --bootargs "(list of kernel boot arguments)" "$#" "$2" '.*' '^--'
 		TORTURE_BOOTARGS="$2"
@@ -121,6 +127,9 @@ do
 		checkarg --duration "(minutes)" $# "$2" '^[0-9]*$' '^error'
 		dur=$(($2*60))
 		shift
+		;;
+	--help|-h)
+		usage
 		;;
 	--interactive)
 		TORTURE_QEMU_INTERACTIVE=1; export TORTURE_QEMU_INTERACTIVE
@@ -180,13 +189,14 @@ do
 		shift
 		;;
 	--torture)
-		checkarg --torture "(suite name)" "$#" "$2" '^\(lock\|rcu\|rcuperf\)$' '^--'
+		checkarg --torture "(suite name)" "$#" "$2" '^\(lock\|rcu\|rcuperf\|refscale\|scf\)$' '^--'
 		TORTURE_SUITE=$2
 		shift
-		if test "$TORTURE_SUITE" = rcuperf
+		if test "$TORTURE_SUITE" = rcuperf || test "$TORTURE_SUITE" = refscale
 		then
-			# If you really want jitter for rcuperf, specify
-			# it after specifying rcuperf.  (But why?)
+			# If you really want jitter for refscale or
+			# rcuperf, specify it after specifying the rcuperf
+			# or the refscale.  (But why jitter in these cases?)
 			jitter=0
 		fi
 		;;
@@ -333,6 +343,8 @@ then
 	mkdir -p "$resdir" || :
 fi
 mkdir $resdir/$ds
+TORTURE_RESDIR="$resdir/$ds"; export TORTURE_RESDIR
+TORTURE_STOPFILE="$resdir/$ds/STOP"; export TORTURE_STOPFILE
 echo Results directory: $resdir/$ds
 echo $scriptname $args
 touch $resdir/$ds/log
@@ -497,3 +509,7 @@ fi
 # Tracing: trace_event=rcu:rcu_grace_period,rcu:rcu_future_grace_period,rcu:rcu_grace_period_init,rcu:rcu_nocb_wake,rcu:rcu_preempt_task,rcu:rcu_unlock_preempted_task,rcu:rcu_quiescent_state_report,rcu:rcu_fqs,rcu:rcu_callback,rcu:rcu_kfree_callback,rcu:rcu_batch_start,rcu:rcu_invoke_callback,rcu:rcu_invoke_kfree_callback,rcu:rcu_batch_end,rcu:rcu_torture_read,rcu:rcu_barrier
 # Function-graph tracing: ftrace=function_graph ftrace_graph_filter=sched_setaffinity,migration_cpu_stop
 # Also --kconfig "CONFIG_FUNCTION_TRACER=y CONFIG_FUNCTION_GRAPH_TRACER=y"
+# Control buffer size: --bootargs trace_buf_size=3k
+# Get trace-buffer dumps on all oopses: --bootargs ftrace_dump_on_oops
+# Ditto, but dump only the oopsing CPU: --bootargs ftrace_dump_on_oops=orig_cpu
+# Heavy-handed way to also dump on warnings: --bootargs panic_on_warn
