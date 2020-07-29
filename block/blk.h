@@ -25,11 +25,6 @@ struct blk_flush_queue {
 	struct list_head	flush_data_in_flight;
 	struct request		*flush_rq;
 
-	/*
-	 * flush_rq shares tag with this rq, both can't be active
-	 * at the same time
-	 */
-	struct request		*orig_rq;
 	struct lock_class_key	key;
 	spinlock_t		mq_flush_lock;
 };
@@ -267,6 +262,20 @@ static inline void req_set_nomerge(struct request_queue *q, struct request *req)
 static inline unsigned int bio_allowed_max_sectors(struct request_queue *q)
 {
 	return round_down(UINT_MAX, queue_logical_block_size(q)) >> 9;
+}
+
+/*
+ * The max bio size which is aligned to q->limits.discard_granularity. This
+ * is a hint to split large discard bio in generic block layer, then if device
+ * driver needs to split the discard bio into smaller ones, their bi_size can
+ * be very probably and easily aligned to discard_granularity of the device's
+ * queue.
+ */
+static inline unsigned int bio_aligned_discard_max_sectors(
+					struct request_queue *q)
+{
+	return round_down(UINT_MAX, q->limits.discard_granularity) >>
+			SECTOR_SHIFT;
 }
 
 /*
