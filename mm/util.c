@@ -424,8 +424,7 @@ void arch_pick_mmap_layout(struct mm_struct *mm, struct rlimit *rlim_stack)
  * @task:        task used to check RLIMIT_MEMLOCK
  * @bypass_rlim: %true if checking RLIMIT_MEMLOCK should be skipped
  *
- * Assumes @task and @mm are valid (i.e. at least one reference on each), and
- * that mmap_lock is held as writer.
+ * Assumes @task and @mm are valid (i.e. at least one reference on each).
  *
  * Return:
  * * 0       on success
@@ -437,9 +436,7 @@ int __account_locked_vm(struct mm_struct *mm, unsigned long pages, bool inc,
 	unsigned long locked_vm, limit;
 	int ret = 0;
 
-	mmap_assert_write_locked(mm);
-
-	locked_vm = mm->locked_vm;
+	locked_vm = atomic64_read(&mm->locked_vm);
 	if (inc) {
 		if (!bypass_rlim) {
 			limit = task_rlimit(task, RLIMIT_MEMLOCK) >> PAGE_SHIFT;
@@ -447,10 +444,10 @@ int __account_locked_vm(struct mm_struct *mm, unsigned long pages, bool inc,
 				ret = -ENOMEM;
 		}
 		if (!ret)
-			mm->locked_vm = locked_vm + pages;
+			atomic64_add(pages, &mm->locked_vm);
 	} else {
 		WARN_ON_ONCE(pages > locked_vm);
-		mm->locked_vm = locked_vm - pages;
+		atomic64_sub(pages, &mm->locked_vm);
 	}
 
 	pr_debug("%s: [%d] caller %ps %c%lu %lu/%lu%s\n", __func__, task->pid,
@@ -476,17 +473,11 @@ EXPORT_SYMBOL_GPL(__account_locked_vm);
  */
 int account_locked_vm(struct mm_struct *mm, unsigned long pages, bool inc)
 {
-	int ret;
-
 	if (pages == 0 || !mm)
 		return 0;
 
-	mmap_write_lock(mm);
-	ret = __account_locked_vm(mm, pages, inc, current,
-				  capable(CAP_IPC_LOCK));
-	mmap_write_unlock(mm);
-
-	return ret;
+	return __account_locked_vm(mm, pages, inc,
+					current, capable(CAP_IPC_LOCK));
 }
 EXPORT_SYMBOL_GPL(account_locked_vm);
 

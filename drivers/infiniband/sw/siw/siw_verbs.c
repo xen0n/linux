@@ -1293,14 +1293,16 @@ struct ib_mr *siw_reg_user_mr(struct ib_pd *pd, u64 start, u64 len,
 		goto err_out;
 	}
 	if (mem_limit != RLIM_INFINITY) {
-		unsigned long num_pages =
-			(PAGE_ALIGN(len + (start & ~PAGE_MASK))) >> PAGE_SHIFT;
+		unsigned long num_pages, locked_pages;
+
+		num_pages = (PAGE_ALIGN(len + (start & ~PAGE_MASK)))
+				>> PAGE_SHIFT;
+		locked_pages = atomic64_read(&current->mm->locked_vm);
 		mem_limit >>= PAGE_SHIFT;
 
-		if (num_pages > mem_limit - current->mm->locked_vm) {
+		if (num_pages > mem_limit - locked_pages) {
 			siw_dbg_pd(pd, "pages req %lu, max %lu, lock %lu\n",
-				   num_pages, mem_limit,
-				   current->mm->locked_vm);
+				   num_pages, mem_limit, locked_pages);
 			rv = -ENOMEM;
 			goto err_out;
 		}
