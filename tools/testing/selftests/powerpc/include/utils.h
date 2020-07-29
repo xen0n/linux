@@ -60,6 +60,7 @@ static inline bool have_hwcap2(unsigned long ftr2)
 #endif
 
 bool is_ppc64le(void);
+int using_hash_mmu(bool *using_hash);
 
 /* Yes, this is evil */
 #define FAIL_IF(x)						\
@@ -99,6 +100,11 @@ do {								\
 /* POWER9 feature */
 #ifndef PPC_FEATURE2_ARCH_3_00
 #define PPC_FEATURE2_ARCH_3_00 0x00800000
+#endif
+
+/* POWER10 feature */
+#ifndef PPC_FEATURE2_ARCH_3_1
+#define PPC_FEATURE2_ARCH_3_1 0x00040000
 #endif
 
 #if defined(__powerpc64__)
