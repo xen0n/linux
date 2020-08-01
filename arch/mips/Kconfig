@@ -2879,6 +2879,28 @@ config MIPS_NR_CPU_NR_MAP
 	default 1024 if MIPS_NR_CPU_NR_MAP_1024
 	default NR_CPUS if !MIPS_NR_CPU_NR_MAP_1024
 
+choice
+	prompt "Default IEEE 754 conformance mode"
+	default IEEE754_DEFAULT_STRICT
+	help
+	  Sets the default IEEE 754 conformance mode, same as overriding the
+	  default value for the ieee754= kernel parameter. See the kernel
+	  parameter for details.
+
+	config IEEE754_DEFAULT_STRICT
+		bool "Strict"
+
+	config IEEE754_DEFAULT_LEGACY
+		bool "Legacy"
+
+	config IEEE754_DEFAULT_STD2008
+		bool "2008"
+
+	config IEEE754_DEFAULT_RELAXED
+		bool "Relaxed"
+
+endchoice
+
 #
 # Timer Interrupt Frequency Configuration
 #
