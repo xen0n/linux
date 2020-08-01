@@ -444,7 +444,11 @@ static void rtl8168_hw_config(struct net_device *dev);
 static void rtl8168_hw_start(struct net_device *dev);
 static int rtl8168_close(struct net_device *dev);
 static void rtl8168_set_rx_mode(struct net_device *dev);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,6,0)
 static void rtl8168_tx_timeout(struct net_device *dev);
+#else
+static void rtl8168_tx_timeout(struct net_device *dev, unsigned int txqueue);
+#endif
 static struct net_device_stats *rtl8168_get_stats(struct net_device *dev);
 static int rtl8168_rx_interrupt(struct net_device *, struct rtl8168_private *, void __iomem *, napi_budget, u32 intsts);
 static int rtl8168_change_mtu(struct net_device *dev, int new_mtu);
@@ -27834,7 +27838,11 @@ static void rtl8168_recover(struct rtl8168_private *tp)
 }
 
 static void
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,6,0)
 rtl8168_tx_timeout(struct net_device *dev)
+#else
+rtl8168_tx_timeout(struct net_device *dev, unsigned int txqueue)
+#endif
 {
         struct rtl8168_private *tp = netdev_priv(dev);
         unsigned long flags;
