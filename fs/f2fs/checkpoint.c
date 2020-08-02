@@ -1255,11 +1255,7 @@ static void unblock_operations(struct f2fs_sb_info *sbi)
 
 void f2fs_wait_on_all_pages(struct f2fs_sb_info *sbi, int type)
 {
-	DEFINE_WAIT(wait);
-
 	for (;;) {
-		prepare_to_wait(&sbi->cp_wait, &wait, TASK_UNINTERRUPTIBLE);
-
 		if (!get_pages(sbi, type))
 			break;
 
@@ -1271,9 +1267,9 @@ void f2fs_wait_on_all_pages(struct f2fs_sb_info *sbi, int type)
 							FS_CP_META_IO);
 		else if (type == F2FS_WB_CP_DATA)
 			f2fs_submit_merged_write(sbi, DATA);
+
 		io_schedule_timeout(DEFAULT_IO_TIMEOUT);
 	}
-	finish_wait(&sbi->cp_wait, &wait);
 }
 
 static void update_ckpt_flags(struct f2fs_sb_info *sbi, struct cp_control *cpc)
