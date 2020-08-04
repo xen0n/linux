@@ -35,6 +35,7 @@
 #include "dmub/dmub_srv.h"
 #include "resource.h"
 #include "dsc.h"
+#include "dc_link_dp.h"
 
 struct dmub_debugfs_trace_header {
 	uint32_t entry_count;
@@ -979,6 +980,21 @@ static ssize_t dp_dpcd_data_read(struct file *f, char __user *buf,
 	return read_size - r;
 }
 
+/* function: read DSC status on the connector
+ *
+ * The read function: dp_dsc_clock_en_read
+ * returns current status of DSC clock on the connector.
+ * The return is a boolean flag: 1 or 0.
+ *
+ * Access it with the following command (you need to specify
+ * connector like DP-1):
+ *
+ *	cat /sys/kernel/debug/dri/0/DP-X/dsc_clock_en
+ *
+ * Expected output:
+ * 1 - means that DSC is currently enabled
+ * 0 - means that DSC is disabled
+ */
 static ssize_t dp_dsc_clock_en_read(struct file *f, char __user *buf,
 				    size_t size, loff_t *pos)
 {
@@ -1036,6 +1052,95 @@ static ssize_t dp_dsc_clock_en_read(struct file *f, char __user *buf,
 	return result;
 }
 
+/* function: write force DSC on the connector
+ *
+ * The write function: dp_dsc_clock_en_write
+ * enables to force DSC on the connector.
+ * User can write to either force enable DSC
+ * on the next modeset or set it to driver default
+ *
+ * Writing DSC settings is done with the following command:
+ * - To force enable DSC (you need to specify
+ * connector like DP-1):
+ *
+ *	echo 0x1 > /sys/kernel/debug/dri/0/DP-X/dsc_clock_en
+ *
+ * - To return to default state set the flag to zero and
+ * let driver deal with DSC automatically
+ * (you need to specify connector like DP-1):
+ *
+ *	echo 0x0 > /sys/kernel/debug/dri/0/DP-X/dsc_clock_en
+ *
+ */
+static ssize_t dp_dsc_clock_en_write(struct file *f, const char __user *buf,
+				     size_t size, loff_t *pos)
+{
+	struct amdgpu_dm_connector *aconnector = file_inode(f)->i_private;
+	struct pipe_ctx *pipe_ctx;
+	int i;
+	char *wr_buf = NULL;
+	uint32_t wr_buf_size = 42;
+	int max_param_num = 1;
+	long param[1] = {0};
+	uint8_t param_nums = 0;
+
+	if (size == 0)
+		return -EINVAL;
+
+	wr_buf = kcalloc(wr_buf_size, sizeof(char), GFP_KERNEL);
+
+	if (!wr_buf) {
+		DRM_DEBUG_DRIVER("no memory to allocate write buffer\n");
+		return -ENOSPC;
+	}
+
+	if (parse_write_buffer_into_params(wr_buf, wr_buf_size,
+					    (long *)param, buf,
+					    max_param_num,
+					    &param_nums)) {
+		kfree(wr_buf);
+		return -EINVAL;
+	}
+
+	if (param_nums <= 0) {
+		DRM_DEBUG_DRIVER("user data not be read\n");
+		kfree(wr_buf);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < MAX_PIPES; i++) {
+		pipe_ctx = &aconnector->dc_link->dc->current_state->res_ctx.pipe_ctx[i];
+			if (pipe_ctx && pipe_ctx->stream &&
+			    pipe_ctx->stream->link == aconnector->dc_link)
+				break;
+	}
+
+	if (!pipe_ctx || !pipe_ctx->stream)
+		goto done;
+
+	aconnector->dsc_settings.dsc_clock_en = param[0];
+
+done:
+	kfree(wr_buf);
+	return size;
+}
+
+/* function: read DSC slice width parameter on the connector
+ *
+ * The read function: dp_dsc_slice_width_read
+ * returns dsc slice width used in the current configuration
+ * The return is an integer: 0 or other positive number
+ *
+ * Access the status with the following command:
+ *
+ *	cat /sys/kernel/debug/dri/0/DP-X/dsc_slice_width
+ *
+ * 0 - means that DSC is disabled
+ *
+ * Any other number more than zero represents the
+ * slice width currently used by DSC in pixels
+ *
+ */
 static ssize_t dp_dsc_slice_width_read(struct file *f, char __user *buf,
 				    size_t size, loff_t *pos)
 {
@@ -1091,6 +1196,82 @@ static ssize_t dp_dsc_slice_width_read(struct file *f, char __user *buf,
 
 	kfree(rd_buf);
 	return result;
+}
+
+/* function: write DSC slice width parameter
+ *
+ * The write function: dp_dsc_slice_width_write
+ * overwrites automatically generated DSC configuration
+ * of slice width.
+ *
+ * The user has to write the slice width divisible by the
+ * picture width.
+ *
+ * Also the user has to write width in hexidecimal
+ * rather than in decimal.
+ *
+ * Writing DSC settings is done with the following command:
+ * - To force overwrite slice width: (example sets to 1920 pixels)
+ *
+ *	echo 0x780 > /sys/kernel/debug/dri/0/DP-X/dsc_slice_width
+ *
+ *  - To stop overwriting and let driver find the optimal size,
+ * set the width to zero:
+ *
+ *	echo 0x0 > /sys/kernel/debug/dri/0/DP-X/dsc_slice_width
+ *
+ */
+static ssize_t dp_dsc_slice_width_write(struct file *f, const char __user *buf,
+				     size_t size, loff_t *pos)
+{
+	struct amdgpu_dm_connector *aconnector = file_inode(f)->i_private;
+	struct pipe_ctx *pipe_ctx;
+	int i;
+	char *wr_buf = NULL;
+	uint32_t wr_buf_size = 42;
+	int max_param_num = 1;
+	long param[1] = {0};
+	uint8_t param_nums = 0;
+
+	if (size == 0)
+		return -EINVAL;
+
+	wr_buf = kcalloc(wr_buf_size, sizeof(char), GFP_KERNEL);
+
+	if (!wr_buf) {
+		DRM_DEBUG_DRIVER("no memory to allocate write buffer\n");
+		return -ENOSPC;
+	}
+
+	if (parse_write_buffer_into_params(wr_buf, wr_buf_size,
+					    (long *)param, buf,
+					    max_param_num,
+					    &param_nums)) {
+		kfree(wr_buf);
+		return -EINVAL;
+	}
+
+	if (param_nums <= 0) {
+		DRM_DEBUG_DRIVER("user data not be read\n");
+		kfree(wr_buf);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < MAX_PIPES; i++) {
+		pipe_ctx = &aconnector->dc_link->dc->current_state->res_ctx.pipe_ctx[i];
+			if (pipe_ctx && pipe_ctx->stream &&
+			    pipe_ctx->stream->link == aconnector->dc_link)
+				break;
+	}
+
+	if (!pipe_ctx || !pipe_ctx->stream)
+		goto done;
+
+	aconnector->dsc_settings.dsc_slice_width = param[0];
+
+done:
+	kfree(wr_buf);
+	return size;
 }
 
 static ssize_t dp_dsc_slice_height_read(struct file *f, char __user *buf,
@@ -1150,7 +1331,7 @@ static ssize_t dp_dsc_slice_height_read(struct file *f, char __user *buf,
 	return result;
 }
 
-static ssize_t dp_dsc_bytes_per_pixel_read(struct file *f, char __user *buf,
+static ssize_t dp_dsc_bits_per_pixel_read(struct file *f, char __user *buf,
 				    size_t size, loff_t *pos)
 {
 	char *rd_buf = NULL;
@@ -1186,7 +1367,7 @@ static ssize_t dp_dsc_bytes_per_pixel_read(struct file *f, char __user *buf,
 
 	snprintf(rd_buf_ptr, str_len,
 		"%d\n",
-		dsc_state.dsc_bytes_per_pixel);
+		dsc_state.dsc_bits_per_pixel);
 	rd_buf_ptr += str_len;
 
 	while (size) {
@@ -1445,12 +1626,14 @@ DEFINE_SHOW_ATTRIBUTE(hdcp_sink_capability);
 static const struct file_operations dp_dsc_clock_en_debugfs_fops = {
 	.owner = THIS_MODULE,
 	.read = dp_dsc_clock_en_read,
+	.write = dp_dsc_clock_en_write,
 	.llseek = default_llseek
 };
 
 static const struct file_operations dp_dsc_slice_width_debugfs_fops = {
 	.owner = THIS_MODULE,
 	.read = dp_dsc_slice_width_read,
+	.write = dp_dsc_slice_width_write,
 	.llseek = default_llseek
 };
 
@@ -1460,9 +1643,9 @@ static const struct file_operations dp_dsc_slice_height_debugfs_fops = {
 	.llseek = default_llseek
 };
 
-static const struct file_operations dp_dsc_bytes_per_pixel_debugfs_fops = {
+static const struct file_operations dp_dsc_bits_per_pixel_debugfs_fops = {
 	.owner = THIS_MODULE,
-	.read = dp_dsc_bytes_per_pixel_read,
+	.read = dp_dsc_bits_per_pixel_read,
 	.llseek = default_llseek
 };
 
@@ -1552,7 +1735,7 @@ static const struct {
 		{"dsc_clock_en", &dp_dsc_clock_en_debugfs_fops},
 		{"dsc_slice_width", &dp_dsc_slice_width_debugfs_fops},
 		{"dsc_slice_height", &dp_dsc_slice_height_debugfs_fops},
-		{"dsc_bytes_per_pixel", &dp_dsc_bytes_per_pixel_debugfs_fops},
+		{"dsc_bits_per_pixel", &dp_dsc_bits_per_pixel_debugfs_fops},
 		{"dsc_pic_width", &dp_dsc_pic_width_debugfs_fops},
 		{"dsc_pic_height", &dp_dsc_pic_height_debugfs_fops},
 		{"dsc_chunk_size", &dp_dsc_chunk_size_debugfs_fops},

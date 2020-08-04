@@ -1618,7 +1618,7 @@ static int amdgpu_ras_save_bad_pages(struct amdgpu_device *adev)
 	data = con->eh_data;
 	save_count = data->count - control->num_recs;
 	/* only new entries are saved */
-	if (save_count > 0)
+	if (save_count > 0) {
 		if (amdgpu_ras_eeprom_process_recods(control,
 							&data->bps[control->num_recs],
 							true,
@@ -1626,6 +1626,9 @@ static int amdgpu_ras_save_bad_pages(struct amdgpu_device *adev)
 			dev_err(adev->dev, "Failed to save EEPROM table data!");
 			return -EIO;
 		}
+
+		dev_info(adev->dev, "Saved %d pages to EEPROM table.\n", save_count);
+	}
 
 	return 0;
 }
@@ -1975,7 +1978,7 @@ int amdgpu_ras_late_init(struct amdgpu_device *adev,
 			amdgpu_ras_request_reset_on_boot(adev,
 					ras_block->block);
 			return 0;
-		} else if (adev->in_suspend || adev->in_gpu_reset) {
+		} else if (adev->in_suspend || amdgpu_in_reset(adev)) {
 			/* in resume phase, if fail to enable ras,
 			 * clean up all ras fs nodes, and disable ras */
 			goto cleanup;
@@ -1984,7 +1987,7 @@ int amdgpu_ras_late_init(struct amdgpu_device *adev,
 	}
 
 	/* in resume phase, no need to create ras fs node */
-	if (adev->in_suspend || adev->in_gpu_reset)
+	if (adev->in_suspend || amdgpu_in_reset(adev))
 		return 0;
 
 	if (ih_info->cb) {
