@@ -30,7 +30,7 @@ asmlinkage void ret_from_kernel_thread(void);
  */
 void flush_thread(void){}
 
-int copy_thread_tls(unsigned long clone_flags,
+int copy_thread(unsigned long clone_flags,
 		unsigned long usp,
 		unsigned long kthread_arg,
 		struct task_struct *p,
