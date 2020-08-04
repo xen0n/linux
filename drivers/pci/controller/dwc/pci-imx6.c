@@ -3,7 +3,7 @@
  * PCIe host controller driver for Freescale i.MX6 SoCs
  *
  * Copyright (C) 2013 Kosagi
- *		http://www.kosagi.com
+ *		https://www.kosagi.com
  *
  * Author: Sean Cross <xobs@kosagi.com>
  */
@@ -1269,7 +1269,7 @@ static void imx6_pcie_quirk(struct pci_dev *dev)
 	if (bus->dev.parent->parent->driver != &imx6_pcie_driver.driver)
 		return;
 
-	if (bus->number == pp->root_bus_nr) {
+	if (pci_is_root_bus(bus)) {
 		struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
 		struct imx6_pcie *imx6_pcie = to_imx6_pcie(pci);
 
