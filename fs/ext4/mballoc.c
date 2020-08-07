@@ -922,7 +922,7 @@ static int ext4_mb_init_cache(struct page *page, char *incore, gfp_t gfp)
 			bh[i] = NULL;
 			continue;
 		}
-		bh[i] = ext4_read_block_bitmap_nowait(sb, group);
+		bh[i] = ext4_read_block_bitmap_nowait(sb, group, false);
 		if (IS_ERR(bh[i])) {
 			err = PTR_ERR(bh[i]);
 			bh[i] = NULL;
@@ -2177,6 +2177,7 @@ static int ext4_mb_good_group_nolock(struct ext4_allocation_context *ac,
 {
 	struct ext4_group_info *grp = ext4_get_group_info(ac->ac_sb, group);
 	struct super_block *sb = ac->ac_sb;
+	struct ext4_sb_info *sbi = EXT4_SB(sb);
 	bool should_lock = ac->ac_flags & EXT4_MB_STRICT_CHECK;
 	ext4_grpblk_t free;
 	int ret = 0;
@@ -2195,7 +2196,25 @@ static int ext4_mb_good_group_nolock(struct ext4_allocation_context *ac,
 
 	/* We only do this if the grp has never been initialized */
 	if (unlikely(EXT4_MB_GRP_NEED_INIT(grp))) {
-		ret = ext4_mb_init_group(ac->ac_sb, group, GFP_NOFS);
+		struct ext4_group_desc *gdp =
+			ext4_get_group_desc(sb, group, NULL);
+		int ret;
+
+		/* cr=0/1 is a very optimistic search to find large
+		 * good chunks almost for free.  If buddy data is not
+		 * ready, then this optimization makes no sense.  But
+		 * we never skip the first block group in a flex_bg,
+		 * since this gets used for metadata block allocation,
+		 * and we want to make sure we locate metadata blocks
+		 * in the first block group in the flex_bg if possible.
+		 */
+		if (cr < 2 &&
+		    (!sbi->s_log_groups_per_flex ||
+		     ((group & ((1 << sbi->s_log_groups_per_flex) - 1)) != 0)) &&
+		    !(ext4_has_group_desc_csum(sb) &&
+		      (gdp->bg_flags & cpu_to_le16(EXT4_BG_BLOCK_UNINIT))))
+			return 0;
+		ret = ext4_mb_init_group(sb, group, GFP_NOFS);
 		if (ret)
 			return ret;
 	}
@@ -2209,12 +2228,91 @@ out:
 	return ret;
 }
 
+/*
+ * Start prefetching @nr block bitmaps starting at @group.
+ * Return the next group which needs to be prefetched.
+ */
+ext4_group_t ext4_mb_prefetch(struct super_block *sb, ext4_group_t group,
+			      unsigned int nr, int *cnt)
+{
+	ext4_group_t ngroups = ext4_get_groups_count(sb);
+	struct buffer_head *bh;
+	struct blk_plug plug;
+
+	blk_start_plug(&plug);
+	while (nr-- > 0) {
+		struct ext4_group_desc *gdp = ext4_get_group_desc(sb, group,
+								  NULL);
+		struct ext4_group_info *grp = ext4_get_group_info(sb, group);
+
+		/*
+		 * Prefetch block groups with free blocks; but don't
+		 * bother if it is marked uninitialized on disk, since
+		 * it won't require I/O to read.  Also only try to
+		 * prefetch once, so we avoid getblk() call, which can
+		 * be expensive.
+		 */
+		if (!EXT4_MB_GRP_TEST_AND_SET_READ(grp) &&
+		    EXT4_MB_GRP_NEED_INIT(grp) &&
+		    ext4_free_group_clusters(sb, gdp) > 0 &&
+		    !(ext4_has_group_desc_csum(sb) &&
+		      (gdp->bg_flags & cpu_to_le16(EXT4_BG_BLOCK_UNINIT)))) {
+			bh = ext4_read_block_bitmap_nowait(sb, group, true);
+			if (bh && !IS_ERR(bh)) {
+				if (!buffer_uptodate(bh) && cnt)
+					(*cnt)++;
+				brelse(bh);
+			}
+		}
+		if (++group >= ngroups)
+			group = 0;
+	}
+	blk_finish_plug(&plug);
+	return group;
+}
+
+/*
+ * Prefetching reads the block bitmap into the buffer cache; but we
+ * need to make sure that the buddy bitmap in the page cache has been
+ * initialized.  Note that ext4_mb_init_group() will block if the I/O
+ * is not yet completed, or indeed if it was not initiated by
+ * ext4_mb_prefetch did not start the I/O.
+ *
+ * TODO: We should actually kick off the buddy bitmap setup in a work
+ * queue when the buffer I/O is completed, so that we don't block
+ * waiting for the block allocation bitmap read to finish when
+ * ext4_mb_prefetch_fini is called from ext4_mb_regular_allocator().
+ */
+void ext4_mb_prefetch_fini(struct super_block *sb, ext4_group_t group,
+			   unsigned int nr)
+{
+	while (nr-- > 0) {
+		struct ext4_group_desc *gdp = ext4_get_group_desc(sb, group,
+								  NULL);
+		struct ext4_group_info *grp = ext4_get_group_info(sb, group);
+
+		if (!group)
+			group = ext4_get_groups_count(sb);
+		group--;
+		grp = ext4_get_group_info(sb, group);
+
+		if (EXT4_MB_GRP_NEED_INIT(grp) &&
+		    ext4_free_group_clusters(sb, gdp) > 0 &&
+		    !(ext4_has_group_desc_csum(sb) &&
+		      (gdp->bg_flags & cpu_to_le16(EXT4_BG_BLOCK_UNINIT)))) {
+			if (ext4_mb_init_group(sb, group, GFP_NOFS))
+				break;
+		}
+	}
+}
+
 static noinline_for_stack int
 ext4_mb_regular_allocator(struct ext4_allocation_context *ac)
 {
-	ext4_group_t ngroups, group, i;
+	ext4_group_t prefetch_grp = 0, ngroups, group, i;
 	int cr = -1;
 	int err = 0, first_err = 0;
+	unsigned int nr = 0, prefetch_ios = 0;
 	struct ext4_sb_info *sbi;
 	struct super_block *sb;
 	struct ext4_buddy e4b;
@@ -2282,6 +2380,7 @@ repeat:
 		 * from the goal value specified
 		 */
 		group = ac->ac_g_ex.fe_group;
+		prefetch_grp = group;
 
 		for (i = 0; i < ngroups; group++, i++) {
 			int ret = 0;
@@ -2292,6 +2391,29 @@ repeat:
 			 */
 			if (group >= ngroups)
 				group = 0;
+
+			/*
+			 * Batch reads of the block allocation bitmaps
+			 * to get multiple READs in flight; limit
+			 * prefetching at cr=0/1, otherwise mballoc can
+			 * spend a lot of time loading imperfect groups
+			 */
+			if ((prefetch_grp == group) &&
+			    (cr > 1 ||
+			     prefetch_ios < sbi->s_mb_prefetch_limit)) {
+				unsigned int curr_ios = prefetch_ios;
+
+				nr = sbi->s_mb_prefetch;
+				if (ext4_has_feature_flex_bg(sb)) {
+					nr = (group / sbi->s_mb_prefetch) *
+						sbi->s_mb_prefetch;
+					nr = nr + sbi->s_mb_prefetch - group;
+				}
+				prefetch_grp = ext4_mb_prefetch(sb, group,
+							nr, &prefetch_ios);
+				if (prefetch_ios == curr_ios)
+					nr = 0;
+			}
 
 			/* This now checks without needing the buddy page */
 			ret = ext4_mb_good_group_nolock(ac, group, cr);
@@ -2367,6 +2489,10 @@ out:
 	mb_debug(sb, "Best len %d, origin len %d, ac_status %u, ac_flags 0x%x, cr %d ret %d\n",
 		 ac->ac_b_ex.fe_len, ac->ac_o_ex.fe_len, ac->ac_status,
 		 ac->ac_flags, cr, err);
+
+	if (nr)
+		ext4_mb_prefetch_fini(sb, prefetch_grp, nr);
+
 	return err;
 }
 
@@ -2612,6 +2738,26 @@ static int ext4_mb_init_backend(struct super_block *sb)
 		if (ext4_mb_add_groupinfo(sb, i, desc) != 0)
 			goto err_freebuddy;
 	}
+
+	if (ext4_has_feature_flex_bg(sb)) {
+		/* a single flex group is supposed to be read by a single IO */
+		sbi->s_mb_prefetch = 1 << sbi->s_es->s_log_groups_per_flex;
+		sbi->s_mb_prefetch *= 8; /* 8 prefetch IOs in flight at most */
+	} else {
+		sbi->s_mb_prefetch = 32;
+	}
+	if (sbi->s_mb_prefetch > ext4_get_groups_count(sb))
+		sbi->s_mb_prefetch = ext4_get_groups_count(sb);
+	/* now many real IOs to prefetch within a single allocation at cr=0
+	 * given cr=0 is an CPU-related optimization we shouldn't try to
+	 * load too many groups, at some point we should start to use what
+	 * we've got in memory.
+	 * with an average random access time 5ms, it'd take a second to get
+	 * 200 groups (* N with flex_bg), so let's make this limit 4
+	 */
+	sbi->s_mb_prefetch_limit = sbi->s_mb_prefetch * 4;
+	if (sbi->s_mb_prefetch_limit > ext4_get_groups_count(sb))
+		sbi->s_mb_prefetch_limit = ext4_get_groups_count(sb);
 
 	return 0;
 
@@ -4399,7 +4545,7 @@ ext4_mb_initialize_context(struct ext4_allocation_context *ac,
 	ac->ac_g_ex = ac->ac_o_ex;
 	ac->ac_flags = ar->flags;
 
-	/* we have to define context: we'll we work with a file or
+	/* we have to define context: we'll work with a file or
 	 * locality group. this is a policy, actually */
 	ext4_mb_group_or_file(ac);
 
