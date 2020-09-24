@@ -6,35 +6,12 @@
  */
 #include <linux/compiler.h>
 #include <linux/kasan-checks.h>
+#include <linux/nospec.h>
 #include <linux/string.h>
 #include <asm/asm.h>
 #include <asm/page.h>
 #include <asm/smap.h>
 #include <asm/extable.h>
-
-/*
- * The fs value determines whether argument validity checking should be
- * performed or not.  If get_fs() == USER_DS, checking is performed, with
- * get_fs() == KERNEL_DS, checking is bypassed.
- *
- * For historical reasons, these macros are grossly misnamed.
- */
-
-#define MAKE_MM_SEG(s)	((mm_segment_t) { (s) })
-
-#define KERNEL_DS	MAKE_MM_SEG(-1UL)
-#define USER_DS 	MAKE_MM_SEG(TASK_SIZE_MAX)
-
-#define get_fs()	(current->thread.addr_limit)
-static inline void set_fs(mm_segment_t fs)
-{
-	current->thread.addr_limit = fs;
-	/* On user-mode return, check fs is correct */
-	set_thread_flag(TIF_FSCHECK);
-}
-
-#define uaccess_kernel() (get_fs().seg == KERNEL_DS.seg)
-#define user_addr_max() (current->thread.addr_limit.seg)
 
 /*
  * Test whether a block of memory is a valid user space address.
@@ -90,11 +67,22 @@ static inline bool pagefault_disabled(void);
  * Return: true (nonzero) if the memory block may be valid, false (zero)
  * if it is definitely invalid.
  */
-#define access_ok(addr, size)					\
+#define access_ok(addr, size)						\
 ({									\
 	WARN_ON_IN_IRQ();						\
-	likely(!__range_not_ok(addr, size, user_addr_max()));		\
+	likely(!__range_not_ok(addr, size, TASK_SIZE_MAX));		\
 })
+
+/*
+ * Sanitize a user pointer such that it becomes NULL if it's not a valid user
+ * pointer.  This prevents speculative dereferences of user-controlled pointers
+ * to kernel space when access_ok() speculatively returns true.  This should be
+ * done *after* access_ok(), to avoid affecting error handling behavior.
+ */
+#define force_user_ptr(ptr)						\
+	(typeof(ptr)) array_index_nospec((__force unsigned long)ptr,	\
+					 TASK_SIZE_MAX)
+
 
 /*
  * These are the main single-value transfer routines.  They automatically
@@ -119,11 +107,6 @@ extern int __get_user_bad(void);
 
 #define __uaccess_begin() stac()
 #define __uaccess_end()   clac()
-#define __uaccess_begin_nospec()	\
-({					\
-	stac();				\
-	barrier_nospec();		\
-})
 
 /*
  * This is the smallest unsigned integer type that can fit a value
@@ -357,7 +340,7 @@ do {									\
 	__label__ __pu_label;					\
 	int __pu_err = -EFAULT;					\
 	__typeof__(*(ptr)) __pu_val = (x);			\
-	__typeof__(ptr) __pu_ptr = (ptr);			\
+	__typeof__(ptr) __pu_ptr = force_user_ptr(ptr);	\
 	__typeof__(size) __pu_size = (size);			\
 	__uaccess_begin();					\
 	__put_user_size(__pu_val, __pu_ptr, __pu_size, __pu_label);	\
@@ -371,9 +354,9 @@ __pu_label:							\
 ({									\
 	int __gu_err;							\
 	__inttype(*(ptr)) __gu_val;					\
-	__typeof__(ptr) __gu_ptr = (ptr);				\
+	__typeof__(ptr) __gu_ptr = force_user_ptr(ptr);		\
 	__typeof__(size) __gu_size = (size);				\
-	__uaccess_begin_nospec();					\
+	__uaccess_begin();						\
 	__get_user_size(__gu_val, __gu_ptr, __gu_size, __gu_err);	\
 	__uaccess_end();						\
 	(x) = (__force __typeof__(*(ptr)))__gu_val;			\
@@ -482,7 +465,7 @@ static __must_check __always_inline bool user_access_begin(const void __user *pt
 {
 	if (unlikely(!access_ok(ptr,len)))
 		return 0;
-	__uaccess_begin_nospec();
+	__uaccess_begin();
 	return 1;
 }
 #define user_access_begin(a,b)	user_access_begin(a,b)
@@ -491,14 +474,16 @@ static __must_check __always_inline bool user_access_begin(const void __user *pt
 #define user_access_save()	smap_save()
 #define user_access_restore(x)	smap_restore(x)
 
-#define unsafe_put_user(x, ptr, label)	\
-	__put_user_size((__typeof__(*(ptr)))(x), (ptr), sizeof(*(ptr)), label)
+#define unsafe_put_user(x, ptr, label)						\
+	__put_user_size((__typeof__(*(ptr)))(x), force_user_ptr(ptr),		\
+			sizeof(*(ptr)), label)
 
 #define unsafe_get_user(x, ptr, err_label)					\
 do {										\
 	int __gu_err;								\
 	__inttype(*(ptr)) __gu_val;						\
-	__get_user_size(__gu_val, (ptr), sizeof(*(ptr)), __gu_err);		\
+	__get_user_size(__gu_val, force_user_ptr(ptr), sizeof(*(ptr)),	\
+			__gu_err);						\
 	(x) = (__force __typeof__(*(ptr)))__gu_val;				\
 	if (unlikely(__gu_err)) goto err_label;					\
 } while (0)
