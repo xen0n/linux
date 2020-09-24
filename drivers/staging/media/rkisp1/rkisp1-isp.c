@@ -989,8 +989,7 @@ static const struct v4l2_subdev_ops rkisp1_isp_ops = {
 	.pad = &rkisp1_isp_pad_ops,
 };
 
-int rkisp1_isp_register(struct rkisp1_device *rkisp1,
-			struct v4l2_device *v4l2_dev)
+int rkisp1_isp_register(struct rkisp1_device *rkisp1)
 {
 	struct rkisp1_isp *isp = &rkisp1->isp;
 	struct media_pad *pads = isp->pads;
@@ -1018,7 +1017,7 @@ int rkisp1_isp_register(struct rkisp1_device *rkisp1,
 	if (ret)
 		return ret;
 
-	ret = v4l2_device_register_subdev(v4l2_dev, sd);
+	ret = v4l2_device_register_subdev(&rkisp1->v4l2_dev, sd);
 	if (ret) {
 		dev_err(rkisp1->dev, "Failed to register isp subdev\n");
 		goto err_cleanup_media_entity;
@@ -1141,12 +1140,12 @@ void rkisp1_isp_isr(struct rkisp1_device *rkisp1)
 		isp_ris = rkisp1_read(rkisp1, RKISP1_CIF_ISP_RIS);
 		if (isp_ris & RKISP1_STATS_MEAS_MASK)
 			rkisp1_stats_isr(&rkisp1->stats, isp_ris);
+		/*
+		 * Then update changed configs. Some of them involve
+		 * lot of register writes. Do those only one per frame.
+		 * Do the updates in the order of the processing flow.
+		 */
+		rkisp1_params_isr(rkisp1);
 	}
 
-	/*
-	 * Then update changed configs. Some of them involve
-	 * lot of register writes. Do those only one per frame.
-	 * Do the updates in the order of the processing flow.
-	 */
-	rkisp1_params_isr(rkisp1, status);
 }
