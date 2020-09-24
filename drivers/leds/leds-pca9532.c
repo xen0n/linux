@@ -478,7 +478,7 @@ pca9532_of_populate_pdata(struct device *dev, struct device_node *np)
 	if (!pdata)
 		return ERR_PTR(-ENOMEM);
 
-	for_each_child_of_node(np, child) {
+	for_each_available_child_of_node(np, child) {
 		if (of_property_read_string(child, "label",
 					    &pdata->leds[i].name))
 			pdata->leds[i].name = child->name;
@@ -507,7 +507,7 @@ static int pca9532_probe(struct i2c_client *client,
 	struct pca9532_data *data = i2c_get_clientdata(client);
 	struct pca9532_platform_data *pca9532_pdata =
 			dev_get_platdata(&client->dev);
-	struct device_node *np = client->dev.of_node;
+	struct device_node *np = dev_of_node(&client->dev);
 
 	if (!pca9532_pdata) {
 		if (np) {
@@ -545,13 +545,8 @@ static int pca9532_probe(struct i2c_client *client,
 static int pca9532_remove(struct i2c_client *client)
 {
 	struct pca9532_data *data = i2c_get_clientdata(client);
-	int err;
 
-	err = pca9532_destroy_devices(data, data->chip_info->num_leds);
-	if (err)
-		return err;
-
-	return 0;
+	return pca9532_destroy_devices(data, data->chip_info->num_leds);
 }
 
 module_i2c_driver(pca9532_driver);

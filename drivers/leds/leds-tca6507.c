@@ -656,7 +656,7 @@ static int tca6507_probe_gpios(struct i2c_client *client,
 	tca->gpio.set = tca6507_gpio_set_value;
 	tca->gpio.parent = &client->dev;
 #ifdef CONFIG_OF_GPIO
-	tca->gpio.of_node = of_node_get(client->dev.of_node);
+	tca->gpio.of_node = of_node_get(dev_of_node(&client->dev));
 #endif
 	err = gpiochip_add_data(&tca->gpio, tca);
 	if (err) {
@@ -689,12 +689,12 @@ static void tca6507_remove_gpio(struct tca6507_chip *tca)
 static struct tca6507_platform_data *
 tca6507_led_dt_init(struct i2c_client *client)
 {
-	struct device_node *np = client->dev.of_node, *child;
+	struct device_node *np = dev_of_node(&client->dev), *child;
 	struct tca6507_platform_data *pdata;
 	struct led_info *tca_leds;
 	int count;
 
-	count = of_get_child_count(np);
+	count = of_get_available_child_count(np);
 	if (!count || count > NUM_LEDS)
 		return ERR_PTR(-ENODEV);
 
@@ -703,7 +703,7 @@ tca6507_led_dt_init(struct i2c_client *client)
 	if (!tca_leds)
 		return ERR_PTR(-ENOMEM);
 
-	for_each_child_of_node(np, child) {
+	for_each_available_child_of_node(np, child) {
 		struct led_info led;
 		u32 reg;
 		int ret;

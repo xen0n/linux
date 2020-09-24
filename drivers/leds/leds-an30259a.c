@@ -202,13 +202,13 @@ error:
 static int an30259a_dt_init(struct i2c_client *client,
 			    struct an30259a *chip)
 {
-	struct device_node *np = client->dev.of_node, *child;
+	struct device_node *np = dev_of_node(&client->dev), *child;
 	int count, ret;
 	int i = 0;
 	const char *str;
 	struct an30259a_led *led;
 
-	count = of_get_child_count(np);
+	count = of_get_available_child_count(np);
 	if (!count || count > AN30259A_MAX_LEDS)
 		return -EINVAL;
 

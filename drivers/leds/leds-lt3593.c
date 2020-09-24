@@ -68,7 +68,7 @@ static int lt3593_led_probe(struct platform_device *pdev)
 	struct led_init_data init_data = {};
 	const char *tmp;
 
-	if (!dev->of_node)
+	if (!dev_of_node(dev))
 		return -ENODEV;
 
 	led_data = devm_kzalloc(dev, sizeof(*led_data), GFP_KERNEL);
@@ -107,7 +107,6 @@ static int lt3593_led_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	led_data->cdev.dev->of_node = dev->of_node;
 	platform_set_drvdata(pdev, led_data);
 
 	return 0;
