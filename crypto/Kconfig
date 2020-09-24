@@ -1185,6 +1185,7 @@ config CRYPTO_AES_PPC_SPE
 
 config CRYPTO_ANUBIS
 	tristate "Anubis cipher algorithm"
+	depends on CRYPTO_USER_API_ENABLE_OBSOLETE
 	select CRYPTO_ALGAPI
 	help
 	  Anubis cipher algorithm.
@@ -1199,6 +1200,7 @@ config CRYPTO_ANUBIS
 
 config CRYPTO_ARC4
 	tristate "ARC4 cipher algorithm"
+	depends on CRYPTO_USER_API_ENABLE_OBSOLETE
 	select CRYPTO_SKCIPHER
 	select CRYPTO_LIB_ARC4
 	help
@@ -1423,6 +1425,7 @@ config CRYPTO_FCRYPT
 
 config CRYPTO_KHAZAD
 	tristate "Khazad cipher algorithm"
+	depends on CRYPTO_USER_API_ENABLE_OBSOLETE
 	select CRYPTO_ALGAPI
 	help
 	  Khazad cipher algorithm.
@@ -1486,6 +1489,7 @@ config CRYPTO_CHACHA_MIPS
 
 config CRYPTO_SEED
 	tristate "SEED cipher algorithm"
+	depends on CRYPTO_USER_API_ENABLE_OBSOLETE
 	select CRYPTO_ALGAPI
 	help
 	  SEED cipher algorithm (RFC4269).
@@ -1612,6 +1616,7 @@ config CRYPTO_SM4
 
 config CRYPTO_TEA
 	tristate "TEA, XTEA and XETA cipher algorithms"
+	depends on CRYPTO_USER_API_ENABLE_OBSOLETE
 	select CRYPTO_ALGAPI
 	help
 	  TEA cipher algorithm.
@@ -1880,6 +1885,15 @@ config CRYPTO_USER_API_AEAD
 	help
 	  This option enables the user-spaces interface for AEAD
 	  cipher algorithms.
+
+config CRYPTO_USER_API_ENABLE_OBSOLETE
+	bool "Enable obsolete cryptographic algorithms for userspace"
+	depends on CRYPTO_USER_API
+	default y
+	help
+	  Allow obsolete cryptographic algorithms to be selected that have
+	  already been phased out from internal use by the kernel, and are
+	  only useful for userspace clients that still rely on them.
 
 config CRYPTO_STATS
 	bool "Crypto usage statistics for User-space"
