@@ -153,6 +153,7 @@ enum ds_type {
 #define DS1388_REG_CONTROL		0x0c
 #	define DS1388_BIT_RST		BIT(0)
 #	define DS1388_BIT_WDE		BIT(1)
+#	define DS1388_BIT_nEOSC		BIT(7)
 
 /* negative offset step is -2.034ppm */
 #define M41TXX_NEG_OFFSET_STEP_PPB	2034
@@ -351,6 +352,10 @@ static int ds1307_set_time(struct device *dev, struct rtc_time *t)
 	case ds_1340:
 		regmap_update_bits(ds1307->regmap, DS1340_REG_FLAG,
 				   DS1340_BIT_OSF, 0);
+		break;
+	case ds_1388:
+		regmap_update_bits(ds1307->regmap, DS1388_REG_FLAG,
+				   DS1388_BIT_OSF, 0);
 		break;
 	case mcp794xx:
 		/*
@@ -1879,6 +1884,19 @@ static int ds1307_probe(struct i2c_client *client,
 
 			regmap_write(ds1307->regmap,
 				     DS1307_REG_HOUR << 4 | 0x08, hour);
+		}
+		break;
+	case ds_1388:
+		err = regmap_read(ds1307->regmap, DS1388_REG_CONTROL, &tmp);
+		if (err) {
+			dev_dbg(ds1307->dev, "read error %d\n", err);
+			goto exit;
+		}
+
+		/* oscillator off?  turn it on, so clock can tick. */
+		if (tmp & DS1388_BIT_nEOSC) {
+			tmp &= ~DS1388_BIT_nEOSC;
+			regmap_write(ds1307->regmap, DS1388_REG_CONTROL, tmp);
 		}
 		break;
 	default:
