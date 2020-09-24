@@ -59,8 +59,6 @@ static __always_inline int arch_futex_atomic_op_inuser(int op, int oparg, int *o
 	if (!user_access_begin(uaddr, sizeof(u32)))
 		return -EFAULT;
 
-	uaddr = force_user_ptr(uaddr);
-
 	switch (op) {
 	case FUTEX_OP_SET:
 		unsafe_atomic_op1("xchgl %0, %2", oval, uaddr, oparg, Efault);
@@ -96,9 +94,6 @@ static inline int futex_atomic_cmpxchg_inatomic(u32 *uval, u32 __user *uaddr,
 
 	if (!user_access_begin(uaddr, sizeof(u32)))
 		return -EFAULT;
-
-	uaddr = force_user_ptr(uaddr);
-
 	asm volatile("\n"
 		"1:\t" LOCK_PREFIX "cmpxchgl %4, %2\n"
 		"2:\n"

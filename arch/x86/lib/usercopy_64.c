@@ -42,8 +42,7 @@ unsigned long __clear_user(void __user *addr, unsigned long size)
 		_ASM_EXTABLE_UA(0b, 3b)
 		_ASM_EXTABLE_UA(1b, 2b)
 		: [size8] "=&c"(size), [dst] "=&D" (__d0)
-		: [size1] "r"(size & 7), "[size8]" (size / 8),
-		  "[dst]" (force_user_ptr(addr)));
+		: [size1] "r"(size & 7), "[size8]" (size / 8), "[dst]"(addr));
 	clac();
 	return size;
 }
@@ -52,7 +51,7 @@ EXPORT_SYMBOL(__clear_user);
 unsigned long clear_user(void __user *to, unsigned long n)
 {
 	if (access_ok(to, n))
-		return __clear_user(force_user_ptr(to), n);
+		return __clear_user(to, n);
 	return n;
 }
 EXPORT_SYMBOL(clear_user);
@@ -88,7 +87,7 @@ EXPORT_SYMBOL_GPL(arch_wb_cache_pmem);
 long __copy_user_flushcache(void *dst, const void __user *src, unsigned size)
 {
 	unsigned long flushed, dest = (unsigned long) dst;
-	long rc = __copy_user_nocache(dst, force_user_ptr(src), size, 0);
+	long rc = __copy_user_nocache(dst, src, size, 0);
 
 	/*
 	 * __copy_user_nocache() uses non-temporal stores for the bulk
