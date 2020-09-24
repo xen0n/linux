@@ -911,7 +911,6 @@ enum {
 /*
  * return values:
  *   >= 0	: return dir entiry position with the name in dir
- *   -EEXIST	: (root dir, ".") it is the root dir itself
  *   -ENOENT	: entry with the name does not exist
  *   -EIO	: I/O error
  */
@@ -979,11 +978,8 @@ rewind:
 					if (ei->hint_femp.eidx ==
 							EXFAT_HINT_NONE ||
 						candi_empty.eidx <=
-							 ei->hint_femp.eidx) {
-						memcpy(&ei->hint_femp,
-							&candi_empty,
-							sizeof(candi_empty));
-					}
+							 ei->hint_femp.eidx)
+						ei->hint_femp = candi_empty;
 				}
 
 				brelse(bh);
