@@ -4,6 +4,7 @@
  */
 
 #include <linux/vmalloc.h>
+#include <linux/log2.h>
 
 #include <rdma/ib_addr.h>
 #include <rdma/ib_umem.h>
@@ -142,10 +143,9 @@ to_emmap(struct rdma_user_mmap_entry *rdma_entry)
 	return container_of(rdma_entry, struct efa_user_mmap_entry, rdma_entry);
 }
 
-static inline bool is_rdma_read_cap(struct efa_dev *dev)
-{
-	return dev->dev_attr.device_caps & EFA_ADMIN_FEATURE_DEVICE_ATTR_DESC_RDMA_READ_MASK;
-}
+#define EFA_DEV_CAP(dev, cap) \
+	((dev)->dev_attr.device_caps & \
+	 EFA_ADMIN_FEATURE_DEVICE_ATTR_DESC_##cap##_MASK)
 
 #define is_reserved_cleared(reserved) \
 	!memchr_inv(reserved, 0, sizeof(reserved))
@@ -221,8 +221,11 @@ int efa_query_device(struct ib_device *ibdev,
 		resp.max_rq_wr = dev_attr->max_rq_depth;
 		resp.max_rdma_size = dev_attr->max_rdma_size;
 
-		if (is_rdma_read_cap(dev))
+		if (EFA_DEV_CAP(dev, RDMA_READ))
 			resp.device_caps |= EFA_QUERY_DEVICE_CAPS_RDMA_READ;
+
+		if (EFA_DEV_CAP(dev, RNR_RETRY))
+			resp.device_caps |= EFA_QUERY_DEVICE_CAPS_RNR_RETRY;
 
 		err = ib_copy_to_udata(udata, &resp,
 				       min(sizeof(resp), udata->outlen));
@@ -269,7 +272,7 @@ int efa_query_qp(struct ib_qp *ibqp, struct ib_qp_attr *qp_attr,
 
 #define EFA_QUERY_QP_SUPP_MASK \
 	(IB_QP_STATE | IB_QP_PKEY_INDEX | IB_QP_PORT | \
-	 IB_QP_QKEY | IB_QP_SQ_PSN | IB_QP_CAP)
+	 IB_QP_QKEY | IB_QP_SQ_PSN | IB_QP_CAP | IB_QP_RNR_RETRY)
 
 	if (qp_attr_mask & ~EFA_QUERY_QP_SUPP_MASK) {
 		ibdev_dbg(&dev->ibdev,
@@ -291,6 +294,7 @@ int efa_query_qp(struct ib_qp *ibqp, struct ib_qp_attr *qp_attr,
 	qp_attr->sq_psn = result.sq_psn;
 	qp_attr->sq_draining = result.sq_draining;
 	qp_attr->port_num = 1;
+	qp_attr->rnr_retry = result.rnr_retry;
 
 	qp_attr->cap.max_send_wr = qp->max_send_wr;
 	qp_attr->cap.max_recv_wr = qp->max_recv_wr;
@@ -380,13 +384,14 @@ err_out:
 	return err;
 }
 
-void efa_dealloc_pd(struct ib_pd *ibpd, struct ib_udata *udata)
+int efa_dealloc_pd(struct ib_pd *ibpd, struct ib_udata *udata)
 {
 	struct efa_dev *dev = to_edev(ibpd->device);
 	struct efa_pd *pd = to_epd(ibpd);
 
 	ibdev_dbg(&dev->ibdev, "Dealloc pd[%d]\n", pd->pdn);
 	efa_pd_dealloc(dev, pd->pdn);
+	return 0;
 }
 
 static int efa_destroy_qp_handle(struct efa_dev *dev, u32 qp_handle)
@@ -741,14 +746,126 @@ err_out:
 	return ERR_PTR(err);
 }
 
+static const struct {
+	int			valid;
+	enum ib_qp_attr_mask	req_param;
+	enum ib_qp_attr_mask	opt_param;
+} srd_qp_state_table[IB_QPS_ERR + 1][IB_QPS_ERR + 1] = {
+	[IB_QPS_RESET] = {
+		[IB_QPS_RESET] = { .valid = 1 },
+		[IB_QPS_INIT]  = {
+			.valid = 1,
+			.req_param = IB_QP_PKEY_INDEX |
+				     IB_QP_PORT |
+				     IB_QP_QKEY,
+		},
+	},
+	[IB_QPS_INIT] = {
+		[IB_QPS_RESET] = { .valid = 1 },
+		[IB_QPS_ERR]   = { .valid = 1 },
+		[IB_QPS_INIT]  = {
+			.valid = 1,
+			.opt_param = IB_QP_PKEY_INDEX |
+				     IB_QP_PORT |
+				     IB_QP_QKEY,
+		},
+		[IB_QPS_RTR]   = {
+			.valid = 1,
+			.opt_param = IB_QP_PKEY_INDEX |
+				     IB_QP_QKEY,
+		},
+	},
+	[IB_QPS_RTR] = {
+		[IB_QPS_RESET] = { .valid = 1 },
+		[IB_QPS_ERR]   = { .valid = 1 },
+		[IB_QPS_RTS]   = {
+			.valid = 1,
+			.req_param = IB_QP_SQ_PSN,
+			.opt_param = IB_QP_CUR_STATE |
+				     IB_QP_QKEY |
+				     IB_QP_RNR_RETRY,
+
+		}
+	},
+	[IB_QPS_RTS] = {
+		[IB_QPS_RESET] = { .valid = 1 },
+		[IB_QPS_ERR]   = { .valid = 1 },
+		[IB_QPS_RTS]   = {
+			.valid = 1,
+			.opt_param = IB_QP_CUR_STATE |
+				     IB_QP_QKEY,
+		},
+		[IB_QPS_SQD] = {
+			.valid = 1,
+			.opt_param = IB_QP_EN_SQD_ASYNC_NOTIFY,
+		},
+	},
+	[IB_QPS_SQD] = {
+		[IB_QPS_RESET] = { .valid = 1 },
+		[IB_QPS_ERR]   = { .valid = 1 },
+		[IB_QPS_RTS]   = {
+			.valid = 1,
+			.opt_param = IB_QP_CUR_STATE |
+				     IB_QP_QKEY,
+		},
+		[IB_QPS_SQD] = {
+			.valid = 1,
+			.opt_param = IB_QP_PKEY_INDEX |
+				     IB_QP_QKEY,
+		}
+	},
+	[IB_QPS_SQE] = {
+		[IB_QPS_RESET] = { .valid = 1 },
+		[IB_QPS_ERR]   = { .valid = 1 },
+		[IB_QPS_RTS]   = {
+			.valid = 1,
+			.opt_param = IB_QP_CUR_STATE |
+				     IB_QP_QKEY,
+		}
+	},
+	[IB_QPS_ERR] = {
+		[IB_QPS_RESET] = { .valid = 1 },
+		[IB_QPS_ERR]   = { .valid = 1 },
+	}
+};
+
+static bool efa_modify_srd_qp_is_ok(enum ib_qp_state cur_state,
+				    enum ib_qp_state next_state,
+				    enum ib_qp_attr_mask mask)
+{
+	enum ib_qp_attr_mask req_param, opt_param;
+
+	if (mask & IB_QP_CUR_STATE  &&
+	    cur_state != IB_QPS_RTR && cur_state != IB_QPS_RTS &&
+	    cur_state != IB_QPS_SQD && cur_state != IB_QPS_SQE)
+		return false;
+
+	if (!srd_qp_state_table[cur_state][next_state].valid)
+		return false;
+
+	req_param = srd_qp_state_table[cur_state][next_state].req_param;
+	opt_param = srd_qp_state_table[cur_state][next_state].opt_param;
+
+	if ((mask & req_param) != req_param)
+		return false;
+
+	if (mask & ~(req_param | opt_param | IB_QP_STATE))
+		return false;
+
+	return true;
+}
+
 static int efa_modify_qp_validate(struct efa_dev *dev, struct efa_qp *qp,
 				  struct ib_qp_attr *qp_attr, int qp_attr_mask,
 				  enum ib_qp_state cur_state,
 				  enum ib_qp_state new_state)
 {
+	int err;
+
 #define EFA_MODIFY_QP_SUPP_MASK \
 	(IB_QP_STATE | IB_QP_CUR_STATE | IB_QP_EN_SQD_ASYNC_NOTIFY | \
-	 IB_QP_PKEY_INDEX | IB_QP_PORT | IB_QP_QKEY | IB_QP_SQ_PSN)
+	 IB_QP_PKEY_INDEX | IB_QP_PORT | IB_QP_QKEY | IB_QP_SQ_PSN | \
+	 IB_QP_RNR_RETRY)
 
 	if (qp_attr_mask & ~EFA_MODIFY_QP_SUPP_MASK) {
 		ibdev_dbg(&dev->ibdev,
@@ -757,8 +874,14 @@ static int efa_modify_qp_validate(struct efa_dev *dev, struct efa_qp *qp,
 		return -EOPNOTSUPP;
 	}
 
-	if (!ib_modify_qp_is_ok(cur_state, new_state, IB_QPT_UD,
-				qp_attr_mask)) {
+	if (qp->ibqp.qp_type == IB_QPT_DRIVER)
+		err = !efa_modify_srd_qp_is_ok(cur_state, new_state,
+					       qp_attr_mask);
+	else
+		err = !ib_modify_qp_is_ok(cur_state, new_state, IB_QPT_UD,
+					  qp_attr_mask);
+
+	if (err) {
 		ibdev_dbg(&dev->ibdev, "Invalid modify QP parameters\n");
 		return -EINVAL;
 	}
@@ -805,26 +928,34 @@ int efa_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *qp_attr,
 	params.qp_handle = qp->qp_handle;
 
 	if (qp_attr_mask & IB_QP_STATE) {
-		params.modify_mask |= BIT(EFA_ADMIN_QP_STATE_BIT) |
-				      BIT(EFA_ADMIN_CUR_QP_STATE_BIT);
+		EFA_SET(&params.modify_mask, EFA_ADMIN_MODIFY_QP_CMD_QP_STATE,
+			1);
+		EFA_SET(&params.modify_mask,
+			EFA_ADMIN_MODIFY_QP_CMD_CUR_QP_STATE, 1);
 		params.cur_qp_state = qp_attr->cur_qp_state;
 		params.qp_state = qp_attr->qp_state;
 	}
 
 	if (qp_attr_mask & IB_QP_EN_SQD_ASYNC_NOTIFY) {
-		params.modify_mask |=
-			BIT(EFA_ADMIN_SQ_DRAINED_ASYNC_NOTIFY_BIT);
+		EFA_SET(&params.modify_mask,
+			EFA_ADMIN_MODIFY_QP_CMD_SQ_DRAINED_ASYNC_NOTIFY, 1);
 		params.sq_drained_async_notify = qp_attr->en_sqd_async_notify;
 	}
 
 	if (qp_attr_mask & IB_QP_QKEY) {
-		params.modify_mask |= BIT(EFA_ADMIN_QKEY_BIT);
+		EFA_SET(&params.modify_mask, EFA_ADMIN_MODIFY_QP_CMD_QKEY, 1);
 		params.qkey = qp_attr->qkey;
 	}
 
 	if (qp_attr_mask & IB_QP_SQ_PSN) {
-		params.modify_mask |= BIT(EFA_ADMIN_SQ_PSN_BIT);
+		EFA_SET(&params.modify_mask, EFA_ADMIN_MODIFY_QP_CMD_SQ_PSN, 1);
 		params.sq_psn = qp_attr->sq_psn;
+	}
+
+	if (qp_attr_mask & IB_QP_RNR_RETRY) {
+		EFA_SET(&params.modify_mask, EFA_ADMIN_MODIFY_QP_CMD_RNR_RETRY,
+			1);
+		params.rnr_retry = qp_attr->rnr_retry;
 	}
 
 	err = efa_com_modify_qp(&dev->edev, &params);
@@ -843,7 +974,7 @@ static int efa_destroy_cq_idx(struct efa_dev *dev, int cq_idx)
 	return efa_com_destroy_cq(&dev->edev, &params);
 }
 
-void efa_destroy_cq(struct ib_cq *ibcq, struct ib_udata *udata)
+int efa_destroy_cq(struct ib_cq *ibcq, struct ib_udata *udata)
 {
 	struct efa_dev *dev = to_edev(ibcq->device);
 	struct efa_cq *cq = to_ecq(ibcq);
@@ -856,6 +987,7 @@ void efa_destroy_cq(struct ib_cq *ibcq, struct ib_udata *udata)
 	efa_destroy_cq_idx(dev, cq->cq_idx);
 	efa_free_mapped(dev, cq->cpu_addr, cq->dma_addr, cq->size,
 			DMA_FROM_DEVICE);
+	return 0;
 }
 
 static int cq_mmap_entries_setup(struct efa_dev *dev, struct efa_cq *cq,
@@ -1013,8 +1145,7 @@ static int umem_to_page_list(struct efa_dev *dev,
 	ibdev_dbg(&dev->ibdev, "hp_cnt[%u], pages_in_hp[%u]\n",
 		  hp_cnt, pages_in_hp);
 
-	rdma_for_each_block(umem->sg_head.sgl, &biter, umem->nmap,
-			    BIT(hp_shift))
+	rdma_umem_for_each_dma_block(umem, &biter, BIT(hp_shift))
 		page_list[hp_idx++] = rdma_block_iter_dma_address(&biter);
 
 	return 0;
@@ -1370,7 +1501,7 @@ struct ib_mr *efa_reg_mr(struct ib_pd *ibpd, u64 start, u64 length,
 
 	supp_access_flags =
 		IB_ACCESS_LOCAL_WRITE |
-		(is_rdma_read_cap(dev) ? IB_ACCESS_REMOTE_READ : 0);
+		(EFA_DEV_CAP(dev, RDMA_READ) ? IB_ACCESS_REMOTE_READ : 0);
 
 	access_flags &= ~IB_ACCESS_OPTIONAL;
 	if (access_flags & ~supp_access_flags) {
@@ -1410,9 +1541,8 @@ struct ib_mr *efa_reg_mr(struct ib_pd *ibpd, u64 start, u64 length,
 		goto err_unmap;
 	}
 
-	params.page_shift = __ffs(pg_sz);
-	params.page_num = DIV_ROUND_UP(length + (start & (pg_sz - 1)),
-				       pg_sz);
+	params.page_shift = order_base_2(pg_sz);
+	params.page_num = ib_umem_num_dma_blocks(mr->umem, pg_sz);
 
 	ibdev_dbg(&dev->ibdev,
 		  "start %#llx length %#llx params.page_shift %u params.page_num %u\n",
@@ -1569,12 +1699,10 @@ int efa_alloc_ucontext(struct ib_ucontext *ibucontext, struct ib_udata *udata)
 	resp.max_tx_batch = dev->dev_attr.max_tx_batch;
 	resp.min_sq_wr = dev->dev_attr.min_sq_depth;
 
-	if (udata && udata->outlen) {
-		err = ib_copy_to_udata(udata, &resp,
-				       min(sizeof(resp), udata->outlen));
-		if (err)
-			goto err_dealloc_uar;
-	}
+	err = ib_copy_to_udata(udata, &resp,
+			       min(sizeof(resp), udata->outlen));
+	if (err)
+		goto err_dealloc_uar;
 
 	return 0;
 
@@ -1745,7 +1873,7 @@ err_out:
 	return err;
 }
 
-void efa_destroy_ah(struct ib_ah *ibah, u32 flags)
+int efa_destroy_ah(struct ib_ah *ibah, u32 flags)
 {
 	struct efa_dev *dev = to_edev(ibah->pd->device);
 	struct efa_ah *ah = to_eah(ibah);
@@ -1755,10 +1883,11 @@ void efa_destroy_ah(struct ib_ah *ibah, u32 flags)
 	if (!(flags & RDMA_DESTROY_AH_SLEEPABLE)) {
 		ibdev_dbg(&dev->ibdev,
 			  "Destroy address handle is not supported in atomic context\n");
-		return;
+		return -EOPNOTSUPP;
 	}
 
 	efa_ah_destroy(dev, ah);
+	return 0;
 }
 
 struct rdma_hw_stats *efa_alloc_hw_stats(struct ib_device *ibdev, u8 port_num)

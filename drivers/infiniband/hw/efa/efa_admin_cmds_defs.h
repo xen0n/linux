@@ -68,14 +68,6 @@ enum efa_admin_get_stats_scope {
 	EFA_ADMIN_GET_STATS_SCOPE_QUEUE             = 1,
 };
 
-enum efa_admin_modify_qp_mask_bits {
-	EFA_ADMIN_QP_STATE_BIT                      = 0,
-	EFA_ADMIN_CUR_QP_STATE_BIT                  = 1,
-	EFA_ADMIN_QKEY_BIT                          = 2,
-	EFA_ADMIN_SQ_PSN_BIT                        = 3,
-	EFA_ADMIN_SQ_DRAINED_ASYNC_NOTIFY_BIT       = 4,
-};
-
 /*
  * QP allocation sizes, converted by fabric QueuePair (QP) create command
  * from QP capabilities.
@@ -199,8 +191,14 @@ struct efa_admin_modify_qp_cmd {
 	struct efa_admin_aq_common_desc aq_common_desc;
 
 	/*
-	 * Mask indicating which fields should be updated see enum
-	 * efa_admin_modify_qp_mask_bits
+	 * Mask indicating which fields should be updated
+	 * 0 : qp_state
+	 * 1 : cur_qp_state
+	 * 2 : qkey
+	 * 3 : sq_psn
+	 * 4 : sq_drained_async_notify
+	 * 5 : rnr_retry
+	 * 31:6 : reserved
 	 */
 	u32 modify_mask;
 
@@ -222,8 +220,8 @@ struct efa_admin_modify_qp_cmd {
 	/* Enable async notification when SQ is drained */
 	u8 sq_drained_async_notify;
 
-	/* MBZ */
-	u8 reserved1;
+	/* Number of RNR retries (valid only for SRD QPs) */
+	u8 rnr_retry;
 
 	/* MBZ */
 	u16 reserved2;
@@ -258,8 +256,8 @@ struct efa_admin_query_qp_resp {
 	/* Indicates that draining is in progress */
 	u8 sq_draining;
 
-	/* MBZ */
-	u8 reserved1;
+	/* Number of RNR retries (valid only for SRD QPs) */
+	u8 rnr_retry;
 
 	/* MBZ */
 	u16 reserved2;
@@ -576,7 +574,9 @@ struct efa_admin_feature_device_attr_desc {
 	/*
 	 * 0 : rdma_read - If set, RDMA Read is supported on
 	 *    TX queues
-	 * 31:1 : reserved - MBZ
+	 * 1 : rnr_retry - If set, RNR retry is supported on
+	 *    modify QP command
+	 * 31:2 : reserved - MBZ
 	 */
 	u32 device_caps;
 
@@ -862,6 +862,14 @@ struct efa_admin_host_info {
 #define EFA_ADMIN_CREATE_QP_CMD_SQ_VIRT_MASK                BIT(0)
 #define EFA_ADMIN_CREATE_QP_CMD_RQ_VIRT_MASK                BIT(1)
 
+/* modify_qp_cmd */
+#define EFA_ADMIN_MODIFY_QP_CMD_QP_STATE_MASK               BIT(0)
+#define EFA_ADMIN_MODIFY_QP_CMD_CUR_QP_STATE_MASK           BIT(1)
+#define EFA_ADMIN_MODIFY_QP_CMD_QKEY_MASK                   BIT(2)
+#define EFA_ADMIN_MODIFY_QP_CMD_SQ_PSN_MASK                 BIT(3)
+#define EFA_ADMIN_MODIFY_QP_CMD_SQ_DRAINED_ASYNC_NOTIFY_MASK BIT(4)
+#define EFA_ADMIN_MODIFY_QP_CMD_RNR_RETRY_MASK              BIT(5)
+
 /* reg_mr_cmd */
 #define EFA_ADMIN_REG_MR_CMD_PHYS_PAGE_SIZE_SHIFT_MASK      GENMASK(4, 0)
 #define EFA_ADMIN_REG_MR_CMD_MEM_ADDR_PHY_MODE_EN_MASK      BIT(7)
@@ -878,6 +886,7 @@ struct efa_admin_host_info {
 
 /* feature_device_attr_desc */
 #define EFA_ADMIN_FEATURE_DEVICE_ATTR_DESC_RDMA_READ_MASK   BIT(0)
+#define EFA_ADMIN_FEATURE_DEVICE_ATTR_DESC_RNR_RETRY_MASK   BIT(1)
 
 /* host_info */
 #define EFA_ADMIN_HOST_INFO_DRIVER_MODULE_TYPE_MASK         GENMASK(7, 0)
