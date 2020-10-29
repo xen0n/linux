@@ -2,6 +2,9 @@
 if MIPS
 source "drivers/platform/mips/Kconfig"
 endif
+if LOONGARCH
+source "drivers/platform/loongarch/Kconfig"
+endif
 
 source "drivers/platform/goldfish/Kconfig"
 
