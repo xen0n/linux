@@ -27,6 +27,14 @@ extern int pm_clk_runtime_resume(struct device *dev);
 	.runtime_resume = pm_clk_runtime_resume,
 #else
 #define USE_PM_CLK_RUNTIME_OPS
+static inline int pm_clk_runtime_suspend(struct device *dev)
+{
+	return 0;
+}
+static inline int pm_clk_runtime_resume(struct device *dev)
+{
+	return 0;
+}
 #endif
 
 #ifdef CONFIG_PM_CLK
