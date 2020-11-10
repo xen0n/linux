@@ -121,14 +121,14 @@ cannot happen.
 +-----------------------------------------------------------------------+
 | Wait a minute! You said that updaters can make useful forward         |
 | progress concurrently with readers, but pre-existing readers will     |
-| block synchronize_rcu()!!!                                        |
+| block synchronize_rcu()!!!                                            |
 | Just who are you trying to fool???                                    |
 +-----------------------------------------------------------------------+
 | **Answer**:                                                           |
 +-----------------------------------------------------------------------+
 | First, if updaters do not wish to be blocked by readers, they can use |
-| call_rcu() or kfree_rcu(), which will be discussed later.     |
-| Second, even when using synchronize_rcu(), the other update-side  |
+| call_rcu() or kfree_rcu(), which will be discussed later.             |
+| Second, even when using synchronize_rcu(), the other update-side      |
 | code does run concurrently with readers, whether pre-existing or not. |
 +-----------------------------------------------------------------------+
 
@@ -178,13 +178,13 @@ little or no synchronization overhead in do_something_dlm().
 +-----------------------------------------------------------------------+
 | **Quick Quiz**:                                                       |
 +-----------------------------------------------------------------------+
-| Why is the synchronize_rcu() on line 28 needed?                   |
+| Why is the synchronize_rcu() on line 28 needed?                       |
 +-----------------------------------------------------------------------+
 | **Answer**:                                                           |
 +-----------------------------------------------------------------------+
 | Without that extra grace period, memory reordering could result in    |
-| do_something_dlm() executing do_something() concurrently with |
-| the last bits of recovery().                                      |
+| do_something_dlm() executing do_something() concurrently with         |
+| the last bits of recovery().                                          |
 +-----------------------------------------------------------------------+
 
 In order to avoid fatal problems such as deadlocks, an RCU read-side
@@ -289,7 +289,7 @@ number of “interesting” compiler optimizations, for example, the use of
 +-----------------------------------------------------------------------+
 | **Quick Quiz**:                                                       |
 +-----------------------------------------------------------------------+
-| But rcu_assign_pointer() does nothing to prevent the two          |
+| But rcu_assign_pointer() does nothing to prevent the two              |
 | assignments to ``p->a`` and ``p->b`` from being reordered. Can't that |
 | also cause problems?                                                  |
 +-----------------------------------------------------------------------+
@@ -430,13 +430,13 @@ line 6 is similar to rcu_dereference(), except that:
 +-----------------------------------------------------------------------+
 | **Quick Quiz**:                                                       |
 +-----------------------------------------------------------------------+
-| Without the rcu_dereference() or the rcu_access_pointer(),    |
+| Without the rcu_dereference() or the rcu_access_pointer(),            |
 | what destructive optimizations might the compiler make use of?        |
 +-----------------------------------------------------------------------+
 | **Answer**:                                                           |
 +-----------------------------------------------------------------------+
-| Let's start with what happens to do_something_gp() if it fails to |
-| use rcu_dereference(). It could reuse a value formerly fetched    |
+| Let's start with what happens to do_something_gp() if it fails to     |
+| use rcu_dereference(). It could reuse a value formerly fetched        |
 | from this same pointer. It could also fetch the pointer from ``gp``   |
 | in a byte-at-a-time manner, resulting in *load tearing*, in turn      |
 | resulting a bytewise mash-up of two distinct pointer values. It might |
@@ -445,11 +445,11 @@ line 6 is similar to rcu_dereference(), except that:
 | update has changed the pointer to match the wrong guess. Too bad      |
 | about any dereferences that returned pre-initialization garbage in    |
 | the meantime!                                                         |
-| For remove_gp_synchronous(), as long as all modifications to      |
+| For remove_gp_synchronous(), as long as all modifications to          |
 | ``gp`` are carried out while holding ``gp_lock``, the above           |
 | optimizations are harmless. However, ``sparse`` will complain if you  |
 | define ``gp`` with ``__rcu`` and then access it without using either  |
-| rcu_access_pointer() or rcu_dereference().                    |
+| rcu_access_pointer() or rcu_dereference().                            |
 +-----------------------------------------------------------------------+
 
 In short, RCU's publish-subscribe guarantee is provided by the
@@ -516,19 +516,19 @@ systems with more than one CPU:
 | Given that multiple CPUs can start RCU read-side critical sections at |
 | any time without any ordering whatsoever, how can RCU possibly tell   |
 | whether or not a given RCU read-side critical section starts before a |
-| given instance of synchronize_rcu()?                              |
+| given instance of synchronize_rcu()?                                  |
 +-----------------------------------------------------------------------+
 | **Answer**:                                                           |
 +-----------------------------------------------------------------------+
 | If RCU cannot tell whether or not a given RCU read-side critical      |
-| section starts before a given instance of synchronize_rcu(), then |
+| section starts before a given instance of synchronize_rcu(), then     |
 | it must assume that the RCU read-side critical section started first. |
-| In other words, a given instance of synchronize_rcu() can avoid   |
+| In other words, a given instance of synchronize_rcu() can avoid       |
 | waiting on a given RCU read-side critical section only if it can      |
-| prove that synchronize_rcu() started first.                       |
-| A related question is “When rcu_read_lock() doesn't generate any  |
+| prove that synchronize_rcu() started first.                           |
+| A related question is “When rcu_read_lock() doesn't generate any      |
 | code, why does it matter how it relates to a grace period?” The       |
-| answer is that it is not the relationship of rcu_read_lock()      |
+| answer is that it is not the relationship of rcu_read_lock()          |
 | itself that is important, but rather the relationship of the code     |
 | within the enclosed RCU read-side critical section to the code        |
 | preceding and following the grace period. If we take this viewpoint,  |
@@ -556,14 +556,14 @@ systems with more than one CPU:
 | Yes, they really are required. To see why the first guarantee is      |
 | required, consider the following sequence of events:                  |
 |                                                                       |
-| #. CPU 1: rcu_read_lock()                                         |
+| #. CPU 1: rcu_read_lock()                                             |
 | #. CPU 1: ``q = rcu_dereference(gp); /* Very likely to return p. */`` |
 | #. CPU 0: ``list_del_rcu(p);``                                        |
-| #. CPU 0: synchronize_rcu() starts.                               |
+| #. CPU 0: synchronize_rcu() starts.                                   |
 | #. CPU 1: ``do_something_with(q->a);``                                |
 |    ``/* No smp_mb(), so might happen after kfree(). */``              |
-| #. CPU 1: rcu_read_unlock()                                       |
-| #. CPU 0: synchronize_rcu() returns.                              |
+| #. CPU 1: rcu_read_unlock()                                           |
+| #. CPU 0: synchronize_rcu() returns.                                  |
 | #. CPU 0: ``kfree(p);``                                               |
 |                                                                       |
 | Therefore, there absolutely must be a full memory barrier between the |
@@ -574,14 +574,14 @@ systems with more than one CPU:
 | is roughly similar:                                                   |
 |                                                                       |
 | #. CPU 0: ``list_del_rcu(p);``                                        |
-| #. CPU 0: synchronize_rcu() starts.                               |
-| #. CPU 1: rcu_read_lock()                                         |
+| #. CPU 0: synchronize_rcu() starts.                                   |
+| #. CPU 1: rcu_read_lock()                                             |
 | #. CPU 1: ``q = rcu_dereference(gp);``                                |
 |    ``/* Might return p if no memory barrier. */``                     |
-| #. CPU 0: synchronize_rcu() returns.                              |
+| #. CPU 0: synchronize_rcu() returns.                                  |
 | #. CPU 0: ``kfree(p);``                                               |
 | #. CPU 1: ``do_something_with(q->a); /* Boom!!! */``                  |
-| #. CPU 1: rcu_read_unlock()                                       |
+| #. CPU 1: rcu_read_unlock()                                           |
 |                                                                       |
 | And similarly, without a memory barrier between the beginning of the  |
 | grace period and the beginning of the RCU read-side critical section, |
@@ -597,7 +597,7 @@ systems with more than one CPU:
 +-----------------------------------------------------------------------+
 | **Quick Quiz**:                                                       |
 +-----------------------------------------------------------------------+
-| You claim that rcu_read_lock() and rcu_read_unlock() generate |
+| You claim that rcu_read_lock() and rcu_read_unlock() generate         |
 | absolutely no code in some kernel builds. This means that the         |
 | compiler might arbitrarily rearrange consecutive RCU read-side        |
 | critical sections. Given such rearrangement, if a given RCU read-side |
@@ -607,11 +607,11 @@ systems with more than one CPU:
 +-----------------------------------------------------------------------+
 | **Answer**:                                                           |
 +-----------------------------------------------------------------------+
-| In cases where rcu_read_lock() and rcu_read_unlock() generate |
+| In cases where rcu_read_lock() and rcu_read_unlock() generate         |
 | absolutely no code, RCU infers quiescent states only at special       |
 | locations, for example, within the scheduler. Because calls to        |
-| schedule() had better prevent calling-code accesses to shared     |
-| variables from being rearranged across the call to schedule(), if |
+| schedule() had better prevent calling-code accesses to shared         |
+| variables from being rearranged across the call to schedule(), if     |
 | RCU detects the end of a given RCU read-side critical section, it     |
 | will necessarily detect the end of all prior RCU read-side critical   |
 | sections, no matter how aggressively the compiler scrambles the code. |
@@ -742,7 +742,7 @@ significant ordering constraints would slow down these fast-path APIs.
 +-----------------------------------------------------------------------+
 | **Answer**:                                                           |
 +-----------------------------------------------------------------------+
-| No, the volatile casts in READ_ONCE() and WRITE_ONCE()        |
+| No, the volatile casts in READ_ONCE() and WRITE_ONCE()                |
 | prevent the compiler from reordering in this particular case.         |
 +-----------------------------------------------------------------------+
 
@@ -799,10 +799,10 @@ obligation to wait for these new readers.
 +-----------------------------------------------------------------------+
 | **Answer**:                                                           |
 +-----------------------------------------------------------------------+
-| For no time at all. Even if synchronize_rcu() were to wait until  |
+| For no time at all. Even if synchronize_rcu() were to wait until      |
 | all readers had completed, a new reader might start immediately after |
-| synchronize_rcu() completed. Therefore, the code following        |
-| synchronize_rcu() can *never* rely on there being no readers.     |
+| synchronize_rcu() completed. Therefore, the code following            |
+| synchronize_rcu() can *never* rely on there being no readers.         |
 +-----------------------------------------------------------------------+
 
 Grace Periods Don't Partition Read-Side Critical Sections
@@ -1104,11 +1104,11 @@ memory barriers.
 | sections.                                                             |
 | Note that it *is* legal for a normal RCU read-side critical section   |
 | to conditionally acquire a sleeping locks (as in                      |
-| mutex_trylock()), but only as long as it does not loop            |
+| mutex_trylock()), but only as long as it does not loop                |
 | indefinitely attempting to conditionally acquire that sleeping locks. |
-| The key point is that things like mutex_trylock() either return   |
+| The key point is that things like mutex_trylock() either return       |
 | with the mutex held, or return an error indication if the mutex was   |
-| not immediately available. Either way, mutex_trylock() returns    |
+| not immediately available. Either way, mutex_trylock() returns        |
 | immediately without sleeping.                                         |
 +-----------------------------------------------------------------------+
 
@@ -1295,18 +1295,18 @@ threads or (in the Linux kernel) workqueues.
 +-----------------------------------------------------------------------+
 | **Quick Quiz**:                                                       |
 +-----------------------------------------------------------------------+
-| Why does line 19 use rcu_access_pointer()? After all,             |
-| call_rcu() on line 25 stores into the structure, which would      |
+| Why does line 19 use rcu_access_pointer()? After all,                 |
+| call_rcu() on line 25 stores into the structure, which would          |
 | interact badly with concurrent insertions. Doesn't this mean that     |
-| rcu_dereference() is required?                                    |
+| rcu_dereference() is required?                                        |
 +-----------------------------------------------------------------------+
 | **Answer**:                                                           |
 +-----------------------------------------------------------------------+
 | Presumably the ``->gp_lock`` acquired on line 18 excludes any         |
-| changes, including any insertions that rcu_dereference() would    |
+| changes, including any insertions that rcu_dereference() would        |
 | protect against. Therefore, any insertions will be delayed until      |
 | after ``->gp_lock`` is released on line 25, which in turn means that  |
-| rcu_access_pointer() suffices.                                    |
+| rcu_access_pointer() suffices.                                        |
 +-----------------------------------------------------------------------+
 
 However, all that remove_gp_cb() is doing is invoking kfree() on
@@ -1351,7 +1351,7 @@ open-coded it.
 +-----------------------------------------------------------------------+
 | **Quick Quiz**:                                                       |
 +-----------------------------------------------------------------------+
-| Earlier it was claimed that call_rcu() and kfree_rcu()        |
+| Earlier it was claimed that call_rcu() and kfree_rcu()                |
 | allowed updaters to avoid being blocked by readers. But how can that  |
 | be correct, given that the invocation of the callback and the freeing |
 | of the memory (respectively) must still wait for a grace period to    |
@@ -1363,9 +1363,9 @@ open-coded it.
 | definition would say that updates in garbage-collected languages      |
 | cannot complete until the next time the garbage collector runs, which |
 | does not seem at all reasonable. The key point is that in most cases, |
-| an updater using either call_rcu() or kfree_rcu() can proceed |
-| to the next update as soon as it has invoked call_rcu() or        |
-| kfree_rcu(), without having to wait for a subsequent grace        |
+| an updater using either call_rcu() or kfree_rcu() can proceed         |
+| to the next update as soon as it has invoked call_rcu() or            |
+| kfree_rcu(), without having to wait for a subsequent grace            |
 | period.                                                               |
 +-----------------------------------------------------------------------+
 
@@ -1894,8 +1894,8 @@ unloading became apparent later.
 | **Quick Quiz**:                                                       |
 +-----------------------------------------------------------------------+
 | Wait a minute! Each RCU callbacks must wait for a grace period to     |
-| complete, and rcu_barrier() must wait for each pre-existing       |
-| callback to be invoked. Doesn't rcu_barrier() therefore need to   |
+| complete, and rcu_barrier() must wait for each pre-existing           |
+| callback to be invoked. Doesn't rcu_barrier() therefore need to       |
 | wait for a full grace period if there is even one callback posted     |
 | anywhere in the system?                                               |
 +-----------------------------------------------------------------------+
@@ -1904,14 +1904,14 @@ unloading became apparent later.
 | Absolutely not!!!                                                     |
 | Yes, each RCU callbacks must wait for a grace period to complete, but |
 | it might well be partly (or even completely) finished waiting by the  |
-| time rcu_barrier() is invoked. In that case, rcu_barrier()    |
+| time rcu_barrier() is invoked. In that case, rcu_barrier()            |
 | need only wait for the remaining portion of the grace period to       |
 | elapse. So even if there are quite a few callbacks posted,            |
-| rcu_barrier() might well return quite quickly.                    |
+| rcu_barrier() might well return quite quickly.                        |
 |                                                                       |
 | So if you need to wait for a grace period as well as for all          |
 | pre-existing callbacks, you will need to invoke both                  |
-| synchronize_rcu() and rcu_barrier(). If latency is a concern, |
+| synchronize_rcu() and rcu_barrier(). If latency is a concern,         |
 | you can always use workqueues to invoke them concurrently.            |
 +-----------------------------------------------------------------------+
 
@@ -2221,7 +2221,7 @@ scheduling-clock interrupt be enabled when RCU needs it to be:
 | **Quick Quiz**:                                                       |
 +-----------------------------------------------------------------------+
 | But what if my driver has a hardware interrupt handler that can run   |
-| for many seconds? I cannot invoke schedule() from an hardware     |
+| for many seconds? I cannot invoke schedule() from an hardware         |
 | interrupt handler, after all!                                         |
 +-----------------------------------------------------------------------+
 | **Answer**:                                                           |
