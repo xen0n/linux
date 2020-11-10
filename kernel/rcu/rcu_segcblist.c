@@ -115,8 +115,8 @@ static void rcu_segcblist_set_len(struct rcu_segcblist *rsclp, long v)
  *
  * CASE 1: Suppose that CPU 0 has no callbacks queued, but invokes
  * call_rcu() just as CPU 1 invokes rcu_barrier().  CPU 0's ->len field
- * will transition from 0->1, which is one of the transitions that must be
- * handled carefully.  Without the full memory barriers before the ->len
+ * will transition from 0->1, which is one of the transitions that must
+ * be handled carefully.  Without the full memory barriers after the ->len
  * update and at the beginning of rcu_barrier(), the following could happen:
  *
  * CPU 0				CPU 1
@@ -135,11 +135,11 @@ static void rcu_segcblist_set_len(struct rcu_segcblist *rsclp, long v)
  * happen before the rcu_barrier().
  *
  *
- * CASE 2: Suppose that CPU 0 is invoking its last callback just as CPU 1 invokes
- * rcu_barrier().  CPU 0's ->len field will transition from 1->0, which is one
- * of the transitions that must be handled carefully.  Without the full memory
- * barriers after the ->len update and at the end of rcu_barrier(), the following
- * could happen:
+ * CASE 2: Suppose that CPU 0 is invoking its last callback just as
+ * CPU 1 invokes rcu_barrier().  CPU 0's ->len field will transition from
+ * 1->0, which is one of the transitions that must be handled carefully.
+ * Without the full memory barriers before the ->len update and at the
+ * end of rcu_barrier(), the following could happen:
  * 
  * CPU 0				CPU 1
  *
