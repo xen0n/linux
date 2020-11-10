@@ -1211,6 +1211,7 @@ static int open_fs_devices(struct btrfs_fs_devices *fs_devices,
 	fs_devices->latest_bdev = latest_dev->bdev;
 	fs_devices->total_rw_bytes = 0;
 	fs_devices->chunk_alloc_policy = BTRFS_CHUNK_ALLOC_REGULAR;
+	fs_devices->read_policy = BTRFS_READ_POLICY_PID;
 
 	return 0;
 }
@@ -5473,7 +5474,18 @@ static int find_live_mirror(struct btrfs_fs_info *fs_info,
 	else
 		num_stripes = map->num_stripes;
 
-	preferred_mirror = first + current->pid % num_stripes;
+	switch (fs_info->fs_devices->read_policy) {
+	default:
+		/* Shouldn't happen, just warn and use pid instead of failing */
+		btrfs_warn_rl(fs_info,
+			      "unknown read_policy type %u, reset to pid",
+			      fs_info->fs_devices->read_policy);
+		fs_info->fs_devices->read_policy = BTRFS_READ_POLICY_PID;
+		fallthrough;
+	case BTRFS_READ_POLICY_PID:
+		preferred_mirror = first + (current->pid % num_stripes);
+		break;
+	}
 
 	if (dev_replace_is_ongoing &&
 	    fs_info->dev_replace.cont_reading_from_srcdev_mode ==
@@ -6885,11 +6897,11 @@ int btrfs_read_sys_array(struct btrfs_fs_info *fs_info)
 	 * fixed to BTRFS_SUPER_INFO_SIZE. If nodesize > sb size, this will
 	 * overallocate but we can keep it as-is, only the first page is used.
 	 */
-	sb = btrfs_find_create_tree_block(fs_info, BTRFS_SUPER_INFO_OFFSET);
+	sb = btrfs_find_create_tree_block(fs_info, BTRFS_SUPER_INFO_OFFSET,
+					  root->root_key.objectid, 0);
 	if (IS_ERR(sb))
 		return PTR_ERR(sb);
 	set_extent_buffer_uptodate(sb);
-	btrfs_set_buffer_lockdep_class(root->root_key.objectid, sb, 0);
 	/*
 	 * The sb extent buffer is artificial and just used to read the system array.
 	 * set_extent_buffer_uptodate() call does not properly mark all it's
@@ -7053,12 +7065,8 @@ static void readahead_tree_node_children(struct extent_buffer *node)
 	int i;
 	const int nr_items = btrfs_header_nritems(node);
 
-	for (i = 0; i < nr_items; i++) {
-		u64 start;
-
-		start = btrfs_node_blockptr(node, i);
-		readahead_tree_block(node->fs_info, start);
-	}
+	for (i = 0; i < nr_items; i++)
+		btrfs_readahead_node_child(node, i);
 }
 
 int btrfs_read_chunk_tree(struct btrfs_fs_info *fs_info)
@@ -7652,6 +7660,19 @@ int btrfs_verify_dev_extents(struct btrfs_fs_info *fs_info)
 	u64 prev_devid = 0;
 	u64 prev_dev_ext_end = 0;
 	int ret = 0;
+
+	/*
+	 * We don't have a dev_root because we mounted with ignorebadroots and
+	 * failed to load the root, so we want to skip the verification in this
+	 * case for sure.
+	 *
+	 * However if the dev root is fine, but the tree itself is corrupted
+	 * we'd still fail to mount.  This verification is only to make sure
+	 * writes can happen safely, so instead just bypass this check
+	 * completely in the case of IGNOREBADROOTS.
+	 */
+	if (btrfs_test_opt(fs_info, IGNOREBADROOTS))
+		return 0;
 
 	key.objectid = 1;
 	key.type = BTRFS_DEV_EXTENT_KEY;

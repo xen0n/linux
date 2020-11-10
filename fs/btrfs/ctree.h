@@ -28,6 +28,7 @@
 #include <linux/dynamic_debug.h>
 #include <linux/refcount.h>
 #include <linux/crc32c.h>
+#include <linux/iomap.h>
 #include "extent-io-tree.h"
 #include "extent_io.h"
 #include "extent_map.h"
@@ -370,7 +371,6 @@ struct btrfs_path {
 	unsigned int search_for_split:1;
 	unsigned int keep_locks:1;
 	unsigned int skip_locking:1;
-	unsigned int leave_spinning:1;
 	unsigned int search_commit_root:1;
 	unsigned int need_commit_sem:1;
 	unsigned int skip_release_on_error:1;
@@ -469,10 +469,11 @@ struct btrfs_discard_ctl {
 	struct btrfs_block_group *block_group;
 	struct list_head discard_list[BTRFS_NR_DISCARD_LISTS];
 	u64 prev_discard;
+	u64 prev_discard_time;
 	atomic_t discardable_extents;
 	atomic64_t discardable_bytes;
 	u64 max_discard_size;
-	unsigned long delay;
+	u64 delay_ms;
 	u32 iops_limit;
 	u32 kbps_limit;
 	u64 discard_extent_bytes;
@@ -559,6 +560,9 @@ enum {
 
 	/* Indicate that the discard workqueue can service discards. */
 	BTRFS_FS_DISCARD_RUNNING,
+
+	/* Indicate that we need to cleanup space cache v1 */
+	BTRFS_FS_CLEANUP_SPACE_CACHE_V1,
 };
 
 /*
@@ -790,7 +794,7 @@ struct btrfs_fs_info {
 	/* used to keep from writing metadata until there is a nice batch */
 	struct percpu_counter dirty_metadata_bytes;
 	struct percpu_counter delalloc_bytes;
-	struct percpu_counter dio_bytes;
+	struct percpu_counter ordered_bytes;
 	s32 dirty_metadata_batch;
 	s32 delalloc_batch;
 
@@ -922,6 +926,7 @@ struct btrfs_fs_info {
 	/* Used to reclaim the metadata space in the background. */
 	struct work_struct async_reclaim_work;
 	struct work_struct async_data_reclaim_work;
+	struct work_struct preempt_reclaim_work;
 
 	spinlock_t unused_bgs_lock;
 	struct list_head unused_bgs;
@@ -931,6 +936,10 @@ struct btrfs_fs_info {
 	/* Cached block sizes */
 	u32 nodesize;
 	u32 sectorsize;
+	/* ilog2 of sectorsize, use to avoid 64bit division */
+	u32 sectorsize_bits;
+	u32 csum_size;
+	u32 csums_per_leaf;
 	u32 stripesize;
 
 	/* Block groups and devices containing active swapfiles. */
@@ -1224,6 +1233,63 @@ struct btrfs_replace_extent_info {
 	int insertions;
 };
 
+/* Arguments for btrfs_drop_extents(). */
+struct btrfs_drop_extents_args {
+	/* Input parameters */
+
+	/*
+	 * If NULL, btrfs_drop_extents() will allocate and free its own path.
+	 * If 'replace_extent' is true, this must not be NULL. Also the path
+	 * is always released except if 'replace_extent' is true and
+	 * btrfs_drop_extents() sets 'extent_inserted' to true, in which case
+	 * the path is kept locked.
+	 */
+	struct btrfs_path *path;
+	/* Start offset of the range to drop extents from. */
+	u64 start;
+	/* End (exclusive, last byte + 1) of the range to drop extents from. */
+	u64 end;
+	/* If true drop all the extent maps in the range. */
+	bool drop_cache;
+	/*
+	 * If true it means we want to insert a new extent after dropping all
+	 * the extents in the range. If this is true, the 'extent_item_size'
+	 * parameter must be set as well and the 'extent_inserted' field will
+	 * be set to true by btrfs_drop_extents() if it could insert the new
+	 * extent.
+	 * Note: when this is set to true the path must not be NULL.
+	 */
+	bool replace_extent;
+	/*
+	 * Used if 'replace_extent' is true. Size of the file extent item to
+	 * insert after dropping all existing extents in the range.
+	 */
+	u32 extent_item_size;
+
+	/* Output parameters */
+
+	/*
+	 * Set to the minimum between the input parameter 'end' and the end
+	 * (exclusive, last byte + 1) of the last dropped extent. This is always
+	 * set even if btrfs_drop_extents() returns an error.
+	 */
+	u64 drop_end;
+	/*
+	 * The number of allocated bytes found in the range. This can be smaller
+	 * than the range's length when there are holes in the range.
+	 */
+	u64 bytes_found;
+	/*
+	 * Only set if 'replace_extent' is true. Set to true if we were able
+	 * to insert a replacement extent after dropping all extents in the
+	 * range, otherwise set to false by btrfs_drop_extents().
+	 * Also, if btrfs_drop_extents() has set this to true it means it
+	 * returned with the path locked, otherwise if it has set this to
+	 * false it has returned with the path released.
+	 */
+	bool extent_inserted;
+};
+
 struct btrfs_file_private {
 	void *filldir_buf;
 };
@@ -1295,6 +1361,8 @@ static inline u32 BTRFS_MAX_XATTR_SIZE(const struct btrfs_fs_info *info)
 #define BTRFS_MOUNT_NOLOGREPLAY		(1 << 27)
 #define BTRFS_MOUNT_REF_VERIFY		(1 << 28)
 #define BTRFS_MOUNT_DISCARD_ASYNC	(1 << 29)
+#define BTRFS_MOUNT_IGNOREBADROOTS	(1 << 30)
+#define BTRFS_MOUNT_IGNOREDATACSUMS	(1 << 31)
 
 #define BTRFS_DEFAULT_COMMIT_INTERVAL	(30)
 #define BTRFS_DEFAULT_MAX_INLINE	(2048)
@@ -1402,7 +1470,7 @@ struct btrfs_map_token {
 };
 
 #define BTRFS_BYTES_TO_BLKS(fs_info, bytes) \
-				((bytes) >> (fs_info)->sb->s_blocksize_bits)
+				((bytes) >> (fs_info)->sectorsize_bits)
 
 static inline void btrfs_init_map_token(struct btrfs_map_token *token,
 					struct extent_buffer *eb)
@@ -2083,6 +2151,7 @@ BTRFS_SETGET_FUNCS(disk_root_level, struct btrfs_root_item, level, 8);
 BTRFS_SETGET_STACK_FUNCS(root_generation, struct btrfs_root_item,
 			 generation, 64);
 BTRFS_SETGET_STACK_FUNCS(root_bytenr, struct btrfs_root_item, bytenr, 64);
+BTRFS_SETGET_STACK_FUNCS(root_drop_level, struct btrfs_root_item, drop_level, 8);
 BTRFS_SETGET_STACK_FUNCS(root_level, struct btrfs_root_item, level, 8);
 BTRFS_SETGET_STACK_FUNCS(root_dirid, struct btrfs_root_item, root_dirid, 64);
 BTRFS_SETGET_STACK_FUNCS(root_refs, struct btrfs_root_item, refs, 32);
@@ -2515,7 +2584,17 @@ int btrfs_get_extent_inline_ref_type(const struct extent_buffer *eb,
 				     enum btrfs_inline_ref_type is_data);
 u64 hash_extent_data_ref(u64 root_objectid, u64 owner, u64 offset);
 
-u64 btrfs_csum_bytes_to_leaves(struct btrfs_fs_info *fs_info, u64 csum_bytes);
+/*
+ * Take the number of bytes to be checksummmed and figure out how many leaves
+ * it would require to store the csums for that many bytes.
+ */
+static inline u64 btrfs_csum_bytes_to_leaves(
+			const struct btrfs_fs_info *fs_info, u64 csum_bytes)
+{
+	const u64 num_csums = csum_bytes >> fs_info->sectorsize_bits;
+
+	return DIV_ROUND_UP_ULL(num_csums, fs_info->csums_per_leaf);
+}
 
 /*
  * Use this if we would be adding new items, as we could split nodes as we cow
@@ -2590,7 +2669,6 @@ int btrfs_free_reserved_extent(struct btrfs_fs_info *fs_info,
 			       u64 start, u64 len, int delalloc);
 int btrfs_pin_reserved_extent(struct btrfs_trans_handle *trans, u64 start,
 			      u64 len);
-void btrfs_prepare_extent_commit(struct btrfs_fs_info *fs_info);
 int btrfs_finish_extent_commit(struct btrfs_trans_handle *trans);
 int btrfs_inc_extent_ref(struct btrfs_trans_handle *trans,
 			 struct btrfs_ref *generic_ref);
@@ -2654,6 +2732,7 @@ enum btrfs_flush_state {
 	ALLOC_CHUNK_FORCE	=	8,
 	RUN_DELAYED_IPUTS	=	9,
 	COMMIT_TRANS		=	10,
+	FORCE_COMMIT_TRANS	=	11,
 };
 
 int btrfs_subvolume_reserve_metadata(struct btrfs_root *root,
@@ -3060,7 +3139,18 @@ int btrfs_writepage_cow_fixup(struct page *page, u64 start, u64 end);
 void btrfs_writepage_endio_finish_ordered(struct page *page, u64 start,
 					  u64 end, int uptodate);
 extern const struct dentry_operations btrfs_dentry_operations;
-ssize_t btrfs_direct_IO(struct kiocb *iocb, struct iov_iter *iter);
+extern const struct iomap_ops btrfs_dio_iomap_ops;
+extern const struct iomap_dio_ops btrfs_dio_ops;
+
+/* Inode locking type flags, by default the exclusive lock is taken */
+#define BTRFS_ILOCK_SHARED	(1U << 0)
+#define BTRFS_ILOCK_TRY 	(1U << 1)
+
+int btrfs_inode_lock(struct inode *inode, unsigned int ilock_flags);
+void btrfs_inode_unlock(struct inode *inode, unsigned int ilock_flags);
+void btrfs_update_inode_bytes(struct btrfs_inode *inode,
+			      const u64 add_bytes,
+			      const u64 del_bytes);
 
 /* ioctl.c */
 long btrfs_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
@@ -3090,16 +3180,9 @@ int btrfs_sync_file(struct file *file, loff_t start, loff_t end, int datasync);
 void btrfs_drop_extent_cache(struct btrfs_inode *inode, u64 start, u64 end,
 			     int skip_pinned);
 extern const struct file_operations btrfs_file_operations;
-int __btrfs_drop_extents(struct btrfs_trans_handle *trans,
-			 struct btrfs_root *root, struct btrfs_inode *inode,
-			 struct btrfs_path *path, u64 start, u64 end,
-			 u64 *drop_end, int drop_cache,
-			 int replace_extent,
-			 u32 extent_item_size,
-			 int *key_inserted);
 int btrfs_drop_extents(struct btrfs_trans_handle *trans,
-		       struct btrfs_root *root, struct inode *inode, u64 start,
-		       u64 end, int drop_cache);
+		       struct btrfs_root *root, struct btrfs_inode *inode,
+		       struct btrfs_drop_extents_args *args);
 int btrfs_replace_file_extents(struct inode *inode, struct btrfs_path *path,
 			   const u64 start, const u64 end,
 			   struct btrfs_replace_extent_info *extent_info,
@@ -3109,7 +3192,7 @@ int btrfs_mark_extent_written(struct btrfs_trans_handle *trans,
 int btrfs_release_file(struct inode *inode, struct file *file);
 int btrfs_dirty_pages(struct btrfs_inode *inode, struct page **pages,
 		      size_t num_pages, loff_t pos, size_t write_bytes,
-		      struct extent_state **cached);
+		      struct extent_state **cached, bool noreserve);
 int btrfs_fdatawrite_range(struct inode *inode, loff_t start, loff_t end);
 int btrfs_check_nocow_lock(struct btrfs_inode *inode, loff_t pos,
 			   size_t *write_bytes);

@@ -576,6 +576,7 @@ static noinline int replay_one_extent(struct btrfs_trans_handle *trans,
 				      struct extent_buffer *eb, int slot,
 				      struct btrfs_key *key)
 {
+	struct btrfs_drop_extents_args drop_args = { 0 };
 	struct btrfs_fs_info *fs_info = root->fs_info;
 	int found_type;
 	u64 extent_end;
@@ -653,7 +654,10 @@ static noinline int replay_one_extent(struct btrfs_trans_handle *trans,
 	btrfs_release_path(path);
 
 	/* drop any overlapping extents */
-	ret = btrfs_drop_extents(trans, root, inode, start, extent_end, 1);
+	drop_args.start = start;
+	drop_args.end = extent_end;
+	drop_args.drop_cache = true;
+	ret = btrfs_drop_extents(trans, root, BTRFS_I(inode), &drop_args);
 	if (ret)
 		goto out;
 
@@ -828,8 +832,8 @@ static noinline int replay_one_extent(struct btrfs_trans_handle *trans,
 	if (ret)
 		goto out;
 
-	inode_add_bytes(inode, nbytes);
 update_inode:
+	btrfs_update_inode_bytes(BTRFS_I(inode), nbytes, drop_args.bytes_found);
 	ret = btrfs_update_inode(trans, root, inode);
 out:
 	if (inode)
@@ -1564,18 +1568,6 @@ out:
 	return ret;
 }
 
-static int insert_orphan_item(struct btrfs_trans_handle *trans,
-			      struct btrfs_root *root, u64 ino)
-{
-	int ret;
-
-	ret = btrfs_insert_orphan_item(trans, root, ino);
-	if (ret == -EEXIST)
-		ret = 0;
-
-	return ret;
-}
-
 static int count_inode_extrefs(struct btrfs_root *root,
 		struct btrfs_inode *inode, struct btrfs_path *path)
 {
@@ -1727,7 +1719,9 @@ static noinline int fixup_inode_link_count(struct btrfs_trans_handle *trans,
 			if (ret)
 				goto out;
 		}
-		ret = insert_orphan_item(trans, root, ino);
+		ret = btrfs_insert_orphan_item(trans, root, ino);
+		if (ret == -EEXIST)
+			ret = 0;
 	}
 
 out:
@@ -2586,6 +2580,7 @@ static int replay_one_buffer(struct btrfs_root *log, struct extent_buffer *eb,
 			 * those prealloc extents just after replaying them.
 			 */
 			if (S_ISREG(mode)) {
+				struct btrfs_drop_extents_args drop_args = { 0 };
 				struct inode *inode;
 				u64 from;
 
@@ -2596,9 +2591,15 @@ static int replay_one_buffer(struct btrfs_root *log, struct extent_buffer *eb,
 				}
 				from = ALIGN(i_size_read(inode),
 					     root->fs_info->sectorsize);
-				ret = btrfs_drop_extents(wc->trans, root, inode,
-							 from, (u64)-1, 1);
+				drop_args.start = from;
+				drop_args.end = (u64)-1;
+				drop_args.drop_cache = true;
+				ret = btrfs_drop_extents(wc->trans, root,
+							 BTRFS_I(inode),
+							 &drop_args);
 				if (!ret) {
+					inode_sub_bytes(inode,
+							drop_args.bytes_found);
 					/* Update the inode's nbytes. */
 					ret = btrfs_update_inode(wc->trans,
 								 root, inode);
@@ -2709,7 +2710,9 @@ static noinline int walk_down_log_tree(struct btrfs_trans_handle *trans,
 		btrfs_node_key_to_cpu(cur, &first_key, path->slots[*level]);
 		blocksize = fs_info->nodesize;
 
-		next = btrfs_find_create_tree_block(fs_info, bytenr);
+		next = btrfs_find_create_tree_block(fs_info, bytenr,
+						    btrfs_header_owner(cur),
+						    *level - 1);
 		if (IS_ERR(next))
 			return PTR_ERR(next);
 
@@ -2732,7 +2735,6 @@ static noinline int walk_down_log_tree(struct btrfs_trans_handle *trans,
 
 				if (trans) {
 					btrfs_tree_lock(next);
-					btrfs_set_lock_blocking_write(next);
 					btrfs_clean_tree_block(next);
 					btrfs_wait_tree_block_writeback(next);
 					btrfs_tree_unlock(next);
@@ -2801,7 +2803,6 @@ static noinline int walk_up_log_tree(struct btrfs_trans_handle *trans,
 
 				if (trans) {
 					btrfs_tree_lock(next);
-					btrfs_set_lock_blocking_write(next);
 					btrfs_clean_tree_block(next);
 					btrfs_wait_tree_block_writeback(next);
 					btrfs_tree_unlock(next);
@@ -2883,7 +2884,6 @@ static int walk_log_tree(struct btrfs_trans_handle *trans,
 
 			if (trans) {
 				btrfs_tree_lock(next);
-				btrfs_set_lock_blocking_write(next);
 				btrfs_clean_tree_block(next);
 				btrfs_wait_tree_block_writeback(next);
 				btrfs_tree_unlock(next);
@@ -4196,6 +4196,7 @@ static int log_one_extent(struct btrfs_trans_handle *trans,
 			  struct btrfs_path *path,
 			  struct btrfs_log_ctx *ctx)
 {
+	struct btrfs_drop_extents_args drop_args = { 0 };
 	struct btrfs_root *log = root->log_root;
 	struct btrfs_file_extent_item *fi;
 	struct extent_buffer *leaf;
@@ -4204,19 +4205,21 @@ static int log_one_extent(struct btrfs_trans_handle *trans,
 	u64 extent_offset = em->start - em->orig_start;
 	u64 block_len;
 	int ret;
-	int extent_inserted = 0;
 
 	ret = log_extent_csums(trans, inode, log, em, ctx);
 	if (ret)
 		return ret;
 
-	ret = __btrfs_drop_extents(trans, log, inode, path, em->start,
-				   em->start + em->len, NULL, 0, 1,
-				   sizeof(*fi), &extent_inserted);
+	drop_args.path = path;
+	drop_args.start = em->start;
+	drop_args.end = em->start + em->len;
+	drop_args.replace_extent = true;
+	drop_args.extent_item_size = sizeof(*fi);
+	ret = btrfs_drop_extents(trans, log, inode, &drop_args);
 	if (ret)
 		return ret;
 
-	if (!extent_inserted) {
+	if (!drop_args.extent_inserted) {
 		key.objectid = btrfs_ino(inode);
 		key.type = BTRFS_EXTENT_DATA_KEY;
 		key.offset = em->start;
