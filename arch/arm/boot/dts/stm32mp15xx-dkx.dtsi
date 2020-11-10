@@ -124,6 +124,10 @@
 	status = "okay";
 };
 
+&crc1 {
+	status = "okay";
+};
+
 &dts {
 	status = "okay";
 };
@@ -149,6 +153,10 @@
 
 &gpu {
 	contiguous-area = <&gpu_reserved>;
+};
+
+&hash1 {
+	status = "okay";
 };
 
 &i2c1 {
