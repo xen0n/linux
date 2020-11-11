@@ -3103,7 +3103,7 @@ static void binder_transaction(struct binder_proc *proc,
 		if (extra_buffers_size < added_size) {
 			/* integer overflow of extra_buffers_size */
 			return_error = BR_FAILED_REPLY;
-			return_error_param = EINVAL;
+			return_error_param = -EINVAL;
 			return_error_line = __LINE__;
 			goto err_bad_extra_size;
 		}
@@ -3614,6 +3614,7 @@ static int binder_thread_write(struct binder_proc *proc,
 			ret = -1;
 			if (increment && !target) {
 				struct binder_node *ctx_mgr_node;
+
 				mutex_lock(&context->context_mgr_node_lock);
 				ctx_mgr_node = context->binder_context_mgr_node;
 				if (ctx_mgr_node) {
