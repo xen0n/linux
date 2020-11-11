@@ -14,6 +14,7 @@
 #include <linux/kasan.h>
 #include <linux/kernel.h>
 #include <linux/kmemleak.h>
+#include <linux/kfence.h>
 #include <linux/memory.h>
 #include <linux/mm.h>
 #include <linux/string.h>
