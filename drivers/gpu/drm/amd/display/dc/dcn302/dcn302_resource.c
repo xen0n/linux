@@ -60,8 +60,8 @@
 #include "vm_helper.h"
 
 #include "dimgrey_cavefish_ip_offset.h"
-#include "dcn/dcn_3_0_0_offset.h"
-#include "dcn/dcn_3_0_0_sh_mask.h"
+#include "dcn/dcn_3_0_2_offset.h"
+#include "dcn/dcn_3_0_2_sh_mask.h"
 #include "dcn/dpcs_3_0_0_offset.h"
 #include "dcn/dpcs_3_0_0_sh_mask.h"
 #include "nbio/nbio_7_4_offset.h"
@@ -1327,6 +1327,7 @@ static bool dcn302_resource_construct(
 	dc->caps.color.dpp.dgam_rom_caps.hlg = 1;
 	dc->caps.color.dpp.post_csc = 1;
 	dc->caps.color.dpp.gamma_corr = 1;
+	dc->caps.color.dpp.dgam_rom_for_yuv = 0;
 
 	dc->caps.color.dpp.hw_3d_lut = 1;
 	dc->caps.color.dpp.ogam_ram = 1;

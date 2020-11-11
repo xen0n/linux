@@ -6846,7 +6846,7 @@ static int amdgpu_dm_connector_get_modes(struct drm_connector *connector)
 
 	encoder = amdgpu_dm_connector_to_encoder(connector);
 
-	if (!edid || !drm_edid_is_valid(edid)) {
+	if (!drm_edid_is_valid(edid)) {
 		amdgpu_dm_connector->num_modes =
 				drm_add_modes_noedid(connector, 640, 480);
 	} else {
@@ -8048,6 +8048,16 @@ static void amdgpu_dm_atomic_commit_tail(struct drm_atomic_state *state)
 			new_crtc_state->mode_changed,
 			new_crtc_state->active_changed,
 			new_crtc_state->connectors_changed);
+
+		/* Disable cursor if disabling crtc */
+		if (old_crtc_state->active && !new_crtc_state->active) {
+			struct dc_cursor_position position;
+
+			memset(&position, 0, sizeof(position));
+			mutex_lock(&dm->dc_lock);
+			dc_stream_set_cursor_position(dm_old_crtc_state->stream, &position);
+			mutex_unlock(&dm->dc_lock);
+		}
 
 		/* Copy all transient state flags into dc state */
 		if (dm_new_crtc_state->stream) {
@@ -9611,7 +9621,7 @@ bool amdgpu_dm_psr_enable(struct dc_stream_state *stream)
 					   &stream, 1,
 					   &params);
 
-	return dc_link_set_psr_allow_active(link, true, false);
+	return dc_link_set_psr_allow_active(link, true, false, false);
 }
 
 /*
@@ -9625,7 +9635,7 @@ static bool amdgpu_dm_psr_disable(struct dc_stream_state *stream)
 
 	DRM_DEBUG_DRIVER("Disabling psr...\n");
 
-	return dc_link_set_psr_allow_active(stream->link, false, true);
+	return dc_link_set_psr_allow_active(stream->link, false, true, false);
 }
 
 /*
