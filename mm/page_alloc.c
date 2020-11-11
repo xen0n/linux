@@ -8449,6 +8449,19 @@ static int __alloc_contig_migrate_range(struct compact_control *cc,
 	return 0;
 }
 
+static void __alloc_contig_clear_range(unsigned long start_pfn,
+				       unsigned long end_pfn)
+{
+	unsigned long pfn;
+
+	for (pfn = start_pfn; pfn < end_pfn; pfn += MAX_ORDER_NR_PAGES) {
+		cond_resched();
+		kernel_init_free_pages(pfn_to_page(pfn),
+				       min_t(unsigned long, end_pfn - pfn,
+					     MAX_ORDER_NR_PAGES));
+	}
+}
+
 /**
  * alloc_contig_range() -- tries to allocate given range of pages
  * @start:	start PFN to allocate
@@ -8457,7 +8470,8 @@ static int __alloc_contig_migrate_range(struct compact_control *cc,
  *			#MIGRATE_MOVABLE or #MIGRATE_CMA).  All pageblocks
  *			in range must have the same migratetype and it must
  *			be either of the two.
- * @gfp_mask:	GFP mask to use during compaction
+ * @gfp_mask:	GFP mask to use during compaction. __GFP_ZERO clears allocated
+ *		pages.
  *
  * The PFN range does not have to be pageblock or MAX_ORDER_NR_PAGES
  * aligned.  The PFN range must belong to a single zone.
@@ -8484,7 +8498,7 @@ int alloc_contig_range(unsigned long start, unsigned long end,
 		.mode = MIGRATE_SYNC,
 		.ignore_skip_hint = true,
 		.no_set_skip_hint = true,
-		.gfp_mask = current_gfp_context(gfp_mask),
+		.gfp_mask = current_gfp_context(gfp_mask & ~__GFP_ZERO),
 		.alloc_contig = true,
 	};
 	INIT_LIST_HEAD(&cc.migratepages);
@@ -8596,6 +8610,9 @@ int alloc_contig_range(unsigned long start, unsigned long end,
 	if (end != outer_end)
 		free_contig_range(end, outer_end - end);
 
+	if (!want_init_on_free() && want_init_on_alloc(gfp_mask))
+		__alloc_contig_clear_range(start, end);
+
 done:
 	undo_isolate_page_range(pfn_max_align_down(start),
 				pfn_max_align_up(end), migratetype);
@@ -8649,7 +8666,8 @@ static bool zone_spans_last_pfn(const struct zone *zone,
 /**
  * alloc_contig_pages() -- tries to find and allocate contiguous range of pages
  * @nr_pages:	Number of contiguous pages to allocate
- * @gfp_mask:	GFP mask to limit search and used during compaction
+ * @gfp_mask:	GFP mask to limit search and used during compaction. __GFP_ZERO
+ *		clears allocated pages.
  * @nid:	Target node
  * @nodemask:	Mask for other possible nodes
  *
