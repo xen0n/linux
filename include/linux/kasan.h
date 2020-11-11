@@ -82,12 +82,12 @@ struct kasan_cache {
 
 #ifdef CONFIG_KASAN_HW_TAGS
 DECLARE_STATIC_KEY_FALSE(kasan_flag_enabled);
-static inline kasan_enabled(void)
+static inline bool kasan_enabled(void)
 {
 	return static_branch_likely(&kasan_flag_enabled);
 }
 #else
-static inline kasan_enabled(void)
+static inline bool kasan_enabled(void)
 {
 	return true;
 }
@@ -236,7 +236,7 @@ void kasan_restore_multi_shot(bool enabled);
 
 #else /* CONFIG_KASAN */
 
-static inline kasan_enabled(void)
+static inline bool kasan_enabled(void)
 {
 	return false;
 }
