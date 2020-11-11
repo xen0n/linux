@@ -44,8 +44,6 @@ int __read_mostly soft_watchdog_user_enabled = 1;
 int __read_mostly watchdog_thresh = 10;
 static int __read_mostly nmi_watchdog_available;
 
-static struct cpumask watchdog_allowed_mask __read_mostly;
-
 struct cpumask watchdog_cpumask __read_mostly;
 unsigned long *watchdog_cpumask_bits = cpumask_bits(&watchdog_cpumask);
 
@@ -86,6 +84,25 @@ static int __init hardlockup_panic_setup(char *str)
 	return 1;
 }
 __setup("nmi_watchdog=", hardlockup_panic_setup);
+
+atomic_t hardlockup_detected = ATOMIC_INIT(0);
+
+static inline void flush_hardlockup_messages(void)
+{
+	static atomic_t flushed = ATOMIC_INIT(0);
+
+	/* flush messages from hard lockup detector */
+	if (atomic_read(&hardlockup_detected) != atomic_read(&flushed)) {
+		atomic_set(&flushed, atomic_read(&hardlockup_detected));
+		printk_safe_flush();
+	}
+}
+
+#else /* CONFIG_HARDLOCKUP_DETECTOR */
+
+static inline void flush_hardlockup_messages(void)
+{
+}
 
 #endif /* CONFIG_HARDLOCKUP_DETECTOR */
 
@@ -161,6 +178,8 @@ static void lockup_detector_update_enable(void)
 #ifdef CONFIG_SMP
 int __read_mostly sysctl_softlockup_all_cpu_backtrace;
 #endif
+
+static struct cpumask watchdog_allowed_mask __read_mostly;
 
 /* Global variables, exported for sysctl */
 unsigned int __read_mostly softlockup_panic =
@@ -350,6 +369,8 @@ static enum hrtimer_restart watchdog_timer_fn(struct hrtimer *hrtimer)
 
 	/* kick the hardlockup detector */
 	watchdog_interrupt_count();
+
+	flush_hardlockup_messages();
 
 	/* kick the softlockup detector */
 	if (completion_done(this_cpu_ptr(&softlockup_completion))) {
