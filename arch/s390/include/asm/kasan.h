@@ -4,6 +4,8 @@
 
 #include <asm/pgtable.h>
 
+#include <asm/pgtable.h>
+
 #ifdef CONFIG_KASAN
 
 #define KASAN_SHADOW_SCALE_SHIFT 3
