@@ -780,8 +780,8 @@ int bfregn_to_uar_index(struct mlx5_ib_dev *dev,
 
 static int mlx5_ib_umem_get(struct mlx5_ib_dev *dev, struct ib_udata *udata,
 			    unsigned long addr, size_t size,
-			    struct ib_umem **umem, int *npages, int *page_shift,
-			    int *ncont, u32 *offset)
+			    struct ib_umem **umem, int *page_shift,
+			    u32 *offset)
 {
 	int err;
 
@@ -791,7 +791,7 @@ static int mlx5_ib_umem_get(struct mlx5_ib_dev *dev, struct ib_udata *udata,
 		return PTR_ERR(*umem);
 	}
 
-	mlx5_ib_cont_pages(*umem, addr, 0, npages, page_shift, ncont, NULL);
+	mlx5_ib_cont_pages(*umem, addr, 0, page_shift);
 
 	err = mlx5_ib_get_buf_offset(addr, *page_shift, offset);
 	if (err) {
@@ -799,8 +799,8 @@ static int mlx5_ib_umem_get(struct mlx5_ib_dev *dev, struct ib_udata *udata,
 		goto err_umem;
 	}
 
-	mlx5_ib_dbg(dev, "addr 0x%lx, size %zu, npages %d, page_shift %d, ncont %d, offset %d\n",
-		    addr, size, *npages, *page_shift, *ncont, *offset);
+	mlx5_ib_dbg(dev, "addr 0x%lx, size %zu, npages %zu, page_shift %d, offset %d\n",
+		    addr, size, ib_umem_num_pages(*umem), *page_shift, *offset);
 
 	return 0;
 
@@ -834,9 +834,7 @@ static int create_user_rq(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 	struct mlx5_ib_ucontext *ucontext = rdma_udata_to_drv_context(
 		udata, struct mlx5_ib_ucontext, ibucontext);
 	int page_shift = 0;
-	int npages;
 	u32 offset = 0;
-	int ncont = 0;
 	int err;
 
 	if (!ucmd->buf_addr)
@@ -849,8 +847,7 @@ static int create_user_rq(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 		return err;
 	}
 
-	mlx5_ib_cont_pages(rwq->umem, ucmd->buf_addr, 0, &npages, &page_shift,
-			   &ncont, NULL);
+	mlx5_ib_cont_pages(rwq->umem, ucmd->buf_addr, 0, &page_shift);
 	err = mlx5_ib_get_buf_offset(ucmd->buf_addr, page_shift,
 				     &rwq->rq_page_offset);
 	if (err) {
@@ -858,14 +855,17 @@ static int create_user_rq(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 		goto err_umem;
 	}
 
-	rwq->rq_num_pas = ncont;
+	rwq->rq_num_pas = ib_umem_num_dma_blocks(rwq->umem, 1UL << page_shift);
 	rwq->page_shift = page_shift;
 	rwq->log_page_size =  page_shift - MLX5_ADAPTER_PAGE_SHIFT;
 	rwq->wq_sig = !!(ucmd->flags & MLX5_WQ_FLAG_SIGNATURE);
 
-	mlx5_ib_dbg(dev, "addr 0x%llx, size %zd, npages %d, page_shift %d, ncont %d, offset %d\n",
-		    (unsigned long long)ucmd->buf_addr, rwq->buf_size,
-		    npages, page_shift, ncont, offset);
+	mlx5_ib_dbg(
+		dev,
+		"addr 0x%llx, size %zd, npages %zu, page_shift %d, ncont %d, offset %d\n",
+		(unsigned long long)ucmd->buf_addr, rwq->buf_size,
+		ib_umem_num_pages(rwq->umem), page_shift, rwq->rq_num_pas,
+		offset);
 
 	err = mlx5_ib_db_map_user(ucontext, udata, ucmd->db_addr, &rwq->db);
 	if (err) {
@@ -898,7 +898,6 @@ static int _create_user_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 	struct mlx5_ib_ubuffer *ubuffer = &base->ubuffer;
 	int page_shift = 0;
 	int uar_index = 0;
-	int npages;
 	u32 offset = 0;
 	int bfregn;
 	int ncont = 0;
@@ -952,9 +951,10 @@ static int _create_user_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 		ubuffer->buf_addr = ucmd->buf_addr;
 		err = mlx5_ib_umem_get(dev, udata, ubuffer->buf_addr,
 				       ubuffer->buf_size, &ubuffer->umem,
-				       &npages, &page_shift, &ncont, &offset);
+				       &page_shift, &offset);
 		if (err)
 			goto err_bfreg;
+		ncont = ib_umem_num_dma_blocks(ubuffer->umem, 1UL << page_shift);
 	} else {
 		ubuffer->umem = NULL;
 	}
@@ -971,7 +971,7 @@ static int _create_user_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 	MLX5_SET(create_qp_in, *in, uid, uid);
 	pas = (__be64 *)MLX5_ADDR_OF(create_qp_in, *in, pas);
 	if (ubuffer->umem)
-		mlx5_ib_populate_pas(dev, ubuffer->umem, page_shift, pas, 0);
+		mlx5_ib_populate_pas(ubuffer->umem, 1UL << page_shift, pas, 0);
 
 	qpc = MLX5_ADDR_OF(create_qp_in, *in, qpc);
 
@@ -1210,17 +1210,16 @@ static int create_raw_packet_qp_sq(struct mlx5_ib_dev *dev,
 	int inlen;
 	int err;
 	int page_shift = 0;
-	int npages;
-	int ncont = 0;
 	u32 offset = 0;
 
 	err = mlx5_ib_umem_get(dev, udata, ubuffer->buf_addr, ubuffer->buf_size,
-			       &sq->ubuffer.umem, &npages, &page_shift, &ncont,
-			       &offset);
+			       &sq->ubuffer.umem, &page_shift, &offset);
 	if (err)
 		return err;
 
-	inlen = MLX5_ST_SZ_BYTES(create_sq_in) + sizeof(u64) * ncont;
+	inlen = MLX5_ST_SZ_BYTES(create_sq_in) +
+		sizeof(u64) * ib_umem_num_dma_blocks(sq->ubuffer.umem,
+						     1UL << page_shift);
 	in = kvzalloc(inlen, GFP_KERNEL);
 	if (!in) {
 		err = -ENOMEM;
@@ -1252,7 +1251,7 @@ static int create_raw_packet_qp_sq(struct mlx5_ib_dev *dev,
 	MLX5_SET(wq, wq, page_offset, offset);
 
 	pas = (__be64 *)MLX5_ADDR_OF(wq, wq, pas);
-	mlx5_ib_populate_pas(dev, sq->ubuffer.umem, page_shift, pas, 0);
+	mlx5_ib_populate_pas(sq->ubuffer.umem, 1UL << page_shift, pas, 0);
 
 	err = mlx5_core_create_sq_tracked(dev, in, inlen, &sq->base.mqp);
 
@@ -2712,11 +2711,12 @@ static int process_create_flags(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 	process_create_flag(dev, &create_flags, MLX5_IB_QP_CREATE_SQPN_QP1,
 			    true, qp);
 
-	if (create_flags)
+	if (create_flags) {
 		mlx5_ib_dbg(dev, "Create QP has unsupported flags 0x%X\n",
 			    create_flags);
-
-	return (create_flags) ? -EINVAL : 0;
+		return -EOPNOTSUPP;
+	}
+	return 0;
 }
 
 static int process_udata_size(struct mlx5_ib_dev *dev,
@@ -4247,6 +4247,9 @@ int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 	int err = -EINVAL;
 	int port;
 
+	if (attr_mask & ~(IB_QP_ATTR_STANDARD_BITS | IB_QP_RATE_LIMIT))
+		return -EOPNOTSUPP;
+
 	if (ibqp->rwq_ind_tbl)
 		return -ENOSYS;
 
@@ -4882,7 +4885,7 @@ static int  create_rq(struct mlx5_ib_rwq *rwq, struct ib_pd *pd,
 		MLX5_SET(rqc, rqc, delay_drop_en, 1);
 	}
 	rq_pas0 = (__be64 *)MLX5_ADDR_OF(wq, wq, pas);
-	mlx5_ib_populate_pas(dev, rwq->umem, rwq->page_shift, rq_pas0, 0);
+	mlx5_ib_populate_pas(rwq->umem, 1UL << rwq->page_shift, rq_pas0, 0);
 	err = mlx5_core_create_rq_tracked(dev, in, inlen, &rwq->core_qp);
 	if (!err && init_attr->create_flags & IB_WQ_FLAGS_DELAY_DROP) {
 		err = set_delay_drop(dev);
