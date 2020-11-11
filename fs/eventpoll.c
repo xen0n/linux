@@ -388,19 +388,26 @@ static bool ep_busy_loop_end(void *p, unsigned long start_time)
  * busy loop will return if need_resched or ep_events_available.
  *
  * we must do our busy polling with irqs enabled
+ *
+ * Returns whether new events are available after a successful busy loop.
  */
-static void ep_busy_loop(struct eventpoll *ep, int nonblock)
+static bool ep_busy_loop(struct eventpoll *ep, int nonblock)
 {
 	unsigned int napi_id = READ_ONCE(ep->napi_id);
 
-	if ((napi_id >= MIN_NAPI_ID) && net_busy_loop_on())
+	if ((napi_id >= MIN_NAPI_ID) && net_busy_loop_on()) {
 		napi_busy_loop(napi_id, nonblock ? NULL : ep_busy_loop_end, ep);
-}
-
-static inline void ep_reset_busy_poll_napi_id(struct eventpoll *ep)
-{
-	if (ep->napi_id)
+		if (ep_events_available(ep))
+			return true;
+		/*
+		 * Busy poll timed out.  Drop NAPI ID for now, we can add
+		 * it back in when we have moved a socket with a valid NAPI
+		 * ID onto the ready list.
+		 */
 		ep->napi_id = 0;
+		return false;
+	}
+	return false;
 }
 
 /*
@@ -441,12 +448,9 @@ static inline void ep_set_busy_poll_napi_id(struct epitem *epi)
 
 #else
 
-static inline void ep_busy_loop(struct eventpoll *ep, int nonblock)
+static inline bool ep_busy_loop(struct eventpoll *ep, int nonblock)
 {
-}
-
-static inline void ep_reset_busy_poll_napi_id(struct eventpoll *ep)
-{
+	return false;
 }
 
 static inline void ep_set_busy_poll_napi_id(struct epitem *epi)
@@ -1625,6 +1629,14 @@ static int ep_send_events(struct eventpoll *ep,
 	poll_table pt;
 	int res = 0;
 
+	/*
+	 * Always short-circuit for fatal signals to allow threads to make a
+	 * timely exit without the chance of finding more events available and
+	 * fetching repeatedly.
+	 */
+	if (fatal_signal_pending(current))
+		return -EINTR;
+
 	init_poll_funcptr(&pt, NULL);
 
 	mutex_lock(&ep->mtx);
@@ -1733,7 +1745,7 @@ static inline struct timespec64 ep_set_mstimeout(long ms)
 static int ep_poll(struct eventpoll *ep, struct epoll_event __user *events,
 		   int maxevents, long timeout)
 {
-	int res = 0, eavail, timed_out = 0;
+	int res, eavail, timed_out = 0;
 	u64 slack = 0;
 	wait_queue_entry_t wait;
 	ktime_t expires, *to = NULL;
@@ -1749,37 +1761,43 @@ static int ep_poll(struct eventpoll *ep, struct epoll_event __user *events,
 	} else if (timeout == 0) {
 		/*
 		 * Avoid the unnecessary trip to the wait queue loop, if the
-		 * caller specified a non blocking operation. We still need
-		 * lock because we could race and not see an epi being added
-		 * to the ready list while in irq callback. Thus incorrectly
-		 * returning 0 back to userspace.
+		 * caller specified a non blocking operation.
 		 */
 		timed_out = 1;
-
-		write_lock_irq(&ep->lock);
-		eavail = ep_events_available(ep);
-		write_unlock_irq(&ep->lock);
-
-		goto send_events;
 	}
 
-fetch_events:
-
-	if (!ep_events_available(ep))
-		ep_busy_loop(ep, timed_out);
-
-	eavail = ep_events_available(ep);
-	if (eavail)
-		goto send_events;
-
 	/*
-	 * Busy poll timed out.  Drop NAPI ID for now, we can add
-	 * it back in when we have moved a socket with a valid NAPI
-	 * ID onto the ready list.
+	 * This call is racy: We may or may not see events that are being added
+	 * to the ready list under the lock (e.g., in IRQ callbacks). For, cases
+	 * with a non-zero timeout, this thread will check the ready list under
+	 * lock and will added to the wait queue.  For, cases with a zero
+	 * timeout, the user by definition should not care and will have to
+	 * recheck again.
 	 */
-	ep_reset_busy_poll_napi_id(ep);
+	eavail = ep_events_available(ep);
 
-	do {
+	while (1) {
+		if (eavail) {
+			/*
+			 * Try to transfer events to user space. In case we get
+			 * 0 events and there's still timeout left over, we go
+			 * trying again in search of more luck.
+			 */
+			res = ep_send_events(ep, events, maxevents);
+			if (res)
+				return res;
+		}
+
+		if (timed_out)
+			return 0;
+
+		eavail = ep_busy_loop(ep, timed_out);
+		if (eavail)
+			continue;
+
+		if (signal_pending(current))
+			return -EINTR;
+
 		/*
 		 * Internally init_wait() uses autoremove_wake_function(),
 		 * thus wait entry is removed from the wait queue on each
@@ -1809,55 +1827,38 @@ fetch_events:
 		 * important.
 		 */
 		eavail = ep_events_available(ep);
-		if (!eavail) {
-			if (signal_pending(current))
-				res = -EINTR;
-			else
-				__add_wait_queue_exclusive(&ep->wq, &wait);
-		}
+		if (!eavail)
+			__add_wait_queue_exclusive(&ep->wq, &wait);
+
 		write_unlock_irq(&ep->lock);
 
-		if (eavail || res)
-			break;
+		if (!eavail)
+			timed_out = !schedule_hrtimeout_range(to, slack,
+							      HRTIMER_MODE_ABS);
+		__set_current_state(TASK_RUNNING);
 
-		if (!schedule_hrtimeout_range(to, slack, HRTIMER_MODE_ABS)) {
-			timed_out = 1;
-			break;
-		}
-
-		/* We were woken up, thus go and try to harvest some events */
+		/*
+		 * We were woken up, thus go and try to harvest some events.
+		 * If timed out and still on the wait queue, recheck eavail
+		 * carefully under lock, below.
+		 */
 		eavail = 1;
 
-	} while (0);
-
-	__set_current_state(TASK_RUNNING);
-
-	if (!list_empty_careful(&wait.entry)) {
-		write_lock_irq(&ep->lock);
-		__remove_wait_queue(&ep->wq, &wait);
-		write_unlock_irq(&ep->lock);
+		if (!list_empty_careful(&wait.entry)) {
+			write_lock_irq(&ep->lock);
+			/*
+			 * If the thread timed out and is not on the wait queue,
+			 * it means that the thread was woken up after its
+			 * timeout expired before it could reacquire the lock.
+			 * Thus, when wait.entry is empty, it needs to harvest
+			 * events.
+			 */
+			if (timed_out)
+				eavail = list_empty(&wait.entry);
+			__remove_wait_queue(&ep->wq, &wait);
+			write_unlock_irq(&ep->lock);
+		}
 	}
-
-send_events:
-	if (fatal_signal_pending(current)) {
-		/*
-		 * Always short-circuit for fatal signals to allow
-		 * threads to make a timely exit without the chance of
-		 * finding more events available and fetching
-		 * repeatedly.
-		 */
-		res = -EINTR;
-	}
-	/*
-	 * Try to transfer events to user space. In case we get 0 events and
-	 * there's still timeout left over, we go trying again in search of
-	 * more luck.
-	 */
-	if (!res && eavail &&
-	    !(res = ep_send_events(ep, events, maxevents)) && !timed_out)
-		goto fetch_events;
-
-	return res;
 }
 
 /**
