@@ -221,9 +221,7 @@ enum v4l2_colorspace {
 	V4L2_COLORSPACE_470_SYSTEM_M  = 5,
 
 	/*
-	 * EBU Tech 3213 PAL/SECAM colorspace. This only makes sense when
-	 * dealing with really old PAL/SECAM recordings. Superseded by
-	 * SMPTE 170M.
+	 * EBU Tech 3213 PAL/SECAM colorspace.
 	 */
 	V4L2_COLORSPACE_470_SYSTEM_BG = 6,
 
@@ -1185,7 +1183,7 @@ struct v4l2_window {
 	struct v4l2_rect        w;
 	__u32			field;	 /* enum v4l2_field */
 	__u32			chromakey;
-	struct v4l2_clip	__user *clips;
+	struct v4l2_clip	*clips;
 	__u32			clipcount;
 	void			__user *bitmap;
 	__u8                    global_alpha;

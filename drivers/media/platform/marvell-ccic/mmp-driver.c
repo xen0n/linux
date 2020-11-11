@@ -308,7 +308,7 @@ static int mmpcam_platform_remove(struct platform_device *pdev)
  */
 
 #ifdef CONFIG_PM
-static int mmpcam_runtime_resume(struct device *dev)
+static int __maybe_unused mmpcam_runtime_resume(struct device *dev)
 {
 	struct mmp_camera *cam = dev_get_drvdata(dev);
 	struct mcam_camera *mcam = &cam->mcam;
@@ -322,7 +322,7 @@ static int mmpcam_runtime_resume(struct device *dev)
 	return 0;
 }
 
-static int mmpcam_runtime_suspend(struct device *dev)
+static int __maybe_unused mmpcam_runtime_suspend(struct device *dev)
 {
 	struct mmp_camera *cam = dev_get_drvdata(dev);
 	struct mcam_camera *mcam = &cam->mcam;
