@@ -3243,7 +3243,7 @@ int kvm_arch_vcpu_create(struct kvm_vcpu *vcpu)
 	int rc;
 
 	BUILD_BUG_ON(sizeof(struct sie_page) != 4096);
-	sie_page = (struct sie_page *) get_zeroed_page(GFP_KERNEL);
+	sie_page = (struct sie_page *) get_zeroed_page(GFP_KERNEL_ACCOUNT);
 	if (!sie_page)
 		return -ENOMEM;
 
