@@ -304,7 +304,7 @@ inline void rtw_set_oper_ch(struct adapter *adapter, u8 ch)
 
 		for (i = 0; i < dvobj->iface_nums; i++) {
 			struct adapter *iface = dvobj->padapters[i];
-			cnt += scnprintf(msg+cnt, len-cnt, " ["ADPT_FMT":", ADPT_ARG(iface));
+			cnt += scnprintf(msg+cnt, len-cnt, " [%s:", ADPT_ARG(iface));
 			if (iface->mlmeextpriv.cur_channel == ch)
 				cnt += scnprintf(msg+cnt, len-cnt, "C");
 			else
@@ -628,7 +628,7 @@ static s16 _rtw_camid_search(struct adapter *adapter, u8 *addr, s16 kid)
 	}
 
 	if (addr)
-		DBG_871X(FUNC_ADPT_FMT" addr:"MAC_FMT" kid:%d, return cam_id:%d\n"
+		DBG_871X(FUNC_ADPT_FMT" addr:%pM kid:%d, return cam_id:%d\n"
 			 , FUNC_ADPT_ARG(adapter), MAC_ARG(addr), kid, cam_id);
 	else
 		DBG_871X(FUNC_ADPT_FMT" addr:%p kid:%d, return cam_id:%d\n"
@@ -702,7 +702,7 @@ s16 rtw_camid_alloc(struct adapter *adapter, struct sta_info *sta, u8 kid)
 
 		if (i == TOTAL_CAM_ENTRY) {
 			if (sta)
-				DBG_871X_LEVEL(_drv_always_, FUNC_ADPT_FMT" pairwise key with "MAC_FMT" id:%u no room\n"
+				DBG_871X_LEVEL(_drv_always_, FUNC_ADPT_FMT" pairwise key with %pM id:%u no room\n"
 				, FUNC_ADPT_ARG(adapter), MAC_ARG(sta->hwaddr), kid);
 			else
 				DBG_871X_LEVEL(_drv_always_, FUNC_ADPT_FMT" group key id:%u no room\n"
@@ -1233,7 +1233,7 @@ int rtw_check_bcn_info(struct adapter *Adapter, u8 *pframe, u32 packet_len)
 	u32 wpa_ielen = 0;
 	u8 *pbssid = GetAddr3Ptr(pframe);
 	struct HT_info_element *pht_info = NULL;
-	struct rtw_ieee80211_ht_cap *pht_cap = NULL;
+	struct ieee80211_ht_cap *pht_cap = NULL;
 	u32 bcn_channel;
 	unsigned short	ht_cap_info;
 	unsigned char ht_info_infos_0;
@@ -1251,7 +1251,7 @@ int rtw_check_bcn_info(struct adapter *Adapter, u8 *pframe, u32 packet_len)
 	}
 
 	if (memcmp(cur_network->network.MacAddress, pbssid, 6)) {
-		DBG_871X("Oops: rtw_check_network_encrypt linked but recv other bssid bcn\n" MAC_FMT MAC_FMT,
+		DBG_871X("Oops: rtw_check_network_encrypt linked but recv other bssid bcn %pM %pM\n",
 				MAC_ARG(pbssid), MAC_ARG(cur_network->network.MacAddress));
 		return true;
 	}
@@ -1282,7 +1282,7 @@ int rtw_check_bcn_info(struct adapter *Adapter, u8 *pframe, u32 packet_len)
 	/* parsing HT_CAP_IE */
 	p = rtw_get_ie(bssid->IEs + _FIXED_IE_LENGTH_, _HT_CAPABILITY_IE_, &len, bssid->IELength - _FIXED_IE_LENGTH_);
 	if (p && len > 0) {
-			pht_cap = (struct rtw_ieee80211_ht_cap *)(p + 2);
+			pht_cap = (struct ieee80211_ht_cap *)(p + 2);
 			ht_cap_info = le16_to_cpu(pht_cap->cap_info);
 	} else {
 			ht_cap_info = 0;
@@ -1431,11 +1431,11 @@ _mismatch:
 		pmlmepriv->timeBcnInfoChkStart = jiffies;
 
 	pmlmepriv->NumOfBcnInfoChkFail++;
-	DBG_871X("%s by "ADPT_FMT" - NumOfChkFail = %d (SeqNum of this Beacon frame = %d).\n", __func__, ADPT_ARG(Adapter), pmlmepriv->NumOfBcnInfoChkFail, GetSequence(pframe));
+	DBG_871X("%s by %s - NumOfChkFail = %d (SeqNum of this Beacon frame = %d).\n", __func__, ADPT_ARG(Adapter), pmlmepriv->NumOfBcnInfoChkFail, GetSequence(pframe));
 
 	if ((pmlmepriv->timeBcnInfoChkStart != 0) && (jiffies_to_msecs(jiffies - pmlmepriv->timeBcnInfoChkStart) <= DISCONNECT_BY_CHK_BCN_FAIL_OBSERV_PERIOD_IN_MS)
 		&& (pmlmepriv->NumOfBcnInfoChkFail >= DISCONNECT_BY_CHK_BCN_FAIL_THRESHOLD)) {
-		DBG_871X("%s by "ADPT_FMT" - NumOfChkFail = %d >= threshold : %d (in %d ms), return FAIL.\n", __func__, ADPT_ARG(Adapter), pmlmepriv->NumOfBcnInfoChkFail,
+		DBG_871X("%s by %s - NumOfChkFail = %d >= threshold : %d (in %d ms), return FAIL.\n", __func__, ADPT_ARG(Adapter), pmlmepriv->NumOfBcnInfoChkFail,
 			DISCONNECT_BY_CHK_BCN_FAIL_THRESHOLD, jiffies_to_msecs(jiffies - pmlmepriv->timeBcnInfoChkStart));
 		pmlmepriv->timeBcnInfoChkStart = 0;
 		pmlmepriv->NumOfBcnInfoChkFail = 0;
@@ -2010,7 +2010,7 @@ int rtw_get_gpio(struct net_device *netdev, int gpio_num)
 {
 	u8 value;
 	u8 direction;
-	struct adapter *adapter = (struct adapter *)rtw_netdev_priv(netdev);
+	struct adapter *adapter = rtw_netdev_priv(netdev);
 	struct pwrctrl_priv *pwrpriv = adapter_to_pwrctl(adapter);
 
 	rtw_ps_deny(adapter, PS_DENY_IOCTL);
@@ -2038,7 +2038,7 @@ int  rtw_set_gpio_output_value(struct net_device *netdev, int gpio_num, bool isH
 {
 	u8 direction = 0;
 	u8 res = -1;
-	struct adapter *adapter = (struct adapter *)rtw_netdev_priv(netdev);
+	struct adapter *adapter = rtw_netdev_priv(netdev);
 
 	/* Check GPIO is 4~7 */
 	if (gpio_num > 7 || gpio_num < 4) {
@@ -2074,7 +2074,7 @@ EXPORT_SYMBOL(rtw_set_gpio_output_value);
 
 int rtw_config_gpio(struct net_device *netdev, int gpio_num, bool isOutput)
 {
-	struct adapter *adapter = (struct adapter *)rtw_netdev_priv(netdev);
+	struct adapter *adapter = rtw_netdev_priv(netdev);
 
 	if (gpio_num > 7 || gpio_num < 4) {
 		DBG_871X("%s The gpio number does not included 4~7.\n", __func__);
