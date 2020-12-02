@@ -13,13 +13,13 @@
 
 #define PM6764TR_PMBUS_READ_VOUT	0xD4
 
-static int pm6764tr_read_word_data(struct i2c_client *client, int page, int reg)
+static int pm6764tr_read_word_data(struct i2c_client *client, int page, int phase, int reg)
 {
 	int ret;
 
 	switch (reg) {
 	case PMBUS_VIRT_READ_VMON:
-		ret = pmbus_read_word_data(client, page, PM6764TR_PMBUS_READ_VOUT);
+		ret = pmbus_read_word_data(client, page, phase, PM6764TR_PMBUS_READ_VOUT);
 		break;
 	default:
 		ret = -ENODATA;
@@ -42,10 +42,9 @@ static struct pmbus_driver_info pm6764tr_info = {
 	.read_word_data = pm6764tr_read_word_data,
 };
 
-static int pm6764tr_probe(struct i2c_client *client,
-			  const struct i2c_device_id *id)
+static int pm6764tr_probe(struct i2c_client *client)
 {
-	return pmbus_do_probe(client, id, &pm6764tr_info);
+	return pmbus_do_probe(client, &pm6764tr_info);
 }
 
 static const struct i2c_device_id pm6764tr_id[] = {
