@@ -476,8 +476,10 @@ static int dm_blk_report_zones(struct gendisk *disk, sector_t sector,
 		return -EAGAIN;
 
 	map = dm_get_live_table(md, &srcu_idx);
-	if (!map)
-		return -EIO;
+	if (!map) {
+		ret = -EIO;
+		goto out;
+	}
 
 	do {
 		struct dm_target *tgt;
@@ -1035,20 +1037,25 @@ static inline sector_t max_io_len_target_boundary(struct dm_target *ti,
 
 static sector_t max_io_len(struct dm_target *ti, sector_t sector)
 {
-	sector_t target_offset = dm_target_offset(ti, sector);
-	sector_t len = max_io_len_target_boundary(ti, target_offset);
-	sector_t max_len;
+	sector_t offset = dm_target_offset(ti, sector);
+	sector_t len = max_io_len_target_boundary(ti, offset);
+	sector_t max_io_len = ti->max_io_len;
 
 	/*
-	 * Does the target need to split even further?
-	 * - q->limits.chunk_sectors reflects ti->max_io_len so
-	 *   blk_max_size_offset() provides required splitting.
-	 * - blk_max_size_offset() also respects q->limits.max_sectors
+	 * Does the target need to split IO even further?
+	 * - varied (per target) IO splitting is a tenet of DM; this
+	 *   explains why stacked chunk_sectors based splitting via
+	 *   blk_max_size_offset() isn't possible here.
 	 */
-	max_len = blk_max_size_offset(ti->table->md->queue,
-				      target_offset);
-	if (len > max_len)
-		len = max_len;
+	if (max_io_len) {
+		if (likely(is_power_of_2(max_io_len)))
+			max_io_len -= offset & (max_io_len - 1);
+		else
+			max_io_len -= sector_div(offset, max_io_len);
+
+		if (len > max_io_len)
+			len = max_io_len;
+	}
 
 	return len;
 }
@@ -1586,7 +1593,7 @@ static blk_qc_t __split_and_process_bio(struct mapped_device *md,
 		ci.sector_count = bio_sectors(bio);
 		while (ci.sector_count && !error) {
 			error = __split_and_process_non_flush(&ci);
-			if (current->bio_list && ci.sector_count && !error) {
+			if (ci.sector_count && !error) {
 				/*
 				 * Remainder must be passed to submit_bio_noacct()
 				 * so that it gets handled *after* bios already submitted
