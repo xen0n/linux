@@ -3650,6 +3650,11 @@ void *__kmalloc_node_track_caller(size_t size, gfp_t flags,
 	return __do_kmalloc_node(size, flags, node, caller);
 }
 EXPORT_SYMBOL(__kmalloc_node_track_caller);
+#else
+void *kmem_cache_last_alloc(struct kmem_cache *cachep, void *object)
+{
+	return NULL;
+}
 #endif /* CONFIG_NUMA */
 
 /**
