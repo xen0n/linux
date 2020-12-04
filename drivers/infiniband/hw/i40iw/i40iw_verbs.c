@@ -533,7 +533,7 @@ static struct ib_qp *i40iw_create_qp(struct ib_pd *ibpd,
 		return ERR_PTR(-ENODEV);
 
 	if (init_attr->create_flags)
-		return ERR_PTR(-EINVAL);
+		return ERR_PTR(-EOPNOTSUPP);
 	if (init_attr->cap.max_inline_data > I40IW_MAX_INLINE_DATA_SIZE)
 		init_attr->cap.max_inline_data = I40IW_MAX_INLINE_DATA_SIZE;
 
@@ -832,6 +832,9 @@ int i40iw_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 	u32 err;
 	unsigned long flags;
 
+	if (attr_mask & ~IB_QP_ATTR_STANDARD_BITS)
+		return -EOPNOTSUPP;
+
 	memset(&info, 0, sizeof(info));
 	ctx_info = &iwqp->ctx_info;
 	iwarp_info = &iwqp->iwarp_info;
@@ -1080,6 +1083,9 @@ static int i40iw_create_cq(struct ib_cq *ibcq,
 	unsigned long flags;
 	int err_code;
 	int entries = attr->cqe;
+
+	if (attr->flags)
+		return -EOPNOTSUPP;
 
 	if (iwdev->closing)
 		return -ENODEV;
@@ -2033,7 +2039,7 @@ static ssize_t hw_rev_show(struct device *dev,
 		rdma_device_to_drv_device(dev, struct i40iw_ib_device, ibdev);
 	u32 hw_rev = iwibdev->iwdev->sc_dev.hw_rev;
 
-	return sprintf(buf, "%x\n", hw_rev);
+	return sysfs_emit(buf, "%x\n", hw_rev);
 }
 static DEVICE_ATTR_RO(hw_rev);
 
@@ -2043,7 +2049,7 @@ static DEVICE_ATTR_RO(hw_rev);
 static ssize_t hca_type_show(struct device *dev,
 			     struct device_attribute *attr, char *buf)
 {
-	return sprintf(buf, "I40IW\n");
+	return sysfs_emit(buf, "I40IW\n");
 }
 static DEVICE_ATTR_RO(hca_type);
 
@@ -2053,7 +2059,7 @@ static DEVICE_ATTR_RO(hca_type);
 static ssize_t board_id_show(struct device *dev,
 			     struct device_attribute *attr, char *buf)
 {
-	return sprintf(buf, "%.*s\n", 32, "I40IW Board ID");
+	return sysfs_emit(buf, "%.*s\n", 32, "I40IW Board ID");
 }
 static DEVICE_ATTR_RO(board_id);
 
@@ -2661,27 +2667,6 @@ static struct i40iw_ib_device *i40iw_init_rdma_device(struct i40iw_device *iwdev
 	iwibdev->ibdev.node_type = RDMA_NODE_RNIC;
 	ether_addr_copy((u8 *)&iwibdev->ibdev.node_guid, netdev->dev_addr);
 
-	iwibdev->ibdev.uverbs_cmd_mask =
-	    (1ull << IB_USER_VERBS_CMD_GET_CONTEXT) |
-	    (1ull << IB_USER_VERBS_CMD_QUERY_DEVICE) |
-	    (1ull << IB_USER_VERBS_CMD_QUERY_PORT) |
-	    (1ull << IB_USER_VERBS_CMD_ALLOC_PD) |
-	    (1ull << IB_USER_VERBS_CMD_DEALLOC_PD) |
-	    (1ull << IB_USER_VERBS_CMD_REG_MR) |
-	    (1ull << IB_USER_VERBS_CMD_DEREG_MR) |
-	    (1ull << IB_USER_VERBS_CMD_CREATE_COMP_CHANNEL) |
-	    (1ull << IB_USER_VERBS_CMD_CREATE_CQ) |
-	    (1ull << IB_USER_VERBS_CMD_DESTROY_CQ) |
-	    (1ull << IB_USER_VERBS_CMD_REQ_NOTIFY_CQ) |
-	    (1ull << IB_USER_VERBS_CMD_CREATE_QP) |
-	    (1ull << IB_USER_VERBS_CMD_MODIFY_QP) |
-	    (1ull << IB_USER_VERBS_CMD_QUERY_QP) |
-	    (1ull << IB_USER_VERBS_CMD_POLL_CQ) |
-	    (1ull << IB_USER_VERBS_CMD_CREATE_AH) |
-	    (1ull << IB_USER_VERBS_CMD_DESTROY_AH) |
-	    (1ull << IB_USER_VERBS_CMD_DESTROY_QP) |
-	    (1ull << IB_USER_VERBS_CMD_POST_RECV) |
-	    (1ull << IB_USER_VERBS_CMD_POST_SEND);
 	iwibdev->ibdev.phys_port_cnt = 1;
 	iwibdev->ibdev.num_comp_vectors = iwdev->ceqs_count;
 	iwibdev->ibdev.dev.parent = &pcidev->dev;
