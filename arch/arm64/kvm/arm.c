@@ -35,7 +35,6 @@
 #include <asm/kvm_asm.h>
 #include <asm/kvm_mmu.h>
 #include <asm/kvm_emulate.h>
-#include <asm/kvm_coproc.h>
 #include <asm/sections.h>
 
 #include <kvm/arm_hypercalls.h>
@@ -198,6 +197,8 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
 	case KVM_CAP_ARM_IRQ_LINE_LAYOUT_2:
 	case KVM_CAP_ARM_NISV_TO_USER:
 	case KVM_CAP_ARM_INJECT_EXT_DABT:
+	case KVM_CAP_SET_GUEST_DEBUG:
+	case KVM_CAP_VCPU_ATTRIBUTES:
 		r = 1;
 		break;
 	case KVM_CAP_ARM_SET_DEVICE_ADDR:
@@ -229,10 +230,35 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
 	case KVM_CAP_STEAL_TIME:
 		r = kvm_arm_pvtime_supported();
 		break;
-	default:
-		r = kvm_arch_vm_ioctl_check_extension(kvm, ext);
+	case KVM_CAP_ARM_EL1_32BIT:
+		r = cpus_have_const_cap(ARM64_HAS_32BIT_EL1);
 		break;
+	case KVM_CAP_GUEST_DEBUG_HW_BPS:
+		r = get_num_brps();
+		break;
+	case KVM_CAP_GUEST_DEBUG_HW_WPS:
+		r = get_num_wrps();
+		break;
+	case KVM_CAP_ARM_PMU_V3:
+		r = kvm_arm_support_pmu_v3();
+		break;
+	case KVM_CAP_ARM_INJECT_SERROR_ESR:
+		r = cpus_have_const_cap(ARM64_HAS_RAS_EXTN);
+		break;
+	case KVM_CAP_ARM_VM_IPA_SIZE:
+		r = get_kvm_ipa_limit();
+		break;
+	case KVM_CAP_ARM_SVE:
+		r = system_supports_sve();
+		break;
+	case KVM_CAP_ARM_PTRAUTH_ADDRESS:
+	case KVM_CAP_ARM_PTRAUTH_GENERIC:
+		r = system_has_full_ptr_auth();
+		break;
+	default:
+		r = 0;
 	}
+
 	return r;
 }
 
@@ -1311,37 +1337,44 @@ static unsigned long nvhe_percpu_order(void)
 	return size ? get_order(size) : 0;
 }
 
-static int kvm_map_vectors(void)
+/* A lookup table holding the hypervisor VA for each vector slot */
+static void *hyp_spectre_vector_selector[BP_HARDEN_EL2_SLOTS];
+
+static int __kvm_vector_slot2idx(enum arm64_hyp_spectre_vector slot)
 {
-	/*
-	 * SV2  = ARM64_SPECTRE_V2
-	 * HEL2 = ARM64_HARDEN_EL2_VECTORS
-	 *
-	 * !SV2 + !HEL2 -> use direct vectors
-	 *  SV2 + !HEL2 -> use hardened vectors in place
-	 * !SV2 +  HEL2 -> allocate one vector slot and use exec mapping
-	 *  SV2 +  HEL2 -> use hardened vectors and use exec mapping
-	 */
-	if (cpus_have_const_cap(ARM64_SPECTRE_V2)) {
-		__kvm_bp_vect_base = kvm_ksym_ref(__bp_harden_hyp_vecs);
-		__kvm_bp_vect_base = kern_hyp_va(__kvm_bp_vect_base);
+	return slot - (slot != HYP_VECTOR_DIRECT);
+}
+
+static void kvm_init_vector_slot(void *base, enum arm64_hyp_spectre_vector slot)
+{
+	int idx = __kvm_vector_slot2idx(slot);
+
+	hyp_spectre_vector_selector[slot] = base + (idx * SZ_2K);
+}
+
+static int kvm_init_vector_slots(void)
+{
+	int err;
+	void *base;
+
+	base = kern_hyp_va(kvm_ksym_ref(__kvm_hyp_vector));
+	kvm_init_vector_slot(base, HYP_VECTOR_DIRECT);
+
+	base = kern_hyp_va(kvm_ksym_ref(__bp_harden_hyp_vecs));
+	kvm_init_vector_slot(base, HYP_VECTOR_SPECTRE_DIRECT);
+
+	if (!cpus_have_const_cap(ARM64_SPECTRE_V3A))
+		return 0;
+
+	if (!has_vhe()) {
+		err = create_hyp_exec_mappings(__pa_symbol(__bp_harden_hyp_vecs),
+					       __BP_HARDEN_HYP_VECS_SZ, &base);
+		if (err)
+			return err;
 	}
 
-	if (cpus_have_const_cap(ARM64_HARDEN_EL2_VECTORS)) {
-		phys_addr_t vect_pa = __pa_symbol(__bp_harden_hyp_vecs);
-		unsigned long size = __BP_HARDEN_HYP_VECS_SZ;
-
-		/*
-		 * Always allocate a spare vector slot, as we don't
-		 * know yet which CPUs have a BP hardening slot that
-		 * we can reuse.
-		 */
-		__kvm_harden_el2_vector_slot = atomic_inc_return(&arm64_el2_vector_last_slot);
-		BUG_ON(__kvm_harden_el2_vector_slot >= BP_HARDEN_EL2_SLOTS);
-		return create_hyp_exec_mappings(vect_pa, size,
-						&__kvm_bp_vect_base);
-	}
-
+	kvm_init_vector_slot(base, HYP_VECTOR_INDIRECT);
+	kvm_init_vector_slot(base, HYP_VECTOR_SPECTRE_INDIRECT);
 	return 0;
 }
 
@@ -1396,13 +1429,40 @@ static void cpu_hyp_reset(void)
 		__hyp_reset_vectors();
 }
 
+/*
+ * EL2 vectors can be mapped and rerouted in a number of ways,
+ * depending on the kernel configuration and CPU present:
+ *
+ * - If the CPU is affected by Spectre-v2, the hardening sequence is
+ *   placed in one of the vector slots, which is executed before jumping
+ *   to the real vectors.
+ *
+ * - If the CPU also has the ARM64_SPECTRE_V3A cap, the slot
+ *   containing the hardening sequence is mapped next to the idmap page,
+ *   and executed before jumping to the real vectors.
+ *
+ * - If the CPU only has the ARM64_SPECTRE_V3A cap, then an
+ *   empty slot is selected, mapped next to the idmap page, and
+ *   executed before jumping to the real vectors.
+ *
+ * Note that ARM64_SPECTRE_V3A is somewhat incompatible with
+ * VHE, as we don't have hypervisor-specific mappings. If the system
+ * is VHE and yet selects this capability, it will be ignored.
+ */
+static void cpu_set_hyp_vector(void)
+{
+	struct bp_hardening_data *data = this_cpu_ptr(&bp_hardening_data);
+	void *vector = hyp_spectre_vector_selector[data->slot];
+
+	*this_cpu_ptr_hyp_sym(kvm_hyp_vector) = (unsigned long)vector;
+}
+
 static void cpu_hyp_reinit(void)
 {
 	kvm_init_host_cpu_context(&this_cpu_ptr_hyp_sym(kvm_host_data)->host_ctxt);
 
 	cpu_hyp_reset();
-
-	*this_cpu_ptr_hyp_sym(kvm_hyp_vector) = (unsigned long)kvm_get_hyp_vector();
+	cpu_set_hyp_vector();
 
 	if (is_kernel_in_hyp_mode())
 		kvm_timer_init_vhe();
@@ -1541,7 +1601,7 @@ static int init_subsystems(void)
 		goto out;
 
 	kvm_perf_init();
-	kvm_coproc_table_init();
+	kvm_sys_reg_table_init();
 
 out:
 	on_each_cpu(_kvm_arch_hardware_disable, NULL, 1);
@@ -1629,12 +1689,6 @@ static int init_hyp_mode(void)
 				  kvm_ksym_ref(__bss_stop), PAGE_HYP_RO);
 	if (err) {
 		kvm_err("Cannot map bss section\n");
-		goto out_err;
-	}
-
-	err = kvm_map_vectors();
-	if (err) {
-		kvm_err("Cannot map vectors\n");
 		goto out_err;
 	}
 
@@ -1779,6 +1833,12 @@ int kvm_arch_init(void *opaque)
 		err = init_hyp_mode();
 		if (err)
 			goto out_err;
+	}
+
+	err = kvm_init_vector_slots();
+	if (err) {
+		kvm_err("Cannot initialise vector slots\n");
+		goto out_err;
 	}
 
 	err = init_subsystems();
