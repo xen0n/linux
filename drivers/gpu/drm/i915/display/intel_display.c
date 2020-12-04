@@ -45,6 +45,7 @@
 
 #include "display/intel_crt.h"
 #include "display/intel_ddi.h"
+#include "display/intel_display_debugfs.h"
 #include "display/intel_dp.h"
 #include "display/intel_dp_mst.h"
 #include "display/intel_dpll_mgr.h"
@@ -7575,25 +7576,25 @@ modeset_get_crtc_power_domains(struct intel_crtc_state *crtc_state)
 	enum intel_display_power_domain domain;
 	u64 domains, new_domains, old_domains;
 
-	old_domains = crtc->enabled_power_domains;
-	crtc->enabled_power_domains = new_domains =
-		get_crtc_power_domains(crtc_state);
+	domains = get_crtc_power_domains(crtc_state);
 
-	domains = new_domains & ~old_domains;
+	new_domains = domains & ~crtc->enabled_power_domains.mask;
+	old_domains = crtc->enabled_power_domains.mask & ~domains;
 
-	for_each_power_domain(domain, domains)
-		intel_display_power_get(dev_priv, domain);
+	for_each_power_domain(domain, new_domains)
+		intel_display_power_get_in_set(dev_priv,
+					       &crtc->enabled_power_domains,
+					       domain);
 
-	return old_domains & ~new_domains;
+	return old_domains;
 }
 
-static void modeset_put_power_domains(struct drm_i915_private *dev_priv,
-				      u64 domains)
+static void modeset_put_crtc_power_domains(struct intel_crtc *crtc,
+					   u64 domains)
 {
-	enum intel_display_power_domain domain;
-
-	for_each_power_domain(domain, domains)
-		intel_display_power_put_unchecked(dev_priv, domain);
+	intel_display_power_put_mask_in_set(to_i915(crtc->base.dev),
+					    &crtc->enabled_power_domains,
+					    domains);
 }
 
 static void valleyview_crtc_enable(struct intel_atomic_state *state,
@@ -7789,12 +7790,10 @@ static void intel_crtc_disable_noatomic(struct intel_crtc *crtc,
 		to_intel_dbuf_state(dev_priv->dbuf.obj.state);
 	struct intel_crtc_state *crtc_state =
 		to_intel_crtc_state(crtc->base.state);
-	enum intel_display_power_domain domain;
 	struct intel_plane *plane;
 	struct drm_atomic_state *state;
 	struct intel_crtc_state *temp_crtc_state;
 	enum pipe pipe = crtc->pipe;
-	u64 domains;
 	int ret;
 
 	if (!crtc_state->hw.active)
@@ -7850,10 +7849,7 @@ static void intel_crtc_disable_noatomic(struct intel_crtc *crtc,
 	intel_update_watermarks(crtc);
 	intel_disable_shared_dpll(crtc_state);
 
-	domains = crtc->enabled_power_domains;
-	for_each_power_domain(domain, domains)
-		intel_display_power_put_unchecked(dev_priv, domain);
-	crtc->enabled_power_domains = 0;
+	intel_display_power_put_all_in_set(dev_priv, &crtc->enabled_power_domains);
 
 	dev_priv->active_pipes &= ~BIT(pipe);
 	cdclk_state->min_cdclk[pipe] = 0;
@@ -11226,16 +11222,13 @@ static void hsw_get_ddi_pll(struct drm_i915_private *dev_priv, enum port port,
 
 static bool hsw_get_transcoder_state(struct intel_crtc *crtc,
 				     struct intel_crtc_state *pipe_config,
-				     u64 *power_domain_mask,
-				     intel_wakeref_t *wakerefs)
+				     struct intel_display_power_domain_set *power_domain_set)
 {
 	struct drm_device *dev = crtc->base.dev;
 	struct drm_i915_private *dev_priv = to_i915(dev);
-	enum intel_display_power_domain power_domain;
 	unsigned long panel_transcoder_mask = BIT(TRANSCODER_EDP);
 	unsigned long enabled_panel_transcoders = 0;
 	enum transcoder panel_transcoder;
-	intel_wakeref_t wf;
 	u32 tmp;
 
 	if (INTEL_GEN(dev_priv) >= 11)
@@ -11306,15 +11299,9 @@ static bool hsw_get_transcoder_state(struct intel_crtc *crtc,
 	drm_WARN_ON(dev, (enabled_panel_transcoders & BIT(TRANSCODER_EDP)) &&
 		    enabled_panel_transcoders != BIT(TRANSCODER_EDP));
 
-	power_domain = POWER_DOMAIN_TRANSCODER(pipe_config->cpu_transcoder);
-	drm_WARN_ON(dev, *power_domain_mask & BIT_ULL(power_domain));
-
-	wf = intel_display_power_get_if_enabled(dev_priv, power_domain);
-	if (!wf)
+	if (!intel_display_power_get_in_set_if_enabled(dev_priv, power_domain_set,
+						       POWER_DOMAIN_TRANSCODER(pipe_config->cpu_transcoder)))
 		return false;
-
-	wakerefs[power_domain] = wf;
-	*power_domain_mask |= BIT_ULL(power_domain);
 
 	tmp = intel_de_read(dev_priv, PIPECONF(pipe_config->cpu_transcoder));
 
@@ -11323,14 +11310,11 @@ static bool hsw_get_transcoder_state(struct intel_crtc *crtc,
 
 static bool bxt_get_dsi_transcoder_state(struct intel_crtc *crtc,
 					 struct intel_crtc_state *pipe_config,
-					 u64 *power_domain_mask,
-					 intel_wakeref_t *wakerefs)
+					 struct intel_display_power_domain_set *power_domain_set)
 {
 	struct drm_device *dev = crtc->base.dev;
 	struct drm_i915_private *dev_priv = to_i915(dev);
-	enum intel_display_power_domain power_domain;
 	enum transcoder cpu_transcoder;
-	intel_wakeref_t wf;
 	enum port port;
 	u32 tmp;
 
@@ -11340,15 +11324,9 @@ static bool bxt_get_dsi_transcoder_state(struct intel_crtc *crtc,
 		else
 			cpu_transcoder = TRANSCODER_DSI_C;
 
-		power_domain = POWER_DOMAIN_TRANSCODER(cpu_transcoder);
-		drm_WARN_ON(dev, *power_domain_mask & BIT_ULL(power_domain));
-
-		wf = intel_display_power_get_if_enabled(dev_priv, power_domain);
-		if (!wf)
+		if (!intel_display_power_get_in_set_if_enabled(dev_priv, power_domain_set,
+							       POWER_DOMAIN_TRANSCODER(cpu_transcoder)))
 			continue;
-
-		wakerefs[power_domain] = wf;
-		*power_domain_mask |= BIT_ULL(power_domain);
 
 		/*
 		 * The PLL needs to be enabled with a valid divider
@@ -11432,30 +11410,22 @@ static bool hsw_get_pipe_config(struct intel_crtc *crtc,
 				struct intel_crtc_state *pipe_config)
 {
 	struct drm_i915_private *dev_priv = to_i915(crtc->base.dev);
-	intel_wakeref_t wakerefs[POWER_DOMAIN_NUM], wf;
-	enum intel_display_power_domain power_domain;
-	u64 power_domain_mask;
+	struct intel_display_power_domain_set power_domain_set = { };
 	bool active;
 	u32 tmp;
 
 	pipe_config->master_transcoder = INVALID_TRANSCODER;
 
-	power_domain = POWER_DOMAIN_PIPE(crtc->pipe);
-	wf = intel_display_power_get_if_enabled(dev_priv, power_domain);
-	if (!wf)
+	if (!intel_display_power_get_in_set_if_enabled(dev_priv, &power_domain_set,
+						       POWER_DOMAIN_PIPE(crtc->pipe)))
 		return false;
-
-	wakerefs[power_domain] = wf;
-	power_domain_mask = BIT_ULL(power_domain);
 
 	pipe_config->shared_dpll = NULL;
 
-	active = hsw_get_transcoder_state(crtc, pipe_config,
-					  &power_domain_mask, wakerefs);
+	active = hsw_get_transcoder_state(crtc, pipe_config, &power_domain_set);
 
 	if (IS_GEN9_LP(dev_priv) &&
-	    bxt_get_dsi_transcoder_state(crtc, pipe_config,
-					 &power_domain_mask, wakerefs)) {
+	    bxt_get_dsi_transcoder_state(crtc, pipe_config, &power_domain_set)) {
 		drm_WARN_ON(&dev_priv->drm, active);
 		active = true;
 	}
@@ -11519,14 +11489,8 @@ static bool hsw_get_pipe_config(struct intel_crtc *crtc,
 		pipe_config->ips_linetime =
 			REG_FIELD_GET(HSW_IPS_LINETIME_MASK, tmp);
 
-	power_domain = POWER_DOMAIN_PIPE_PANEL_FITTER(crtc->pipe);
-	drm_WARN_ON(&dev_priv->drm, power_domain_mask & BIT_ULL(power_domain));
-
-	wf = intel_display_power_get_if_enabled(dev_priv, power_domain);
-	if (wf) {
-		wakerefs[power_domain] = wf;
-		power_domain_mask |= BIT_ULL(power_domain);
-
+	if (intel_display_power_get_in_set_if_enabled(dev_priv, &power_domain_set,
+						      POWER_DOMAIN_PIPE_PANEL_FITTER(crtc->pipe))) {
 		if (INTEL_GEN(dev_priv) >= 9)
 			skl_get_pfit_config(pipe_config);
 		else
@@ -11560,9 +11524,7 @@ static bool hsw_get_pipe_config(struct intel_crtc *crtc,
 	}
 
 out:
-	for_each_power_domain(power_domain, power_domain_mask)
-		intel_display_power_put(dev_priv,
-					power_domain, wakerefs[power_domain]);
+	intel_display_power_put_all_in_set(dev_priv, &power_domain_set);
 
 	return active;
 }
@@ -16376,8 +16338,7 @@ static void intel_atomic_commit_tail(struct intel_atomic_state *state)
 	for_each_oldnew_intel_crtc_in_state(state, crtc, old_crtc_state, new_crtc_state, i) {
 		intel_post_plane_update(state, crtc);
 
-		if (put_domains[i])
-			modeset_put_power_domains(dev_priv, put_domains[i]);
+		modeset_put_crtc_power_domains(crtc, put_domains[crtc->pipe]);
 
 		intel_modeset_verify_crtc(crtc, state, old_crtc_state, new_crtc_state);
 
@@ -17266,6 +17227,12 @@ fail:
 	return ERR_PTR(ret);
 }
 
+static int intel_crtc_late_register(struct drm_crtc *crtc)
+{
+	intel_crtc_debugfs_add(crtc);
+	return 0;
+}
+
 #define INTEL_CRTC_FUNCS \
 	.gamma_set = drm_atomic_helper_legacy_gamma_set, \
 	.set_config = drm_atomic_helper_set_config, \
@@ -17275,7 +17242,8 @@ fail:
 	.atomic_destroy_state = intel_crtc_destroy_state, \
 	.set_crc_source = intel_crtc_set_crc_source, \
 	.verify_crc_source = intel_crtc_verify_crc_source, \
-	.get_crc_sources = intel_crtc_get_crc_sources
+	.get_crc_sources = intel_crtc_get_crc_sources, \
+	.late_register = intel_crtc_late_register
 
 static const struct drm_crtc_funcs bdw_crtc_funcs = {
 	INTEL_CRTC_FUNCS,
@@ -19588,7 +19556,7 @@ intel_modeset_setup_hw_state(struct drm_device *dev,
 
 		put_domains = modeset_get_crtc_power_domains(crtc_state);
 		if (drm_WARN_ON(dev, put_domains))
-			modeset_put_power_domains(dev_priv, put_domains);
+			modeset_put_crtc_power_domains(crtc, put_domains);
 	}
 
 	intel_display_power_put(dev_priv, POWER_DOMAIN_INIT, wakeref);
