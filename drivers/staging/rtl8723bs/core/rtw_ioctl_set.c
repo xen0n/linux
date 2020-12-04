@@ -189,8 +189,8 @@ u8 rtw_set_802_11_bssid(struct adapter *padapter, u8 *bssid)
 				goto release_mlme_lock;/* it means driver is in WIFI_ADHOC_MASTER_STATE, we needn't create bss again. */
 		} else {
 			RT_TRACE(_module_rtl871x_ioctl_set_c_, _drv_info_, ("Set BSSID not the same bssid\n"));
-			RT_TRACE(_module_rtl871x_ioctl_set_c_, _drv_info_, ("set_bssid ="MAC_FMT"\n", MAC_ARG(bssid)));
-			RT_TRACE(_module_rtl871x_ioctl_set_c_, _drv_info_, ("cur_bssid ="MAC_FMT"\n", MAC_ARG(pmlmepriv->cur_network.network.MacAddress)));
+			RT_TRACE(_module_rtl871x_ioctl_set_c_, _drv_info_, ("set_bssid =%pM\n", MAC_ARG(bssid)));
+			RT_TRACE(_module_rtl871x_ioctl_set_c_, _drv_info_, ("cur_bssid =%pM\n", MAC_ARG(pmlmepriv->cur_network.network.MacAddress)));
 
 			rtw_disassoc_cmd(padapter, 0, true);
 
@@ -657,12 +657,10 @@ u16 rtw_get_cur_max_rate(struct adapter *adapter)
 	if (IsSupportedHT(psta->wireless_mode)) {
 		rtw_hal_get_hwreg(adapter, HW_VAR_RF_TYPE, (u8 *)(&rf_type));
 
-		max_rate = rtw_mcs_rate(
-			rf_type,
-			((psta->bw_mode == CHANNEL_WIDTH_40)?1:0),
-			short_GI,
-			psta->htpriv.ht_cap.supp_mcs_set
-		);
+		max_rate = rtw_mcs_rate(rf_type,
+					((psta->bw_mode == CHANNEL_WIDTH_40)?1:0),
+					short_GI,
+					psta->htpriv.ht_cap.mcs.rx_mask);
 	} else {
 		while ((pcur_bss->SupportedRates[i] != 0) && (pcur_bss->SupportedRates[i] != 0xFF)) {
 			rate = pcur_bss->SupportedRates[i]&0x7F;
