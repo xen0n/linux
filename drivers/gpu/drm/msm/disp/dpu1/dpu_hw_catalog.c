@@ -8,7 +8,6 @@
 #include <linux/platform_device.h>
 #include "dpu_hw_mdss.h"
 #include "dpu_hw_catalog.h"
-#include "dpu_hw_catalog_format.h"
 #include "dpu_kms.h"
 
 #define VIG_MASK \
@@ -41,6 +40,8 @@
 #define PINGPONG_SDM845_SPLIT_MASK \
 	(PINGPONG_SDM845_MASK | BIT(DPU_PINGPONG_TE2))
 
+#define MERGE_3D_SM8150_MASK (0)
+
 #define DSPP_SC7180_MASK BIT(DPU_DSPP_PCC)
 
 #define INTF_SDM845_MASK (0)
@@ -59,6 +60,79 @@
 #define SSPP_UNITY_SCALE	1
 
 #define STRCAT(X, Y) (X Y)
+
+static const uint32_t plane_formats[] = {
+	DRM_FORMAT_ARGB8888,
+	DRM_FORMAT_ABGR8888,
+	DRM_FORMAT_RGBA8888,
+	DRM_FORMAT_BGRA8888,
+	DRM_FORMAT_XRGB8888,
+	DRM_FORMAT_RGBX8888,
+	DRM_FORMAT_BGRX8888,
+	DRM_FORMAT_XBGR8888,
+	DRM_FORMAT_RGB888,
+	DRM_FORMAT_BGR888,
+	DRM_FORMAT_RGB565,
+	DRM_FORMAT_BGR565,
+	DRM_FORMAT_ARGB1555,
+	DRM_FORMAT_ABGR1555,
+	DRM_FORMAT_RGBA5551,
+	DRM_FORMAT_BGRA5551,
+	DRM_FORMAT_XRGB1555,
+	DRM_FORMAT_XBGR1555,
+	DRM_FORMAT_RGBX5551,
+	DRM_FORMAT_BGRX5551,
+	DRM_FORMAT_ARGB4444,
+	DRM_FORMAT_ABGR4444,
+	DRM_FORMAT_RGBA4444,
+	DRM_FORMAT_BGRA4444,
+	DRM_FORMAT_XRGB4444,
+	DRM_FORMAT_XBGR4444,
+	DRM_FORMAT_RGBX4444,
+	DRM_FORMAT_BGRX4444,
+};
+
+static const uint32_t plane_formats_yuv[] = {
+	DRM_FORMAT_ARGB8888,
+	DRM_FORMAT_ABGR8888,
+	DRM_FORMAT_RGBA8888,
+	DRM_FORMAT_BGRX8888,
+	DRM_FORMAT_BGRA8888,
+	DRM_FORMAT_XRGB8888,
+	DRM_FORMAT_XBGR8888,
+	DRM_FORMAT_RGBX8888,
+	DRM_FORMAT_RGB888,
+	DRM_FORMAT_BGR888,
+	DRM_FORMAT_RGB565,
+	DRM_FORMAT_BGR565,
+	DRM_FORMAT_ARGB1555,
+	DRM_FORMAT_ABGR1555,
+	DRM_FORMAT_RGBA5551,
+	DRM_FORMAT_BGRA5551,
+	DRM_FORMAT_XRGB1555,
+	DRM_FORMAT_XBGR1555,
+	DRM_FORMAT_RGBX5551,
+	DRM_FORMAT_BGRX5551,
+	DRM_FORMAT_ARGB4444,
+	DRM_FORMAT_ABGR4444,
+	DRM_FORMAT_RGBA4444,
+	DRM_FORMAT_BGRA4444,
+	DRM_FORMAT_XRGB4444,
+	DRM_FORMAT_XBGR4444,
+	DRM_FORMAT_RGBX4444,
+	DRM_FORMAT_BGRX4444,
+
+	DRM_FORMAT_NV12,
+	DRM_FORMAT_NV21,
+	DRM_FORMAT_NV16,
+	DRM_FORMAT_NV61,
+	DRM_FORMAT_VYUY,
+	DRM_FORMAT_UYVY,
+	DRM_FORMAT_YUYV,
+	DRM_FORMAT_YVYU,
+	DRM_FORMAT_YUV420,
+	DRM_FORMAT_YVU420,
+};
 
 /*************************************************************
  * DPU sub blocks config
@@ -111,7 +185,6 @@ static const struct dpu_caps sm8150_dpu_caps = {
 static const struct dpu_caps sm8250_dpu_caps = {
 	.max_mixer_width = DEFAULT_DPU_OUTPUT_LINE_WIDTH,
 	.max_mixer_blendstages = 0xb,
-	.max_linewidth = 4096,
 	.qseed_type = DPU_SSPP_SCALER_QSEED3, /* TODO: qseed3 lite */
 	.smart_dma_rev = DPU_SSPP_SMART_DMA_V2, /* TODO: v2.5 */
 	.ubwc_version = DPU_HW_UBWC_VER_40,
@@ -481,40 +554,59 @@ static const struct dpu_pingpong_sub_blks sdm845_pp_sblk = {
 		.len = 0x20, .version = 0x10000},
 };
 
-#define PP_BLK_TE(_name, _id, _base) \
+#define PP_BLK_TE(_name, _id, _base, _merge_3d) \
 	{\
 	.name = _name, .id = _id, \
 	.base = _base, .len = 0xd4, \
 	.features = PINGPONG_SDM845_SPLIT_MASK, \
+	.merge_3d = _merge_3d, \
 	.sblk = &sdm845_pp_sblk_te \
 	}
-#define PP_BLK(_name, _id, _base) \
+#define PP_BLK(_name, _id, _base, _merge_3d) \
 	{\
 	.name = _name, .id = _id, \
 	.base = _base, .len = 0xd4, \
 	.features = PINGPONG_SDM845_MASK, \
+	.merge_3d = _merge_3d, \
 	.sblk = &sdm845_pp_sblk \
 	}
 
 static const struct dpu_pingpong_cfg sdm845_pp[] = {
-	PP_BLK_TE("pingpong_0", PINGPONG_0, 0x70000),
-	PP_BLK_TE("pingpong_1", PINGPONG_1, 0x70800),
-	PP_BLK("pingpong_2", PINGPONG_2, 0x71000),
-	PP_BLK("pingpong_3", PINGPONG_3, 0x71800),
+	PP_BLK_TE("pingpong_0", PINGPONG_0, 0x70000, 0),
+	PP_BLK_TE("pingpong_1", PINGPONG_1, 0x70800, 0),
+	PP_BLK("pingpong_2", PINGPONG_2, 0x71000, 0),
+	PP_BLK("pingpong_3", PINGPONG_3, 0x71800, 0),
 };
 
 static struct dpu_pingpong_cfg sc7180_pp[] = {
-	PP_BLK_TE("pingpong_0", PINGPONG_0, 0x70000),
-	PP_BLK_TE("pingpong_1", PINGPONG_1, 0x70800),
+	PP_BLK_TE("pingpong_0", PINGPONG_0, 0x70000, 0),
+	PP_BLK_TE("pingpong_1", PINGPONG_1, 0x70800, 0),
 };
 
 static const struct dpu_pingpong_cfg sm8150_pp[] = {
-	PP_BLK_TE("pingpong_0", PINGPONG_0, 0x70000),
-	PP_BLK_TE("pingpong_1", PINGPONG_1, 0x70800),
-	PP_BLK("pingpong_2", PINGPONG_2, 0x71000),
-	PP_BLK("pingpong_3", PINGPONG_3, 0x71800),
-	PP_BLK("pingpong_4", PINGPONG_4, 0x72000),
-	PP_BLK("pingpong_5", PINGPONG_5, 0x72800),
+	PP_BLK_TE("pingpong_0", PINGPONG_0, 0x70000, MERGE_3D_0),
+	PP_BLK_TE("pingpong_1", PINGPONG_1, 0x70800, MERGE_3D_0),
+	PP_BLK("pingpong_2", PINGPONG_2, 0x71000, MERGE_3D_1),
+	PP_BLK("pingpong_3", PINGPONG_3, 0x71800, MERGE_3D_1),
+	PP_BLK("pingpong_4", PINGPONG_4, 0x72000, MERGE_3D_2),
+	PP_BLK("pingpong_5", PINGPONG_5, 0x72800, MERGE_3D_2),
+};
+
+/*************************************************************
+ * MERGE_3D sub blocks config
+ *************************************************************/
+#define MERGE_3D_BLK(_name, _id, _base) \
+	{\
+	.name = _name, .id = _id, \
+	.base = _base, .len = 0x100, \
+	.features = MERGE_3D_SM8150_MASK, \
+	.sblk = NULL \
+	}
+
+static const struct dpu_merge_3d_cfg sm8150_merge_3d[] = {
+	MERGE_3D_BLK("merge_3d_0", MERGE_3D_0, 0x83000),
+	MERGE_3D_BLK("merge_3d_1", MERGE_3D_1, 0x83100),
+	MERGE_3D_BLK("merge_3d_2", MERGE_3D_2, 0x83200),
 };
 
 /*************************************************************
@@ -838,6 +930,8 @@ static void sm8150_cfg_init(struct dpu_mdss_cfg *dpu_cfg)
 		.mixer = sm8150_lm,
 		.pingpong_count = ARRAY_SIZE(sm8150_pp),
 		.pingpong = sm8150_pp,
+		.merge_3d_count = ARRAY_SIZE(sm8150_merge_3d),
+		.merge_3d = sm8150_merge_3d,
 		.intf_count = ARRAY_SIZE(sm8150_intf),
 		.intf = sm8150_intf,
 		.vbif_count = ARRAY_SIZE(sdm845_vbif),
@@ -868,6 +962,8 @@ static void sm8250_cfg_init(struct dpu_mdss_cfg *dpu_cfg)
 		.mixer = sm8150_lm,
 		.pingpong_count = ARRAY_SIZE(sm8150_pp),
 		.pingpong = sm8150_pp,
+		.merge_3d_count = ARRAY_SIZE(sm8150_merge_3d),
+		.merge_3d = sm8150_merge_3d,
 		.intf_count = ARRAY_SIZE(sm8150_intf),
 		.intf = sm8150_intf,
 		.vbif_count = ARRAY_SIZE(sdm845_vbif),
