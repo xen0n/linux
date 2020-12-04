@@ -165,7 +165,7 @@ static inline unsigned long decode_bar(struct pci_dev *dev, u32 bar)
 #define PCI_COMMAND_DECODE_ENABLE	(PCI_COMMAND_MEMORY | PCI_COMMAND_IO)
 
 /**
- * pci_read_base - Read a PCI BAR
+ * __pci_read_base - Read a PCI BAR
  * @dev: the PCI device
  * @type: type of the BAR
  * @res: resource buffer to be filled in
@@ -677,7 +677,7 @@ const unsigned char pcie_link_speed[] = {
 	PCIE_SPEED_8_0GT,		/* 3 */
 	PCIE_SPEED_16_0GT,		/* 4 */
 	PCIE_SPEED_32_0GT,		/* 5 */
-	PCI_SPEED_UNKNOWN,		/* 6 */
+	PCIE_SPEED_64_0GT,		/* 6 */
 	PCI_SPEED_UNKNOWN,		/* 7 */
 	PCI_SPEED_UNKNOWN,		/* 8 */
 	PCI_SPEED_UNKNOWN,		/* 9 */
@@ -719,6 +719,7 @@ const char *pci_speed_string(enum pci_bus_speed speed)
 	    "8.0 GT/s PCIe",		/* 0x16 */
 	    "16.0 GT/s PCIe",		/* 0x17 */
 	    "32.0 GT/s PCIe",		/* 0x18 */
+	    "64.0 GT/s PCIe",		/* 0x19 */
 	};
 
 	if (speed < ARRAY_SIZE(speed_strings))
@@ -1612,7 +1613,7 @@ static bool pci_ext_cfg_is_aliased(struct pci_dev *dev)
 }
 
 /**
- * pci_cfg_space_size - Get the configuration space size of the PCI device
+ * pci_cfg_space_size_ext - Get the configuration space size of the PCI device
  * @dev: PCI device
  *
  * Regular PCI devices have 256 bytes, but PCI-X 2 and PCI Express devices

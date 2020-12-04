@@ -366,7 +366,7 @@ static int __init pcibios_assign_resources(void)
 	return 0;
 }
 
-/**
+/*
  * called in fs_initcall (one below subsys_initcall),
  * give a chance for motherboard reserve resources
  */
