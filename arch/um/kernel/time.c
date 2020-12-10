@@ -46,6 +46,9 @@ static void time_travel_set_time(unsigned long long ns)
 	if (unlikely(ns < time_travel_time))
 		panic("time-travel: time goes backwards %lld -> %lld\n",
 		      time_travel_time, ns);
+	else if (unlikely(ns >= S64_MAX))
+		panic("The system was going to sleep forever, aborting");
+
 	time_travel_time = ns;
 }
 
@@ -260,11 +263,6 @@ static void __time_travel_add_event(struct time_travel_event *e,
 	struct time_travel_event *tmp;
 	bool inserted = false;
 
-	if (WARN(time_travel_mode == TT_MODE_BASIC &&
-		 e != &time_travel_timer_event,
-		 "only timer events can be handled in basic mode"))
-		return;
-
 	if (e->pending)
 		return;
 
@@ -404,9 +402,14 @@ static void time_travel_oneshot_timer(struct time_travel_event *e)
 	deliver_alarm();
 }
 
-void time_travel_sleep(unsigned long long duration)
+void time_travel_sleep(void)
 {
-	unsigned long long next = time_travel_time + duration;
+	/*
+	 * Wait "forever" (using S64_MAX because there are some potential
+	 * wrapping issues, especially with the current TT_MODE_EXTERNAL
+	 * controller application.
+	 */
+	unsigned long long next = S64_MAX;
 
 	if (time_travel_mode == TT_MODE_BASIC)
 		os_timer_disable();
@@ -673,10 +676,8 @@ void read_persistent_clock64(struct timespec64 *ts)
 {
 	long long nsecs;
 
-	if (time_travel_start_set)
+	if (time_travel_mode != TT_MODE_OFF)
 		nsecs = time_travel_start + time_travel_time;
-	else if (time_travel_mode == TT_MODE_EXTERNAL)
-		nsecs = time_travel_ext_req(UM_TIMETRAVEL_GET_TOD, -1);
 	else
 		nsecs = os_persistent_clock_emulation();
 
@@ -686,6 +687,25 @@ void read_persistent_clock64(struct timespec64 *ts)
 
 void __init time_init(void)
 {
+#ifdef CONFIG_UML_TIME_TRAVEL_SUPPORT
+	switch (time_travel_mode) {
+	case TT_MODE_EXTERNAL:
+		time_travel_start = time_travel_ext_req(UM_TIMETRAVEL_GET_TOD, -1);
+		/* controller gave us the *current* time, so adjust by that */
+		time_travel_ext_get_time();
+		time_travel_start -= time_travel_time;
+		break;
+	case TT_MODE_INFCPU:
+	case TT_MODE_BASIC:
+		if (!time_travel_start_set)
+			time_travel_start = os_persistent_clock_emulation();
+		break;
+	case TT_MODE_OFF:
+		/* we just read the host clock with os_persistent_clock_emulation() */
+		break;
+	}
+#endif
+
 	timer_set_signal_handler();
 	late_time_init = um_timer_setup;
 }
