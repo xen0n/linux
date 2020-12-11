@@ -141,6 +141,7 @@ comment "Default settings for advanced configuration options are used"
 
 config HIGHMEM
 	bool "High memory support"
+	select KMAP_LOCAL
 	help
 	  The address space of Microblaze processors is only 4 Gigabytes large
 	  and it has to accommodate user address space, kernel address
