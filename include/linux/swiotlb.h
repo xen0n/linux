@@ -105,7 +105,7 @@ static inline bool is_swiotlb_active(void)
 	return false;
 }
 
-static void swiotlb_adjust_size(unsigned long new_size)
+static inline void swiotlb_adjust_size(unsigned long new_size)
 {
 }
 #endif /* CONFIG_SWIOTLB */
