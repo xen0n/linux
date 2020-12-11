@@ -95,7 +95,7 @@ enum {
 };
 
 /* Strings for Input Source Enum Control */
-static const char *const in_src_str[3] = {"Rear Mic", "Line", "Front Mic" };
+static const char *const in_src_str[3] = { "Microphone", "Line In", "Front Microphone" };
 #define IN_SRC_NUM_OF_INPUTS 3
 enum {
 	REAR_MIC,
@@ -1223,7 +1223,7 @@ static const struct hda_pintbl ae5_pincfgs[] = {
 	{ 0x0e, 0x01c510f0 }, /* SPDIF In */
 	{ 0x0f, 0x01017114 }, /* Port A -- Rear L/R. */
 	{ 0x10, 0x01017012 }, /* Port D -- Center/LFE or FP Hp */
-	{ 0x11, 0x01a170ff }, /* Port B -- LineMicIn2 / Rear Headphone */
+	{ 0x11, 0x012170ff }, /* Port B -- LineMicIn2 / Rear Headphone */
 	{ 0x12, 0x01a170f0 }, /* Port C -- LineIn1 */
 	{ 0x13, 0x908700f0 }, /* What U Hear In*/
 	{ 0x18, 0x50d000f0 }, /* N/A */
@@ -8544,7 +8544,7 @@ static void amic_callback(struct hda_codec *codec, struct hda_jack_callback *cb)
 		ca0132_select_mic(codec);
 }
 
-static void ca0132_init_unsol(struct hda_codec *codec)
+static void ca0132_setup_unsol(struct hda_codec *codec)
 {
 	struct ca0132_spec *spec = codec->spec;
 	snd_hda_jack_detect_enable_callback(codec, spec->unsol_tag_hp, hp_callback);
@@ -9376,7 +9376,6 @@ static int ca0132_init(struct hda_codec *codec)
 	if (ca0132_quirk(spec) == QUIRK_AE5 || ca0132_quirk(spec) == QUIRK_AE7)
 		ae5_register_set(codec);
 
-	ca0132_init_unsol(codec);
 	ca0132_init_params(codec);
 	ca0132_init_flags(codec);
 
@@ -9940,6 +9939,8 @@ static int patch_ca0132(struct hda_codec *codec)
 	err = snd_hda_parse_pin_def_config(codec, &spec->autocfg, NULL);
 	if (err < 0)
 		goto error;
+
+	ca0132_setup_unsol(codec);
 
 	return 0;
 
