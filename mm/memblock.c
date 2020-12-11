@@ -1860,6 +1860,30 @@ void __init_memblock memblock_trim_memory(phys_addr_t align)
 	}
 }
 
+/**
+ * memblock_enforce_memory_reserved_overlap - make sure every range in
+ * @memblock.reserved is covered by @memblock.memory
+ *
+ * The data in @memblock.memory is used to detect zone and node boundaries
+ * during initialization of the memory map and the page allocator. Make
+ * sure that every memory range present in @memblock.reserved is also added
+ * to @memblock.memory even if the architecture specific memory
+ * initialization failed to do so
+ */
+void __init memblock_enforce_memory_reserved_overlap(void)
+{
+	phys_addr_t start, end;
+	int nid;
+	u64 i;
+
+	__for_each_mem_range(i, &memblock.reserved, &memblock.memory,
+			     NUMA_NO_NODE, MEMBLOCK_NONE, &start, &end, &nid) {
+		pr_warn("memblock: reserved range [%pa-%pa] is not in memory\n",
+			&start, &end);
+		memblock_add_node(start, (end - start), nid);
+	}
+}
+
 void __init_memblock memblock_set_current_limit(phys_addr_t limit)
 {
 	memblock.current_limit = limit;
@@ -1928,6 +1952,85 @@ static int __init early_memblock(char *p)
 	return 0;
 }
 early_param("memblock", early_memblock);
+
+static void __init free_memmap(unsigned long start_pfn, unsigned long end_pfn)
+{
+	struct page *start_pg, *end_pg;
+	phys_addr_t pg, pgend;
+
+	/*
+	 * Convert start_pfn/end_pfn to a struct page pointer.
+	 */
+	start_pg = pfn_to_page(start_pfn - 1) + 1;
+	end_pg = pfn_to_page(end_pfn - 1) + 1;
+
+	/*
+	 * Convert to physical addresses, and round start upwards and end
+	 * downwards.
+	 */
+	pg = PAGE_ALIGN(__pa(start_pg));
+	pgend = __pa(end_pg) & PAGE_MASK;
+
+	/*
+	 * If there are free pages between these, free the section of the
+	 * memmap array.
+	 */
+	if (pg < pgend)
+		memblock_free(pg, pgend - pg);
+}
+
+/*
+ * The mem_map array can get very big.  Free the unused area of the memory map.
+ */
+static void __init free_unused_memmap(void)
+{
+	unsigned long start, end, prev_end = 0;
+	int i;
+
+	if (!IS_ENABLED(CONFIG_HAVE_ARCH_PFN_VALID) ||
+	    IS_ENABLED(CONFIG_SPARSEMEM_VMEMMAP))
+		return;
+
+	/*
+	 * This relies on each bank being in address order.
+	 * The banks are sorted previously in bootmem_init().
+	 */
+	for_each_mem_pfn_range(i, MAX_NUMNODES, &start, &end, NULL) {
+#ifdef CONFIG_SPARSEMEM
+		/*
+		 * Take care not to free memmap entries that don't exist
+		 * due to SPARSEMEM sections which aren't present.
+		 */
+		start = min(start, ALIGN(prev_end, PAGES_PER_SECTION));
+#else
+		/*
+		 * Align down here since the VM subsystem insists that the
+		 * memmap entries are valid from the bank start aligned to
+		 * MAX_ORDER_NR_PAGES.
+		 */
+		start = round_down(start, MAX_ORDER_NR_PAGES);
+#endif
+
+		/*
+		 * If we had a previous bank, and there is a space
+		 * between the current bank and the previous, free it.
+		 */
+		if (prev_end && prev_end < start)
+			free_memmap(prev_end, start);
+
+		/*
+		 * Align up here since the VM subsystem insists that the
+		 * memmap entries are valid from the bank end aligned to
+		 * MAX_ORDER_NR_PAGES.
+		 */
+		prev_end = ALIGN(end, MAX_ORDER_NR_PAGES);
+	}
+
+#ifdef CONFIG_SPARSEMEM
+	if (!IS_ALIGNED(prev_end, PAGES_PER_SECTION))
+		free_memmap(prev_end, ALIGN(prev_end, PAGES_PER_SECTION));
+#endif
+}
 
 static void __init __free_pages_memory(unsigned long start, unsigned long end)
 {
@@ -2015,6 +2118,7 @@ unsigned long __init memblock_free_all(void)
 {
 	unsigned long pages;
 
+	free_unused_memmap();
 	reset_all_zones_managed_pages();
 
 	pages = free_low_memory_core_early();
