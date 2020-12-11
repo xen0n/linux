@@ -36,7 +36,6 @@
 #include "hns_roce_device.h"
 #include "hns_roce_cmd.h"
 #include "hns_roce_hem.h"
-#include <rdma/hns-abi.h>
 #include "hns_roce_common.h"
 
 static int alloc_cqc(struct hns_roce_dev *hr_dev, struct hns_roce_cq *hr_cq)
@@ -250,6 +249,9 @@ int hns_roce_create_cq(struct ib_cq *ib_cq, const struct ib_cq_init_attr *attr,
 	int vector = attr->comp_vector;
 	u32 cq_entries = attr->cqe;
 	int ret;
+
+	if (attr->flags)
+		return -EOPNOTSUPP;
 
 	if (cq_entries < 1 || cq_entries > hr_dev->caps.max_cqes) {
 		ibdev_err(ibdev, "Failed to check CQ count %d max=%d\n",
