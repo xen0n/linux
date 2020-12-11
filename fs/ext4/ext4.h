@@ -98,6 +98,16 @@
 #define ext_debug(ino, fmt, ...)	no_printk(fmt, ##__VA_ARGS__)
 #endif
 
+#define ASSERT(assert)						\
+do {									\
+	if (unlikely(!(assert))) {					\
+		printk(KERN_EMERG					\
+		       "Assertion failure in %s() at %s:%d: '%s'\n",	\
+		       __func__, __FILE__, __LINE__, #assert);		\
+		BUG();							\
+	}								\
+} while (0)
+
 /* data type for block offset of block group */
 typedef int ext4_grpblk_t;
 
@@ -3360,6 +3370,21 @@ static inline void ext4_unlock_group(struct super_block *sb,
 {
 	spin_unlock(ext4_group_lock_ptr(sb, group));
 }
+
+#ifdef CONFIG_QUOTA
+static inline bool ext4_quota_capable(struct super_block *sb)
+{
+	return (test_opt(sb, QUOTA) || ext4_has_feature_quota(sb));
+}
+
+static inline bool ext4_is_quota_journalled(struct super_block *sb)
+{
+	struct ext4_sb_info *sbi = EXT4_SB(sb);
+
+	return (ext4_has_feature_quota(sb) ||
+		sbi->s_qf_names[USRQUOTA] || sbi->s_qf_names[GRPQUOTA]);
+}
+#endif
 
 /*
  * Block validity checking
