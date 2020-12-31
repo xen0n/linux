@@ -23,6 +23,8 @@ obj-$(CONFIG_PROC_FS)		+= proc.o
 
 obj-$(CONFIG_SMP)		+= smp.o
 
+obj-$(CONFIG_NUMA)		+= numa.o
+
 obj-$(CONFIG_PCI_MSI)		+= msi.o
 
 CPPFLAGS_vmlinux.lds		:= $(KBUILD_CFLAGS)
