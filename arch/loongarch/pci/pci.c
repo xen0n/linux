@@ -10,6 +10,7 @@
 #include <linux/pci.h>
 #include <linux/vgaarb.h>
 #include <asm/loongson.h>
+#include <asm/numa.h>
 
 #define PCI_DEVICE_ID_LOONGSON_HOST     0x7a00
 #define PCI_DEVICE_ID_LOONGSON_DC       0x7a06
@@ -82,6 +83,7 @@ int pcibios_alloc_irq(struct pci_dev *dev)
 
 static void pci_fixup_resbase(struct pci_dev *dev)
 {
+	int node = pcibus_to_node(dev->bus);
 	struct resource *res;
 	struct resource_entry *entry, *window, *tmp;
 	struct pci_host_bridge *bridge = to_pci_host_bridge(dev->bus->bridge);
@@ -97,9 +99,9 @@ static void pci_fixup_resbase(struct pci_dev *dev)
 
 	resource_list_for_each_entry(window, &bridge->windows) {
 		if (window->res->flags & IORESOURCE_MEM) {
-			window->offset = HT1LO_OFFSET;
-			window->res->start |= HT1LO_OFFSET;
-			window->res->end   |= HT1LO_OFFSET;
+			window->offset = nid_to_addrbase(node) | HT1LO_OFFSET;
+			window->res->start |= nid_to_addrbase(node) | HT1LO_OFFSET;
+			window->res->end   |= nid_to_addrbase(node) | HT1LO_OFFSET;
 		}
 	}
 }
