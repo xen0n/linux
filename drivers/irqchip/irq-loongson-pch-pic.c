@@ -33,12 +33,17 @@
 #define PIC_REG_IDX(irq_id)	((irq_id) / PIC_COUNT_PER_REG)
 #define PIC_REG_BIT(irq_id)	((irq_id) % PIC_COUNT_PER_REG)
 
+static int nr_pch_pics;
+
 struct pch_pic {
 	void __iomem		*base;
 	struct irq_domain	*pic_domain;
+	struct fwnode_handle	*domain_handle;
 	u32			ht_vec_base;
 	raw_spinlock_t		pic_lock;
 };
+
+struct pch_pic *pch_pic_priv[4];
 
 static void pch_pic_bitset(struct pch_pic *priv, int offset, int bit)
 {
@@ -180,7 +185,7 @@ static void pch_pic_reset(struct pch_pic *priv)
 	int i;
 
 	for (i = 0; i < PIC_COUNT; i++) {
-		/* Write vectored ID */
+		/* Write vector ID */
 		writeb(priv->ht_vec_base + i, priv->base + PCH_INT_HTVEC(i));
 		/* Hardcode route to HT0 Lo */
 		writeb(1, priv->base + PCH_INT_ROUTE(i));
@@ -197,6 +202,8 @@ static void pch_pic_reset(struct pch_pic *priv)
 		writel_relaxed(0xFFFFFFFF, priv->base + PCH_PIC_HTMSI_EN + 4 * i);
 	}
 }
+
+#ifdef CONFIG_OF
 
 static int pch_pic_of_init(struct device_node *node,
 				struct device_node *parent)
@@ -242,6 +249,7 @@ static int pch_pic_of_init(struct device_node *node,
 	}
 
 	pch_pic_reset(priv);
+	pch_pic_priv[0] = priv;
 
 	return 0;
 
@@ -254,3 +262,61 @@ free_priv:
 }
 
 IRQCHIP_DECLARE(pch_pic, "loongson,pch-pic-1.0", pch_pic_of_init);
+
+#endif
+
+#ifdef CONFIG_ACPI
+
+struct fwnode_handle *pch_pic_acpi_init(struct fwnode_handle *parent,
+					struct acpi_madt_bio_pic *acpi_pchpic)
+{
+	int count;
+	struct pch_pic *priv;
+	struct irq_domain *parent_domain;
+
+	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
+	if (!priv)
+		return NULL;
+
+	raw_spin_lock_init(&priv->pic_lock);
+	priv->base = ioremap(acpi_pchpic->address, acpi_pchpic->size);
+	if (!priv->base)
+		goto free_priv;
+
+	priv->domain_handle = irq_domain_alloc_fwnode(priv->base);
+	if (!priv->domain_handle) {
+		pr_err("Unable to allocate domain handle\n");
+		goto iounmap_base;
+	}
+
+	priv->ht_vec_base = acpi_pchpic->gsi_base;
+	count = ((readq(priv->base) >> 48) & 0xff) + 1;
+	parent_domain = irq_find_matching_fwnode(parent, DOMAIN_BUS_ANY);
+	if (!parent_domain) {
+		pr_err("Failed to find the parent domain\n");
+		goto iounmap_base;
+	}
+
+	priv->pic_domain = irq_domain_create_hierarchy(parent_domain, 0,
+						count, priv->domain_handle,
+						&pch_pic_domain_ops, priv);
+
+	if (!priv->pic_domain) {
+		pr_err("Failed to create IRQ domain\n");
+		goto iounmap_base;
+	}
+
+	pch_pic_reset(priv);
+	pch_pic_priv[nr_pch_pics++] = priv;
+
+	return priv->domain_handle;
+
+iounmap_base:
+	iounmap(priv->base);
+free_priv:
+	kfree(priv);
+
+	return NULL;
+}
+
+#endif
