@@ -8,6 +8,7 @@
 #include <linux/pci.h>
 #include <linux/vgaarb.h>
 
+#include <asm/numa.h>
 #include <asm/loongson.h>
 
 #define PCI_ACCESS_READ  0
@@ -17,10 +18,11 @@ static int loongson_pci_config_access(unsigned char access_type,
 		struct pci_bus *bus, unsigned int devfn,
 		int where, u32 *data)
 {
-	unsigned char busnum = bus->number;
+	int node = pcibus_to_node(bus);
 	int device = PCI_SLOT(devfn);
 	int function = PCI_FUNC(devfn);
 	int reg = where & ~3;
+	unsigned char busnum = pci_is_root_bus(bus) ? 0 : bus->number;
 	u_int64_t addr;
 	void *addrp;
 
@@ -29,7 +31,7 @@ static int loongson_pci_config_access(unsigned char access_type,
 	 * device 2: misc, device 21: confbus
 	 */
 	if (where < PCI_CFG_SPACE_SIZE) { /* standard config */
-		addr = (busnum << 16) | (device << 11) | (function << 8) | reg;
+		addr = nid_to_addrbase(node) | (busnum << 16) | (device << 11) | (function << 8) | reg;
 		if (busnum == 0) {
 			if (device > 23 || (device >= 9 && device <= 20 && function == 1))
 				return PCIBIOS_DEVICE_NOT_FOUND;
@@ -39,7 +41,7 @@ static int loongson_pci_config_access(unsigned char access_type,
 		}
 	} else if (where < PCI_CFG_SPACE_EXP_SIZE) {  /* extended config */
 		reg = (reg & 0xff) | ((reg & 0xf00) << 16);
-		addr = (busnum << 16) | (device << 11) | (function << 8) | reg;
+		addr = nid_to_addrbase(node) | (busnum << 16) | (device << 11) | (function << 8) | reg;
 		if (busnum == 0) {
 			if (device > 23 || (device >= 9 && device <= 20 && function == 1))
 				return PCIBIOS_DEVICE_NOT_FOUND;
@@ -106,6 +108,32 @@ int loongson_pci_write(struct pci_bus *bus, unsigned int devfn, int where, int s
 
 	return ret;
 }
+
+static void pci_root_fix_resbase(struct pci_dev *dev)
+{
+	int node = pcibus_to_node(dev->bus);
+	struct resource *res;
+	struct resource_entry *entry, *window, *tmp;
+	struct pci_host_bridge *bridge = to_pci_host_bridge(dev->bus->bridge);
+
+	resource_list_for_each_entry_safe(entry, tmp, &dev->bus->resources) {
+		res = entry->res;
+
+		if (res->flags & IORESOURCE_MEM) {
+			res->start &= GENMASK_ULL(40, 0);
+			res->end   &= GENMASK_ULL(40, 0);
+		}
+	}
+
+	resource_list_for_each_entry(window, &bridge->windows) {
+		if (window->res->flags & IORESOURCE_MEM) {
+			window->offset = nid_to_addrbase(node) | HT1LO_OFFSET;
+			window->res->start |= nid_to_addrbase(node) | HT1LO_OFFSET;
+			window->res->end   |= nid_to_addrbase(node) | HT1LO_OFFSET;
+		}
+	}
+}
+DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_LOONGSON, PCI_DEVICE_ID_LOONGSON_HOST, pci_root_fix_resbase);
 
 static void pci_fixup_vgadev(struct pci_dev *pdev)
 {

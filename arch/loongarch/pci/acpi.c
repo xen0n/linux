@@ -11,6 +11,7 @@
 #include <linux/pci-acpi.h>
 
 #include <asm/pci.h>
+#include <asm/numa.h>
 #include <asm/loongson.h>
 
 struct pci_root_info {
@@ -138,7 +139,7 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 	if (!controller->mcfg_addr)
 		controller->mcfg_addr = mcfg_addr_init(controller->index);
 
-	controller->node = 0;
+	controller->node = pa_to_nid(controller->mcfg_addr);
 
 	bus = pci_find_bus(domain, busnum);
 	if (bus) {
