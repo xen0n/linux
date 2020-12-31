@@ -20,7 +20,6 @@
 /* Registers */
 #define HTVEC_EN_OFF		0x20
 #define HTVEC_MAX_PARENT_IRQ	8
-
 #define VEC_COUNT_PER_REG	32
 #define VEC_REG_IDX(irq_id)	((irq_id) / VEC_COUNT_PER_REG)
 #define VEC_REG_BIT(irq_id)	((irq_id) % VEC_COUNT_PER_REG)
@@ -30,7 +29,10 @@ struct htvec {
 	void __iomem		*base;
 	struct irq_domain	*htvec_domain;
 	raw_spinlock_t		htvec_lock;
+	struct fwnode_handle	*domain_handle;
 };
+
+struct htvec *htvec_priv;
 
 static void htvec_irq_dispatch(struct irq_desc *desc)
 {
@@ -155,6 +157,8 @@ static void htvec_reset(struct htvec *priv)
 	}
 }
 
+#ifdef CONFIG_OF
+
 static int htvec_of_init(struct device_node *node,
 				struct device_node *parent)
 {
@@ -202,6 +206,8 @@ static int htvec_of_init(struct device_node *node,
 		irq_set_chained_handler_and_data(parent_irq[i],
 						 htvec_irq_dispatch, priv);
 
+	htvec_priv = priv;
+
 	return 0;
 
 irq_dispose:
@@ -216,3 +222,65 @@ free_priv:
 }
 
 IRQCHIP_DECLARE(htvec, "loongson,htvec-1.0", htvec_of_init);
+
+#endif
+
+#ifdef CONFIG_ACPI
+
+struct fwnode_handle *htvec_acpi_init(struct fwnode_handle *parent,
+					struct acpi_madt_ht_pic *acpi_htvec)
+{
+	int i, parent_irq[8];
+	struct htvec *priv;
+	struct irq_fwspec fwspec;
+
+	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
+	if (!priv)
+		return NULL;
+
+	priv->num_parents = HTVEC_MAX_PARENT_IRQ;
+	priv->base = ioremap(acpi_htvec->address, acpi_htvec->size);
+
+	/* Interrupt may come from any of the 8 interrupt lines */
+	for (i = 0; i < priv->num_parents; i++)
+		parent_irq[i] = acpi_htvec->cascade[i];
+
+	priv->domain_handle = irq_domain_alloc_fwnode(priv->base);
+	if (!priv->domain_handle) {
+		pr_err("Unable to allocate domain handle\n");
+		goto iounmap_base;
+	}
+
+	/* Setup IRQ domain */
+	priv->htvec_domain = irq_domain_create_linear(priv->domain_handle,
+					(VEC_COUNT_PER_REG * priv->num_parents),
+					&htvec_domain_ops, priv);
+	if (!priv->htvec_domain) {
+		pr_err("loongson-htvec: cannot add IRQ domain\n");
+		goto iounmap_base;
+	}
+
+	htvec_reset(priv);
+
+	for (i = 0; i < priv->num_parents; i++) {
+		fwspec.fwnode = parent;
+		fwspec.param[0] = parent_irq[i];
+		fwspec.param_count = 1;
+		parent_irq[i] = irq_create_fwspec_mapping(&fwspec);
+		irq_set_chained_handler_and_data(parent_irq[i],
+						 htvec_irq_dispatch, priv);
+	}
+
+	htvec_priv = priv;
+
+	return htvec_priv->domain_handle;
+
+iounmap_base:
+	iounmap(priv->base);
+	priv->domain_handle = NULL;
+	kfree(priv);
+
+	return NULL;
+}
+
+#endif
