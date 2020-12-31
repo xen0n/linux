@@ -139,6 +139,12 @@ static void __init acpi_process_madt(void)
 	loongson_sysconf.nr_cpus = num_processors;
 }
 
+#ifndef CONFIG_ACPI_SLEEP
+int (*acpi_suspend_lowlevel)(void);
+#else
+int (*acpi_suspend_lowlevel)(void) = loongarch_acpi_suspend;
+#endif
+
 void __init acpi_boot_table_init(void)
 {
 	/*
