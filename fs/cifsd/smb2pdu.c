@@ -619,7 +619,8 @@ static void destroy_previous_session(struct ksmbd_user *user, u64 id)
 
 	prev_user = prev_sess->user;
 
-	if (strcmp(user->name, prev_user->name) ||
+	if (!prev_user ||
+	    strcmp(user->name, prev_user->name) ||
 	    user->passkey_sz != prev_user->passkey_sz ||
 	    memcmp(user->passkey, prev_user->passkey, user->passkey_sz)) {
 		put_session(prev_sess);
@@ -903,7 +904,9 @@ static int decode_encrypt_ctxt(struct ksmbd_conn *conn,
 
 	for (i = 0; i < cph_cnt; i++) {
 		if (pneg_ctxt->Ciphers[i] == SMB2_ENCRYPTION_AES128_GCM ||
-		    pneg_ctxt->Ciphers[i] == SMB2_ENCRYPTION_AES128_CCM) {
+		    pneg_ctxt->Ciphers[i] == SMB2_ENCRYPTION_AES128_CCM ||
+		    pneg_ctxt->Ciphers[i] == SMB2_ENCRYPTION_AES256_CCM ||
+		    pneg_ctxt->Ciphers[i] == SMB2_ENCRYPTION_AES256_GCM) {
 			ksmbd_debug(SMB, "Cipher ID = 0x%x\n",
 				pneg_ctxt->Ciphers[i]);
 			conn->cipher_type = pneg_ctxt->Ciphers[i];
@@ -1917,9 +1920,13 @@ static noinline int create_smb2_pipe(struct ksmbd_work *work)
 	}
 
 	id = ksmbd_session_rpc_open(work->sess, name);
-	if (id < 0)
+	if (id < 0) {
 		ksmbd_err("Unable to open RPC pipe: %d\n", id);
+		err = id;
+		goto out;
+	}
 
+	rsp->hdr.Status = STATUS_SUCCESS;
 	rsp->StructureSize = cpu_to_le16(89);
 	rsp->OplockLevel = SMB2_OPLOCK_LEVEL_NONE;
 	rsp->Reserved = 0;
@@ -1942,6 +1949,19 @@ static noinline int create_smb2_pipe(struct ksmbd_work *work)
 	return 0;
 
 out:
+	switch (err) {
+	case -EINVAL:
+		rsp->hdr.Status = STATUS_INVALID_PARAMETER;
+		break;
+	case -ENOSPC:
+	case -ENOMEM:
+		rsp->hdr.Status = STATUS_NO_MEMORY;
+		break;
+	}
+
+	if (!IS_ERR(name))
+		kfree(name);
+
 	smb2_set_err_rsp(work);
 	return err;
 }
@@ -3316,6 +3336,7 @@ static int smb2_populate_readdir_entry(struct ksmbd_conn *conn, int info_level,
 
 	d_info->last_entry_offset = d_info->data_count;
 	d_info->data_count += next_entry_offset;
+	d_info->out_buf_len -= next_entry_offset;
 	d_info->wptr += next_entry_offset;
 	kfree(conv_name);
 
@@ -5820,8 +5841,8 @@ int smb2_read(struct ksmbd_work *work)
 			le64_to_cpu(req->VolatileFileId),
 			le64_to_cpu(req->PersistentFileId));
 	if (!fp) {
-		rsp->hdr.Status = STATUS_FILE_CLOSED;
-		return -ENOENT;
+		err = -ENOENT;
+		goto out;
 	}
 
 	if (!(fp->daccess & (FILE_READ_DATA_LE | FILE_READ_ATTRIBUTES_LE))) {
@@ -6057,7 +6078,7 @@ int smb2_write(struct ksmbd_work *work)
 {
 	struct smb2_write_req *req;
 	struct smb2_write_rsp *rsp, *rsp_org;
-	struct ksmbd_file *fp = NULL;
+	struct ksmbd_file *fp;
 	loff_t offset;
 	size_t length;
 	ssize_t nbytes;
@@ -6082,8 +6103,8 @@ int smb2_write(struct ksmbd_work *work)
 	fp = ksmbd_lookup_fd_slow(work, le64_to_cpu(req->VolatileFileId),
 		le64_to_cpu(req->PersistentFileId));
 	if (!fp) {
-		rsp->hdr.Status = STATUS_FILE_CLOSED;
-		return -ENOENT;
+		err = -ENOENT;
+		goto out;
 	}
 
 	if (!(fp->daccess & (FILE_WRITE_DATA_LE | FILE_READ_ATTRIBUTES_LE))) {
@@ -7960,10 +7981,11 @@ static void fill_transform_hdr(struct smb2_transform_hdr *tr_hdr, char *old_buf,
 	tr_hdr->ProtocolId = SMB2_TRANSFORM_PROTO_NUM;
 	tr_hdr->OriginalMessageSize = cpu_to_le32(orig_len);
 	tr_hdr->Flags = cpu_to_le16(0x01);
-	if (cipher_type == SMB2_ENCRYPTION_AES128_GCM)
-		get_random_bytes(&tr_hdr->Nonce, SMB3_AES128GCM_NONCE);
+	if (cipher_type == SMB2_ENCRYPTION_AES128_GCM ||
+	    cipher_type == SMB2_ENCRYPTION_AES256_GCM)
+		get_random_bytes(&tr_hdr->Nonce, SMB3_AES_GCM_NONCE);
 	else
-		get_random_bytes(&tr_hdr->Nonce, SMB3_AES128CCM_NONCE);
+		get_random_bytes(&tr_hdr->Nonce, SMB3_AES_CCM_NONCE);
 	memcpy(&tr_hdr->SessionId, &hdr->SessionId, 8);
 	inc_rfc1001_len(tr_hdr, sizeof(struct smb2_transform_hdr) - 4);
 	inc_rfc1001_len(tr_hdr, orig_len);
