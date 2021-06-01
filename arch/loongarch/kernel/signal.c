@@ -526,6 +526,20 @@ void arch_do_signal_or_restart(struct pt_regs *regs, bool has_signal)
 	restore_saved_sigmask();
 }
 
+#ifdef CONFIG_SMP
+static int smp_save_fp_context(void __user *sc)
+{
+	return save_hw_fp_context(sc);
+}
+
+static int smp_restore_fp_context(void __user *sc)
+{
+	return cpu_has_fpu
+	       ? restore_hw_fp_context(sc)
+	       : copy_fp_from_sigcontext(sc);
+}
+#endif
+
 static int signal_setup(void)
 {
 	/*
@@ -538,6 +552,11 @@ static int signal_setup(void)
 		     (offsetof(struct rt_sigframe, rs_uc.uc_extcontext) -
 		      offsetof(struct rt_sigframe, rs_uc.uc_mcontext)));
 
+#ifdef CONFIG_SMP
+	/* For now just do the cpu_has_fpu check when the functions are invoked */
+	save_fp_context = smp_save_fp_context;
+	restore_fp_context = smp_restore_fp_context;
+#else
 	if (cpu_has_fpu) {
 		save_fp_context = save_hw_fp_context;
 		restore_fp_context = restore_hw_fp_context;
@@ -545,6 +564,7 @@ static int signal_setup(void)
 		save_fp_context = copy_fp_to_sigcontext;
 		restore_fp_context = copy_fp_from_sigcontext;
 	}
+#endif /* CONFIG_SMP */
 
 	return 0;
 }
