@@ -76,6 +76,26 @@
  * kernelsp array for it. It stores the current sp in t0 and loads the
  * new value in sp.
  */
+#ifdef CONFIG_SMP
+	/* SMP variation */
+	.macro	get_saved_sp docfi=0
+	csrrd	t0, PERCPU_BASE_KS
+	la.abs	t1, kernelsp
+	LONG_ADDU	t1, t1, t0
+	move	t0, sp
+	.if \docfi
+	.cfi_register sp, t0
+	.endif
+	LONG_L	sp, t1, 0
+	.endm
+
+	.macro	set_saved_sp stackp temp temp2
+	la.abs	\temp, kernelsp
+	LONG_ADDU	\temp, \temp, x0
+	LONG_S	\stackp, \temp, 0
+	.endm
+#else /* !CONFIG_SMP */
+	/* Uniprocessor variation */
 	.macro	get_saved_sp docfi=0
 	la.abs	t1, kernelsp
 	move	t0, sp
@@ -89,6 +109,7 @@
 	la.abs	\temp, kernelsp
 	LONG_S	\stackp, \temp, 0
 	.endm
+#endif
 
 	.macro	SAVE_SOME docfi=0
 	csrrd	t1, LOONGARCH_CSR_PRMD
