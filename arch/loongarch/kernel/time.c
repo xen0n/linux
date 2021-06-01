@@ -105,6 +105,29 @@ static unsigned long __init get_loops_per_jiffy(void)
 	return lpj;
 }
 
+#ifdef CONFIG_SMP
+/*
+ * If we have a constant timer are using it for the delay loop, we can
+ * skip clock calibration if another cpu in the same socket has already
+ * been calibrated. This assumes that constant timer applies to all
+ * cpus in the socket - this should be a safe assumption.
+ */
+unsigned long calibrate_delay_is_known(void)
+{
+	int next, cpu = smp_processor_id();
+	const struct cpumask *mask = topology_core_cpumask(cpu);
+
+	if (!mask)
+		return 0;
+
+	next = cpumask_any_but(mask, cpu);
+	if (next < nr_cpu_ids)
+		return cpu_data[next].udelay_val;
+
+	return 0;
+}
+#endif
+
 static long init_timeval;
 
 void sync_counter(void)
