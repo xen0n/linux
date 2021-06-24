@@ -22,7 +22,7 @@
 #include <linux/pfn.h>
 #include <linux/hardirq.h>
 #include <linux/gfp.h>
-#include <linux/initrd.h>
+#include <linux/hugetlb.h>
 #include <linux/mmzone.h>
 
 #include <asm/asm-offsets.h>
@@ -155,6 +155,188 @@ void arch_remove_memory(u64 start, u64 size, struct vmem_altmap *altmap)
 	__remove_pages(start_pfn, nr_pages, altmap);
 }
 #endif
+#endif
+
+#ifdef CONFIG_SPARSEMEM_VMEMMAP
+void __meminit arch_vmemmap_verify(pte_t *pte, int node,
+				unsigned long start, unsigned long end)
+{
+	unsigned long pfn = pte_pfn(*pte);
+	int actual_node = early_pfn_to_nid(pfn);
+
+	if (node_distance(actual_node, node) > LOCAL_DISTANCE)
+		pr_warn("[%lx-%lx] potential offnode page_structs\n",
+			start, end - 1);
+}
+
+void * __meminit arch_vmemmap_alloc_block_zero(unsigned long size, int node)
+{
+	void *p = vmemmap_alloc_block(size, node);
+
+	if (!p)
+		return NULL;
+	memset(p, 0, size);
+
+	return p;
+}
+
+pte_t * __meminit arch_vmemmap_pte_populate(pmd_t *pmd, unsigned long addr, int node)
+{
+	pte_t *pte = pte_offset_kernel(pmd, addr);
+	if (pte_none(*pte)) {
+		pte_t entry;
+		void *p = arch_vmemmap_alloc_block_zero(PAGE_SIZE, node);
+		if (!p)
+			return NULL;
+		entry = pfn_pte(__pa(p) >> PAGE_SHIFT, PAGE_KERNEL);
+		set_pte_at(&init_mm, addr, pte, entry);
+	}
+	return pte;
+}
+
+pmd_t * __meminit arch_vmemmap_pmd_populate(pud_t *pud, unsigned long addr, int node)
+{
+	pmd_t *pmd = pmd_offset(pud, addr);
+	if (pmd_none(*pmd)) {
+		void *p = arch_vmemmap_alloc_block_zero(PAGE_SIZE, node);
+		if (!p)
+			return NULL;
+		pmd_populate_kernel(&init_mm, pmd, p);
+	}
+	return pmd;
+}
+
+pud_t * __meminit arch_vmemmap_pud_populate(p4d_t *p4d, unsigned long addr, int node)
+{
+	pud_t *pud = pud_offset(p4d, addr);
+	if (pud_none(*pud)) {
+		void *p = arch_vmemmap_alloc_block_zero(PAGE_SIZE, node);
+		if (!p)
+			return NULL;
+#ifndef __PAGETABLE_PMD_FOLDED
+		pmd_init((unsigned long)p, (unsigned long)invalid_pte_table);
+#endif
+		pud_populate(&init_mm, pud, p);
+	}
+	return pud;
+}
+
+p4d_t * __meminit arch_vmemmap_p4d_populate(pgd_t *pgd, unsigned long addr, int node)
+{
+	p4d_t *p4d = p4d_offset(pgd, addr);
+	if (p4d_none(*p4d)) {
+		void *p = arch_vmemmap_alloc_block_zero(PAGE_SIZE, node);
+		if (!p)
+			return NULL;
+#ifndef __PAGETABLE_PUD_FOLDED
+		pud_init((unsigned long)p, (unsigned long)invalid_pmd_table);
+#endif
+		p4d_populate(&init_mm, p4d, p);
+	}
+	return p4d;
+}
+
+pgd_t * __meminit arch_vmemmap_pgd_populate(unsigned long addr, int node)
+{
+	pgd_t *pgd = pgd_offset_k(addr);
+	if (pgd_none(*pgd)) {
+		void *p = arch_vmemmap_alloc_block_zero(PAGE_SIZE, node);
+		if (!p)
+			return NULL;
+		pgd_populate(&init_mm, pgd, p);
+	}
+	return pgd;
+}
+
+int __meminit arch_vmemmap_populate_basepages(unsigned long start,
+					 unsigned long end, int node)
+{
+	unsigned long addr = start;
+	pgd_t *pgd;
+	p4d_t *p4d;
+	pud_t *pud;
+	pmd_t *pmd;
+	pte_t *pte;
+
+	for (; addr < end; addr += PAGE_SIZE) {
+		pgd = arch_vmemmap_pgd_populate(addr, node);
+		if (!pgd)
+			return -ENOMEM;
+		p4d = arch_vmemmap_p4d_populate(pgd, addr, node);
+		if (!p4d)
+			return -ENOMEM;
+		pud = arch_vmemmap_pud_populate(p4d, addr, node);
+		if (!pud)
+			return -ENOMEM;
+		pmd = arch_vmemmap_pmd_populate(pud, addr, node);
+		if (!pmd)
+			return -ENOMEM;
+		pte = arch_vmemmap_pte_populate(pmd, addr, node);
+		if (!pte)
+			return -ENOMEM;
+		arch_vmemmap_verify(pte, node, addr, addr + PAGE_SIZE);
+	}
+
+	return 0;
+}
+
+int __meminit arch_vmemmap_populate_hugepages(unsigned long start,
+					 unsigned long end, int node)
+{
+	unsigned long addr = start;
+	unsigned long next;
+	pgd_t *pgd;
+	p4d_t *p4d;
+	pud_t *pud;
+	pmd_t *pmd;
+
+	for (addr = start; addr < end; addr = next) {
+		next = pmd_addr_end(addr, end);
+
+		pgd = arch_vmemmap_pgd_populate(addr, node);
+		if (!pgd)
+			return -ENOMEM;
+		p4d = arch_vmemmap_p4d_populate(pgd, addr, node);
+		if (!p4d)
+			return -ENOMEM;
+		pud = arch_vmemmap_pud_populate(p4d, addr, node);
+		if (!pud)
+			return -ENOMEM;
+
+		pmd = pmd_offset(pud, addr);
+		if (pmd_none(*pmd)) {
+			void *p = NULL;
+
+			p = arch_vmemmap_alloc_block_zero(PMD_SIZE, node);
+			if (p) {
+				pmd_t entry;
+
+				entry = pfn_pmd(virt_to_pfn(p), PAGE_KERNEL);
+				entry = pmd_mkhuge(entry);
+				set_pmd_at(&init_mm, addr, pmd, entry);
+
+				continue;
+			}
+		} else if (pmd_huge(*pmd)) {
+			arch_vmemmap_verify((pte_t *)pmd, node, addr, next);
+			continue;
+		}
+		if (arch_vmemmap_populate_basepages(addr, next, node))
+			return -ENOMEM;
+	}
+
+	return 0;
+}
+
+int __meminit vmemmap_populate(unsigned long start, unsigned long end, int node,
+		struct vmem_altmap *altmap)
+{
+	return arch_vmemmap_populate_hugepages(start, end, node);
+}
+void vmemmap_free(unsigned long start, unsigned long end,
+		struct vmem_altmap *altmap)
+{
+}
 #endif
 
 /*

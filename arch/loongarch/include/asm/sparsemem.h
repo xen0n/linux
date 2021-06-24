@@ -11,6 +11,14 @@
 #define SECTION_SIZE_BITS	29 /* 2^29 = Largest Huge Page Size */
 #define MAX_PHYSMEM_BITS	48
 
+#ifndef CONFIG_SPARSEMEM_VMEMMAP
+#define VMEMMAP_SIZE	0
+#else
+#define VMEMMAP_SIZE	(sizeof(struct page) * (1UL << (cpu_pabits + 1 - PAGE_SHIFT)))
+#endif
+
+#include <linux/mm_types.h>
+
 #endif /* CONFIG_SPARSEMEM */
 
 #ifdef CONFIG_MEMORY_HOTPLUG
