@@ -16,6 +16,7 @@
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
+#include <linux/syscore_ops.h>
 
 /* Registers */
 #define HTVEC_EN_OFF		0x20
@@ -30,6 +31,7 @@ struct htvec {
 	struct irq_domain	*htvec_domain;
 	raw_spinlock_t		htvec_lock;
 	struct fwnode_handle	*domain_handle;
+	u32			saved_vec_en[HTVEC_MAX_PARENT_IRQ];
 };
 
 struct htvec *htvec_priv;
@@ -157,6 +159,29 @@ static void htvec_reset(struct htvec *priv)
 	}
 }
 
+static int htvec_suspend(void)
+{
+	int i;
+
+	for (i = 0; i < htvec_priv->num_parents; i++)
+		htvec_priv->saved_vec_en[i] = readl(htvec_priv->base + HTVEC_EN_OFF + 4 * i);
+
+	return 0;
+}
+
+static void htvec_resume(void)
+{
+	int i;
+
+	for (i = 0; i < htvec_priv->num_parents; i++)
+		writel(htvec_priv->saved_vec_en[i], htvec_priv->base + HTVEC_EN_OFF + 4 * i);
+}
+
+static struct syscore_ops htvec_syscore_ops = {
+	.suspend = htvec_suspend,
+	.resume = htvec_resume,
+};
+
 #ifdef CONFIG_OF
 
 static int htvec_of_init(struct device_node *node,
@@ -207,6 +232,8 @@ static int htvec_of_init(struct device_node *node,
 						 htvec_irq_dispatch, priv);
 
 	htvec_priv = priv;
+
+	register_syscore_ops(&htvec_syscore_ops);
 
 	return 0;
 
@@ -272,6 +299,8 @@ struct fwnode_handle *htvec_acpi_init(struct fwnode_handle *parent,
 	}
 
 	htvec_priv = priv;
+
+	register_syscore_ops(&htvec_syscore_ops);
 
 	return htvec_priv->domain_handle;
 
