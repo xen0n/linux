@@ -71,7 +71,7 @@ typedef struct qspinlock {
 #define _Q_LOCKED_MASK		_Q_SET_MASK(LOCKED)
 
 #define _Q_PENDING_OFFSET	(_Q_LOCKED_OFFSET + _Q_LOCKED_BITS)
-#if CONFIG_NR_CPUS < (1U << 14)
+#if (CONFIG_NR_CPUS < (1U << 14)) && defined(CONFIG_ARCH_HAS_HW_XCHG_SMALL)
 #define _Q_PENDING_BITS		8
 #else
 #define _Q_PENDING_BITS		1
