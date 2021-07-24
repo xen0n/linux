@@ -228,6 +228,10 @@ config ARCH_HAS_FORTIFY_SOURCE
 	  An architecture should select this when it can successfully
 	  build and run with CONFIG_FORTIFY_SOURCE.
 
+# Select if arch has hardware sub-word xchg/cmpxchg support
+config ARCH_HAS_HW_XCHG_SMALL
+	bool
+
 #
 # Select if the arch provides a historic keepinit alias for the retain_initrd
 # command line option
