@@ -15,7 +15,6 @@
 #include <asm/cpu.h>
 #include <asm/cpu-features.h>
 #include <asm/current.h>
-#include <asm/inst.h>
 #include <asm/loongarch.h>
 #include <asm/ptrace.h>
 #include <asm/processor.h>

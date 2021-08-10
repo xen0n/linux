@@ -30,7 +30,6 @@
 #include <asm/fpu.h>
 #include <asm/ucontext.h>
 #include <asm/cpu-features.h>
-#include <asm/inst.h>
 
 #include "signal-common.h"
 

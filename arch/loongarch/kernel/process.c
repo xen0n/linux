@@ -39,7 +39,6 @@
 #include <asm/cpu.h>
 #include <asm/elf.h>
 #include <asm/fpu.h>
-#include <asm/inst.h>
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/irq_regs.h>
