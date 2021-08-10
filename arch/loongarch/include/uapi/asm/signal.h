@@ -11,7 +11,7 @@
 #include <linux/types.h>
 
 #ifndef _NSIG
-#define _NSIG		128
+#define _NSIG		64
 #endif
 #define _NSIG_BPW	__BITS_PER_LONG
 #define _NSIG_WORDS	(_NSIG / _NSIG_BPW)
