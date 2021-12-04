@@ -29,7 +29,12 @@ cflags-y += $(call cc-option, -mno-check-zero-division)
 
 ifdef CONFIG_64BIT
 ld-emul			= $(64bit-emul)
-cflags-y		+= -mabi=lp64
+
+  ifeq ($(call cc-option-yn,-mabi=lp64s), y)
+    cflags-y += -mabi=lp64s
+  else
+    cflags-y += -mabi=lp64
+  endif
 endif
 
 all-y			:= vmlinux
