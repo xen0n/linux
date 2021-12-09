@@ -17,7 +17,11 @@
 #include <linux/platform_device.h>
 #include <linux/bitops.h>
 #include <asm/types.h>
+#if defined(CONFIG_MIPS) && defined(CONFIG_MACH_LOONGSON64)
+#include <asm/mach-loongson64/loongson.h>
+#else
 #include <asm/loongson.h>
+#endif
 
 #define STLS2F_N_GPIO		4
 #define STLS3A_N_GPIO		16
