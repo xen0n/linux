@@ -15,10 +15,7 @@ static inline bool on_thread_stack(void)
 static inline __must_check int arch_syscall_enter_tracehook(struct pt_regs *regs)
 {
 	int ret = tracehook_report_syscall_entry(regs);
-
-	if (ret)
-		syscall_set_return_value(current, current_pt_regs(), -ENOSYS, 0);
-
+	syscall_set_return_value(current, regs, -ENOSYS, 0);
 	return ret;
 }
 
