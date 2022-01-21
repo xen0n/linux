@@ -14,22 +14,42 @@
 
 static inline void arch_local_irq_enable(void)
 {
-	csr_xchgl(CSR_CRMD_IE, CSR_CRMD_IE, LOONGARCH_CSR_CRMD);
+	u32 flags = CSR_CRMD_IE;
+	__asm__ __volatile__(
+		"csrxchg %[val], %[mask], %[reg]\n\t"
+		: [val] "+r" (flags)
+		: [mask] "r" (CSR_CRMD_IE), [reg] "i" (LOONGARCH_CSR_CRMD)
+		: "memory");
 }
 
 static inline void arch_local_irq_disable(void)
 {
-	csr_xchgl(0, CSR_CRMD_IE, LOONGARCH_CSR_CRMD);
+	u32 flags = 0;
+	__asm__ __volatile__(
+		"csrxchg %[val], %[mask], %[reg]\n\t"
+		: [val] "+r" (flags)
+		: [mask] "r" (CSR_CRMD_IE), [reg] "i" (LOONGARCH_CSR_CRMD)
+		: "memory");
 }
 
 static inline unsigned long arch_local_irq_save(void)
 {
-	return csr_xchgl(0, CSR_CRMD_IE, LOONGARCH_CSR_CRMD);
+	u32 flags = 0;
+	__asm__ __volatile__(
+		"csrxchg %[val], %[mask], %[reg]\n\t"
+		: [val] "+r" (flags)
+		: [mask] "r" (CSR_CRMD_IE), [reg] "i" (LOONGARCH_CSR_CRMD)
+		: "memory");
+	return flags;
 }
 
 static inline void arch_local_irq_restore(unsigned long flags)
 {
-	csr_xchgl(flags, CSR_CRMD_IE, LOONGARCH_CSR_CRMD);
+	__asm__ __volatile__(
+		"csrxchg %[val], %[mask], %[reg]\n\t"
+		: [val] "+r" (flags)
+		: [mask] "r" (CSR_CRMD_IE), [reg] "i" (LOONGARCH_CSR_CRMD)
+		: "memory");
 }
 
 static inline unsigned long arch_local_save_flags(void)
