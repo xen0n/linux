@@ -230,53 +230,103 @@ static inline u32 read_cpucfg(u32 reg)
 /* CSR */
 static inline u32 csr_readl(u32 reg)
 {
-	return __csrrd(reg);
+	u32 val;
+	asm volatile (
+		"csrrd %[val], %[reg] \n\t"
+		: [val] "=r" (val)
+		: [reg] "i" (reg)
+		: "memory");
+	return val;
 }
 
 static inline u64 csr_readq(u32 reg)
 {
-	return __dcsrrd(reg);
+	u64 val;
+	asm volatile (
+		"csrrd %[val], %[reg] \n\t"
+		: [val] "=r" (val)
+		: [reg] "i" (reg)
+		: "memory");
+	return val;
 }
 
 static inline void csr_writel(u32 val, u32 reg)
 {
-	__csrwr(val, reg);
+	asm volatile (
+		"csrwr %[val], %[reg] \n\t"
+		: [val] "+r" (val)
+		: [reg] "i" (reg)
+		: "memory");
 }
 
 static inline void csr_writeq(u64 val, u32 reg)
 {
-	__dcsrwr(val, reg);
+	asm volatile (
+		"csrwr %[val], %[reg] \n\t"
+		: [val] "+r" (val)
+		: [reg] "i" (reg)
+		: "memory");
 }
 
 static inline u32 csr_xchgl(u32 val, u32 mask, u32 reg)
 {
-	return __csrxchg(val, mask, reg);
+	asm volatile (
+		"csrxchg %[val], %[mask], %[reg] \n\t"
+		: [val] "+r" (val)
+		: [mask] "r" (mask), [reg] "i" (reg)
+		: "memory");
+	return val;
 }
 
 static inline u64 csr_xchgq(u64 val, u64 mask, u32 reg)
 {
-	return __dcsrxchg(val, mask, reg);
+	asm volatile (
+		"csrxchg %[val], %[mask], %[reg] \n\t"
+		: [val] "+r" (val)
+		: [mask] "r" (mask), [reg] "i" (reg)
+		: "memory");
+	return val;
 }
 
 /* IOCSR */
 static inline u32 iocsr_readl(u32 reg)
 {
-	return __iocsrrd_w(reg);
+	u32 val;
+	asm volatile (
+		"iocsrrd.w %[val], %[reg] \n\t"
+		: [val] "=r" (val)
+		: [reg] "r" (reg)
+		: "memory");
+	return val;
 }
 
 static inline u64 iocsr_readq(u32 reg)
 {
-	return __iocsrrd_d(reg);
+	u64 val;
+	asm volatile (
+		"iocsrrd.d %[val], %[reg] \n\t"
+		: [val] "=r" (val)
+		: [reg] "r" (reg)
+		: "memory");
+	return val;
 }
 
 static inline void iocsr_writel(u32 val, u32 reg)
 {
-	__iocsrwr_w(val, reg);
+	asm volatile (
+		"iocsrwr.w %[val], %[reg] \n\t"
+		:
+		: [val] "r" (val), [reg] "r" (reg)
+		: "memory");
 }
 
 static inline void iocsr_writeq(u64 val, u32 reg)
 {
-	__iocsrwr_d(val, reg);
+	asm volatile (
+		"iocsrwr.d %[val], %[reg] \n\t"
+		:
+		: [val] "r" (val), [reg] "r" (reg)
+		: "memory");
 }
 
 #endif /* !__ASSEMBLY__ */
