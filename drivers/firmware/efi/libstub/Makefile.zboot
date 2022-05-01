@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: GPL-2.0
+
+# to be include'd by arch/$(ARCH)/boot/Makefile after setting
+# EFI_ZBOOT_PAYLOAD, EFI_ZBOOT_BFD_TARGET and EFI_ZBOOT_MACH_TYPE
+
+comp-type-$(CONFIG_KERNEL_GZIP)		:= gzip
+comp-type-$(CONFIG_KERNEL_LZ4)		:= lz4
+comp-type-$(CONFIG_KERNEL_LZMA)		:= lzma
+comp-type-$(CONFIG_KERNEL_LZO)		:= lzo
+comp-type-$(CONFIG_KERNEL_XZ)		:= xzkern
+comp-type-$(CONFIG_KERNEL_ZSTD)		:= zstd22
+
+# in GZIP, the appended le32 carrying the uncompressed size is part of the
+# format, but in other cases, we just append it at the end for convenience,
+# causing the original tools to complain when checking image integrity.
+# So disregard it when calculating the payload size in the zimage header.
+zimage-method-y				:= $(comp-type-y)_with_size
+zimage-size-len-y			:= 4
+
+zimage-method-$(CONFIG_KERNEL_GZIP)	:= gzip
+zimage-size-len-$(CONFIG_KERNEL_GZIP)	:= 0
+
+quiet_cmd_sbsign = SBSIGN  $@
+      cmd_sbsign = sbsign --out $@ $< \
+		   --key $(CONFIG_EFI_ZBOOT_SIGNING_KEY) \
+		   --cert $(CONFIG_EFI_ZBOOT_SIGNING_CERT) \
+		   2>/dev/null
+
+$(obj)/Image.signed: $(EFI_ZBOOT_PAYLOAD) FORCE
+	$(call if_changed,sbsign)
+
+ZBOOT_PAYLOAD-y				 := $(EFI_ZBOOT_PAYLOAD)
+ZBOOT_PAYLOAD-$(CONFIG_EFI_ZBOOT_SIGNED) := $(obj)/Image.signed
+
+$(obj)/zImage: $(ZBOOT_PAYLOAD-y) FORCE
+	$(call if_changed,$(zimage-method-y))
+
+OBJCOPYFLAGS_zImage.o := -I binary -O $(EFI_ZBOOT_BFD_TARGET) \
+			 --rename-section .data=.gzdata,load,alloc,readonly,contents
+$(obj)/zImage.o: $(obj)/zImage FORCE
+	$(call if_changed,objcopy)
+
+AFLAGS_zboot-header.o += -DMACHINE_TYPE=IMAGE_FILE_MACHINE_$(EFI_ZBOOT_MACH_TYPE) \
+			 -DZIMG_EFI_PATH="\"$(realpath $(obj)/zImage.efi.elf)\"" \
+			 -DZIMG_SIZE_LEN=$(zimage-size-len-y) \
+			 -DCOMP_TYPE="\"$(comp-type-y)\""
+
+$(obj)/zboot-header.o: $(srctree)/drivers/firmware/efi/libstub/zboot-header.S FORCE
+	$(call if_changed_rule,as_o_S)
+
+ZBOOT_DEPS := $(obj)/zboot-header.o $(objtree)/drivers/firmware/efi/libstub/lib.a
+
+LDFLAGS_zImage.efi.elf := -T $(srctree)/drivers/firmware/efi/libstub/zboot.lds
+$(obj)/zImage.efi.elf: $(obj)/zImage.o $(ZBOOT_DEPS) FORCE
+	$(call if_changed,ld)
+
+ZIMAGE_EFI-y				:= zImage.efi
+ZIMAGE_EFI-$(CONFIG_EFI_ZBOOT_SIGNED)	:= zImage.efi.unsigned
+
+OBJCOPYFLAGS_$(ZIMAGE_EFI-y) := -O binary
+$(obj)/$(ZIMAGE_EFI-y): $(obj)/zImage.efi.elf FORCE
+	$(call if_changed,objcopy)
+
+targets += zboot-header.o zImage zImage.o zImage.efi.elf zImage.efi
+
+ifneq ($(CONFIG_EFI_ZBOOT_SIGNED),)
+$(obj)/zImage.efi: $(obj)/zImage.efi.unsigned FORCE
+	$(call if_changed,sbsign)
+
+targets += Image.signed zImage.efi.unsigned
+endif
