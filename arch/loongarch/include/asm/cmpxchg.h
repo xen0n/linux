@@ -21,10 +21,17 @@
 		__ret;				\
 })
 
+extern unsigned long __xchg_small(volatile void *ptr, unsigned long x,
+				  unsigned int size);
+
 static inline unsigned long __xchg(volatile void *ptr, unsigned long x,
 				   int size)
 {
 	switch (size) {
+	case 1:
+	case 2:
+		return __xchg_small(ptr, x, size);
+
 	case 4:
 		return __xchg_asm("amswap_db.w", (volatile u32 *)ptr, (u32)x);
 
@@ -67,10 +74,17 @@ static inline unsigned long __xchg(volatile void *ptr, unsigned long x,
 	__ret;								\
 })
 
+extern unsigned long __cmpxchg_small(volatile void *ptr, unsigned long old,
+				     unsigned long new, unsigned int size);
+
 static inline unsigned long __cmpxchg(volatile void *ptr, unsigned long old,
 				      unsigned long new, unsigned int size)
 {
 	switch (size) {
+	case 1:
+	case 2:
+		return __cmpxchg_small(ptr, old, new, size);
+
 	case 4:
 		return __cmpxchg_asm("ll.w", "sc.w", (volatile u32 *)ptr,
 				     (u32)old, new);
