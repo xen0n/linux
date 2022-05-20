@@ -491,8 +491,28 @@ static void __init prefill_possible_map(void)
 static inline void prefill_possible_map(void) {}
 #endif
 
+static void ls7a_toggle_dog(bool enable)
+{
+	if (enable) {
+		*(volatile u32 *)(TO_UNCAC(0x100d0030)) = 2;
+		*(volatile u32 *)(TO_UNCAC(0x100d0034)) = 1;
+		return;
+	}
+
+	*(volatile u32 *)(TO_UNCAC(0x100d0030)) = 0;
+}
+
+static u32 ls7a_read_dog(void)
+{
+	return *(volatile u32 *)(TO_UNCAC(0x100d0038));
+}
+
 void __init setup_arch(char **cmdline_p)
 {
+	pr_info("XXX watchdog countdown now 0x%x\n", ls7a_read_dog());
+	ls7a_toggle_dog(true);
+	pr_info("XXX watchdog enabled, countdown now 0x%x\n", ls7a_read_dog());
+
 	cpu_probe();
 
 	fw_init_cmdline();
@@ -512,6 +532,9 @@ void __init setup_arch(char **cmdline_p)
 	prefill_possible_map();
 
 	paging_init();
+
+	/* *(volatile u32 *)(TO_UNCACHE(0x100d0030)) = 0; */
+	pr_info("XXX setup_arch finished, watchdog countdown now 0x%x\n", ls7a_read_dog());
 }
 
 static int __init register_gop_device(void)
