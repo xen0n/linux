@@ -1487,6 +1487,8 @@ void __weak free_initmem(void)
 	free_initmem_default(POISON_FREE_INITMEM);
 }
 
+extern void ls7a_enable_wdt(bool enable);
+
 static int __ref kernel_init(void *unused)
 {
 	int ret;
@@ -1551,6 +1553,8 @@ static int __ref kernel_init(void *unused)
 		else
 			return 0;
 	}
+
+	ls7a_enable_wdt(false);
 
 	if (!try_to_run_init_process("/sbin/init") ||
 	    !try_to_run_init_process("/etc/init") ||
