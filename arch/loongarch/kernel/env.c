@@ -11,6 +11,7 @@
 #include <linux/of_fdt.h>
 #include <asm/early_ioremap.h>
 #include <asm/bootinfo.h>
+#include <asm/legacy_bpi.h>
 #include <asm/loongson.h>
 
 u64 efi_system_table;
@@ -42,6 +43,8 @@ void __init init_environ(void)
 		set_bit(EFI_BOOT, &efi.flags);
 	else
 		clear_bit(EFI_BOOT, &efi.flags);
+
+	maybe_handle_bpi(&fdt_ptr);
 
 	early_init_dt_scan(fdt_ptr);
 	early_init_fdt_reserve_self();

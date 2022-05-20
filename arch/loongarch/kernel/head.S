@@ -48,6 +48,10 @@ SYM_CODE_START(kernel_entry)			# kernel entry point
 	st.d		a0, t0, 0		# firmware arguments
 	la		t0, fw_arg1
 	st.d		a1, t0, 0
+#ifdef CONFIG_LEGACY_BPI
+	la		t0, fw_arg2
+	st.d		a2, t0, 0
+#endif
 
 	/* KSave3 used for percpu base, initialized as 0 */
 	csrwr		zero, PERCPU_BASE_KS
