@@ -320,6 +320,25 @@ config EFI_STUB
 	  This kernel feature allows the kernel to be loaded directly by
 	  EFI firmware without the use of a bootloader.
 
+config LEGACY_BPI
+	bool "Legacy BPI boot protocol support"
+	depends on EFI_STUB
+	help
+	  This enables support for the legacy BPI boot protocol, which is the
+	  early in-house successor of the boot protocol during Loongson's MIPS
+	  era. The boot protocol starts with a "struct bootparamsinterface",
+	  hence the name; it has no official name.
+
+	  Loongson had finished the development of BPI and given it to vendors
+	  long before upstreaming of LoongArch even began, so practically this
+	  is going to remain as the only widely supported LoongArch boot
+	  protocol in a while.
+
+	  Say Y if you want to boot the kernel with existing firmware and
+	  bootloader as of 2022. The ability to boot with new EFI-stub-based
+	  protocol remains, so it is safe to say Y even if you have switched
+	  to newer firmware.
+
 config SMP
 	bool "Multi-Processing support"
 	help

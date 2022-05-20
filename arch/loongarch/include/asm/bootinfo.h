@@ -37,6 +37,9 @@ struct loongson_system_configuration {
 
 extern u64 efi_system_table;
 extern unsigned long fw_arg0, fw_arg1;
+#ifdef CONFIG_LEGACY_BPI
+extern unsigned long fw_arg2;
+#endif
 extern struct loongson_board_info b_info;
 extern struct loongson_system_configuration loongson_sysconf;
 

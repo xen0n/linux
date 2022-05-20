@@ -54,6 +54,9 @@ struct screen_info screen_info;
 #endif
 
 unsigned long fw_arg0, fw_arg1;
+#ifdef CONFIG_LEGACY_BPI
+unsigned long fw_arg2;
+#endif
 DEFINE_PER_CPU(unsigned long, kernelsp);
 struct cpuinfo_loongarch cpu_data[NR_CPUS] __read_mostly;
 
