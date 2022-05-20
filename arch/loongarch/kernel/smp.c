@@ -23,6 +23,7 @@
 
 #include <asm/cpu.h>
 #include <asm/idle.h>
+#include <asm/legacy_bpi.h>
 #include <asm/loongson.h>
 #include <asm/mmu_context.h>
 #include <asm/numa.h>
@@ -201,9 +202,19 @@ void loongson3_boot_secondary(int cpu, struct task_struct *idle)
 
 	pr_info("Booting CPU#%d...\n", cpu);
 
-	entry = __pa_symbol((unsigned long)&smpboot_entry);
+	/* BPI firmware expects a cached address for the new PC. */
+	if (is_booted_with_bpi())
+		entry = (unsigned long)&smpboot_entry;
+	else
+		entry = __pa_symbol((unsigned long)&smpboot_entry);
+
 	cpuboot_data.stack = (unsigned long)__KSTK_TOS(idle);
 	cpuboot_data.thread_info = (unsigned long)task_thread_info(idle);
+
+	pr_info("  PC = 0x%016lx\n", entry);
+	pr_info("  SP = 0x%016lx\n", cpuboot_data.stack);
+	pr_info("  TP = 0x%016lx\n", cpuboot_data.thread_info);
+	pr_info("  map to %d\n", cpu_logical_map(cpu));
 
 	csr_mail_send(entry, cpu_logical_map(cpu), 0);
 
@@ -565,32 +576,45 @@ asmlinkage void start_secondary(void)
 {
 	unsigned int cpu;
 
+	pr_info("XXXX start_secondary 1\n");
+	pr_info("     I saw sp = 0x%016lx\n", cpuboot_data.stack);
+	pr_info("     I saw tp = 0x%016lx\n", cpuboot_data.thread_info);
+
 	sync_counter();
+	pr_info("XXXX start_secondary 1.1\n");
 	cpu = smp_processor_id();
+	pr_info("XXXX start_secondary 2: I'm CPU %d\n", cpu);
 	set_my_cpu_offset(per_cpu_offset(cpu));
 
 	cpu_probe();
+	pr_info("XXXX CPU %d: start_secondary 3\n", cpu);
 	constant_clockevent_init();
+	pr_info("XXXX CPU %d: start_secondary 4\n", cpu);
 	loongson3_init_secondary();
+	pr_info("XXXX CPU %d: start_secondary 5\n", cpu);
 
 	set_cpu_sibling_map(cpu);
 	set_cpu_core_map(cpu);
 
 	notify_cpu_starting(cpu);
+	pr_info("XXXX CPU %d: start_secondary 6\n", cpu);
 
 	/* Notify boot CPU that we're starting */
 	complete(&cpu_starting);
+	pr_info("XXXX CPU %d: start_secondary 7\n", cpu);
 
 	/* The CPU is running, now mark it online */
 	set_cpu_online(cpu, true);
 
 	calculate_cpu_foreign_map();
+	pr_info("XXXX CPU %d: start_secondary 8\n", cpu);
 
 	/*
 	 * Notify boot CPU that we're up & online and it can safely return
 	 * from __cpu_up()
 	 */
 	complete(&cpu_running);
+	pr_info("XXXX CPU %d: start_secondary 9\n", cpu);
 
 	/*
 	 * irq will be enabled in loongson3_smp_finish(), enabling it too
@@ -598,8 +622,10 @@ asmlinkage void start_secondary(void)
 	 */
 	WARN_ON_ONCE(!irqs_disabled());
 	loongson3_smp_finish();
+	pr_info("XXXX CPU %d: start_secondary 10\n", cpu);
 
 	cpu_startup_entry(CPUHP_AP_ONLINE_IDLE);
+	pr_info("XXXX CPU %d: start_secondary finished\n", cpu);
 }
 
 void __init smp_cpus_done(unsigned int max_cpus)
