@@ -356,8 +356,28 @@ static void __init prefill_possible_map(void)
 static inline void prefill_possible_map(void) {}
 #endif
 
+static u32 __iomem *ls7a_wdt_ctl;
+static u32 __iomem *ls7a_wdt_kick;
+
+static void ls7a_enable_wdt(bool enable)
+{
+	if (enable) {
+		writel(2, ls7a_wdt_ctl);
+		writel(1, ls7a_wdt_kick);
+		pr_info("XXX ls7a wdt enabled\n");
+		return;
+	}
+
+	writel(0, ls7a_wdt_ctl);
+	pr_info("XXX ls7a wdt disabled\n");
+}
+
 void __init setup_arch(char **cmdline_p)
 {
+	ls7a_wdt_ctl = (u32 __iomem *)TO_UNCACHE(0x100d0030);
+	ls7a_wdt_kick = (u32 __iomem *)TO_UNCACHE(0x100d0034);
+	ls7a_enable_wdt(true);
+
 	cpu_probe();
 	*cmdline_p = boot_command_line;
 
