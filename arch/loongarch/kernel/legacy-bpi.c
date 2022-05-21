@@ -170,7 +170,25 @@ static void synthesize_efi_memmaps(const struct bpi_ext_mem *bpi_memmap)
 {
 	int i;
 
+	pr_info(PREFIX "memmap: desc version %d, %d maps\n",
+	        bpi_memmap->desc_version, bpi_memmap->map_count);
+
 	for (i = 0; i < bpi_memmap->map_count; i++) {
+		const char *type_str;
+		switch (bpi_memmap->map[i].mem_type) {
+		case ADDRESS_TYPE_SYSRAM:   type_str = "SYSRAM  "; break;
+		case ADDRESS_TYPE_RESERVED: type_str = "RESERVED"; break;
+		case ADDRESS_TYPE_ACPI:     type_str = "ACPI    "; break;
+		case ADDRESS_TYPE_NVS:      type_str = "NVS     "; break;
+		case ADDRESS_TYPE_PMEM:     type_str = "PMEM    "; break;
+		}
+
+		pr_info(PREFIX "memmap[%d]: %s start=%p vaddr=%p size=%zd attribute=%llx\n",
+		        i, type_str, bpi_memmap->map[i].mem_start,
+		        bpi_memmap->map[i].mem_vaddr,
+		        bpi_memmap->map[i].mem_size,
+		        bpi_memmap->map[i].attribute);
+
 		switch (bpi_memmap->map[i].mem_type) {
 		case ADDRESS_TYPE_SYSRAM:
 			synth_efi_memmaps[i].type = EFI_CONVENTIONAL_MEMORY;
@@ -194,7 +212,7 @@ static void synthesize_efi_memmaps(const struct bpi_ext_mem *bpi_memmap)
 	}
 
 	synth_efi_memmap_data.phys_map = TO_PHYS((u64)&synth_efi_memmaps);
-	synth_efi_memmap_data.desc_version = 1;
+	synth_efi_memmap_data.desc_version = bpi_memmap->desc_version;
 	synth_efi_memmap_data.desc_size =
 		sizeof(efi_memory_desc_t) * bpi_memmap->map_count;
 	synth_efi_memmap_data.size = synth_efi_memmap_data.desc_size;

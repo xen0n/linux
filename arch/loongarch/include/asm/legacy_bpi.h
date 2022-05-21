@@ -27,18 +27,20 @@ struct bpi_extlist_head {
 #define ADDRESS_TYPE_NVS	4
 #define ADDRESS_TYPE_PMEM	5
 
-struct bpi_mem_entry {
-	u32 mem_type;
-	u64 mem_start;
-	u64 mem_size;
-} __packed;
-
 #define BPI_EXT_MEM_SIGNATURE		"MEM"
 #define BPI_MEMMAP_MAX			128
 struct bpi_ext_mem {
 	struct bpi_extlist_head header;
 	u8 map_count;
-	struct bpi_mem_entry map[BPI_MEMMAP_MAX];
+	u32 desc_version;
+	struct bpi_mem_entry {
+		u32 mem_type;
+		u32 padding;
+		u64 mem_start;
+		u64 mem_vaddr;
+		u64 mem_size;
+		u64 attribute;
+	} __packed map[BPI_MEMMAP_MAX];
 } __packed;
 
 #define BPI_EXT_VBIOS_SIGNATURE		"VBIOS"
