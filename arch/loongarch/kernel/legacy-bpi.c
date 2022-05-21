@@ -123,7 +123,7 @@ static int parse_bpi(const struct bootparamsinterface *bpi_ptr, struct parsed_bp
 	}
 
 	while(p != NULL) {
-		vp = TO_CACHE((u64)p);
+		vp = (struct bpi_extlist_head *)TO_CACHE((u64)p);
 
 		if (memcmp(&(vp->signature), BPI_EXT_MEM_SIGNATURE, 3) == 0) {
 			if ((ret = parse_bpi_mem(vp, out)) != 0) {
@@ -224,6 +224,7 @@ static void fdt_update_cell_size(void *fdt)
 static int synthesize_efistub_fdt_from_bpi(const struct parsed_bpi *bpi)
 {
 	void *fdt = synth_fdt_buf;
+	const char *bpi_argv;
 	int node, ret;
 	u32 fdt_val32;
 	u64 fdt_val64;
@@ -245,12 +246,17 @@ static int synthesize_efistub_fdt_from_bpi(const struct parsed_bpi *bpi)
 		ret = node;
 		goto fdt_set_fail;
 	}
+	pr_info(PREFIX "YYYYY 3.1\n");
 
-	if (fw_arg1 && strlen((const char *)fw_arg1) > 0) {
-		ret = fdt_setprop(fdt, node, "bootargs", &fw_arg1, strlen((const char *)fw_arg1) + 1);
-		if (ret)
-			goto fdt_set_fail;
+	if (fw_arg1) {
+		bpi_argv = (const char *)TO_CACHE(fw_arg1);
+		if (strlen(bpi_argv) > 0) {
+			ret = fdt_setprop(fdt, node, "bootargs", &bpi_argv, strlen(bpi_argv) + 1);
+			if (ret)
+				goto fdt_set_fail;
+		}
 	}
+	pr_info(PREFIX "YYYYY 3.2\n");
 
 #define SETxx(prop, bit, val) do { \
 	fdt_val##bit = cpu_to_fdt##bit(val); \
@@ -263,16 +269,22 @@ static int synthesize_efistub_fdt_from_bpi(const struct parsed_bpi *bpi)
 #define SET64(prop, val) SETxx(prop, 64, val)
 
 	SET64(EFISTUB_FDT_PROP_SYSTAB, bpi->efi_systab);
+	pr_info(PREFIX "YYYYY 3.3\n");
 	SET64(EFISTUB_FDT_PROP_MMBASE, synth_efi_memmap_data.phys_map);
+	pr_info(PREFIX "YYYYY 3.4\n");
 	SET32(EFISTUB_FDT_PROP_MMSIZE, synth_efi_memmap_data.size);
+	pr_info(PREFIX "YYYYY 3.5\n");
 	SET32(EFISTUB_FDT_PROP_DCSIZE, synth_efi_memmap_data.desc_size);
+	pr_info(PREFIX "YYYYY 3.6\n");
 	SET32(EFISTUB_FDT_PROP_DCVERS, synth_efi_memmap_data.desc_version);
 
 #undef SET32
 #undef SET64
 #undef SETxx
 
+	pr_info(PREFIX "YYYYY 4\n");
 	fdt_pack(fdt);
+	pr_info(PREFIX "YYYYY ok\n");
 
 	return 0;
 
