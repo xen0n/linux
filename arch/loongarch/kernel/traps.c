@@ -144,7 +144,7 @@ static void show_code(void *pc, bool user)
 	printk("Code:");
 
 	for(i = -3 ; i < 6 ; i++) {
-		if (__get_inst(&insn, pc + i, user)) {
+		if (__get_inst(&insn, pc + 4 * i, user)) {
 			pr_cont(" (Bad address in era)\n");
 			break;
 		}
