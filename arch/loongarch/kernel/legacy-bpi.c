@@ -187,8 +187,8 @@ static void synthesize_efi_memmaps(const struct bpi_ext_mem *bpi_memmap)
 			continue;
 		}
 		synth_efi_memmaps[i].pad = 0;
-		synth_efi_memmaps[i].phys_addr = TO_PHYS(bpi_memmap->map[i].mem_start);
-		synth_efi_memmaps[i].virt_addr = bpi_memmap->map[i].mem_start;
+		synth_efi_memmaps[i].phys_addr = bpi_memmap->map[i].mem_start;
+		synth_efi_memmaps[i].virt_addr = TO_CACHE(bpi_memmap->map[i].mem_start);
 		synth_efi_memmaps[i].num_pages = bpi_memmap->map[i].mem_size / PAGE_SIZE;
 		synth_efi_memmaps[i].attribute = 0;
 	}

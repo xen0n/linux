@@ -114,7 +114,12 @@ static int __init set_virtual_map(void)
 
 	size = sizeof(efi_memory_desc_t);
 
+	int i = 0;
 	for_each_efi_memory_desc(in) {
+		pr_info("set_virtual_map %dth desc:\n", i++);
+		pr_info("  type %d\n  phys_addr %p\n  virt_addr %p\n", in->type, (void *)in->phys_addr, (void *)in->virt_addr);
+		pr_info("  num_pages %ld\n  attribute %lx\n", in->num_pages, in->attribute);
+
 		attr = in->attribute;
 		if (!(attr & EFI_MEMORY_RUNTIME))
 			continue;
@@ -127,18 +132,25 @@ static int __init set_virtual_map(void)
 		memcpy(&runtime_map[count++], in, size);
 	}
 
+	pr_info("set_virtual_map XXXXX 2\n");
 	rt = early_memremap_ro((unsigned long)efi_systab->runtime, sizeof(*rt));
+	pr_info("set_virtual_map XXXXX 3\n");
 
 	/* Install the new virtual address map */
 	svam = rt->set_virtual_address_map;
+	pr_info("set_virtual_map XXXXX svam = %p\n", svam);
 
 	fix_efi_mapping();
+	pr_info("set_virtual_map XXXXX 4\n");
 
 	status = svam(size * count, size, efi.memmap.desc_version,
 			(efi_memory_desc_t *)TO_PHYS((unsigned long)runtime_map));
+	pr_info("set_virtual_map XXXXX svam returns %d\n", status);
 
 	local_flush_tlb_all();
+	pr_info("set_virtual_map XXXXX 5\n");
 	write_csr_pagesize(PS_DEFAULT_SIZE);
+	pr_info("set_virtual_map XXXXX 6\n");
 
 	return 0;
 }
@@ -147,16 +159,20 @@ void __init efi_runtime_init(void)
 {
 	efi_status_t status;
 
+	pr_info("EFI EFI -1\n");
 	if (!efi_enabled(EFI_BOOT))
 		return;
 
+	pr_info("EFI EFI 0\n");
 	if (!efi_systab->runtime)
 		return;
 
+	pr_info("EFI EFI 1\n");
 	status = set_virtual_map();
 	if (status < 0)
 		return;
 
+	pr_info("EFI EFI 2\n");
 	if (efi_runtime_disabled()) {
 		pr_info("EFI runtime services will be disabled.\n");
 		return;
@@ -165,8 +181,10 @@ void __init efi_runtime_init(void)
 	efi.runtime = (efi_runtime_services_t *)efi_systab->runtime;
 	efi.runtime_version = (unsigned int)efi.runtime->hdr.revision;
 
+	pr_info("EFI EFI 3\n");
 	efi_native_runtime_setup();
 	set_bit(EFI_RUNTIME_SERVICES, &efi.flags);
+	pr_info("EFI EFI 4 ok\n");
 }
 
 void __init efi_init(void)

@@ -217,6 +217,7 @@ void __init platform_init(void)
 	pr_info("The BIOS Version: %s\n", b_info.bios_version);
 
 	efi_runtime_init();
+	pr_info("XXXXXXXXXXXXXXXXX alive\n");
 }
 
 static void __init check_kernel_sections_mem(void)
