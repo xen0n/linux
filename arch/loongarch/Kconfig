@@ -322,7 +322,7 @@ config EFI_STUB
 
 config LEGACY_BPI
 	bool "Legacy BPI boot protocol support"
-	depends on EFI_STUB
+	select EFI
 	help
 	  This enables support for the legacy BPI boot protocol, which is the
 	  early in-house successor of the boot protocol during Loongson's MIPS
