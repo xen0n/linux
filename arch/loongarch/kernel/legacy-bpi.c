@@ -49,6 +49,7 @@ static int parse_bpi_mem(const struct bpi_extlist_head *head, struct parsed_bpi 
 		return -EINVAL;
 	}
 
+	pr_info(PREFIX "  MEM table at %p (length=%d)\n", v, head->length);
 	out->bpi_memmap = v;
 	return 0;
 }
@@ -62,6 +63,7 @@ static int parse_bpi_vbios(struct bpi_extlist_head *head, struct parsed_bpi *out
 		return -EINVAL;
 	}
 
+	pr_info(PREFIX "  VBIOS table at %p (length=%d)\n", v, head->length);
 	out->vbios_addr = v->vbios_addr;
 	return 0;
 }
@@ -76,6 +78,7 @@ static int parse_bpi_sinfo(struct bpi_extlist_head *head, struct parsed_bpi *out
 		return -EINVAL;
 	}
 
+	pr_info(PREFIX "  SINFO table at %p (length=%d)\n", v, head->length);
 	memcpy(&out->screen_info, &v->si, sizeof(out->screen_info));
 	return 0;
 }
@@ -83,7 +86,7 @@ static int parse_bpi_sinfo(struct bpi_extlist_head *head, struct parsed_bpi *out
 
 static int parse_bpi(const struct bootparamsinterface *bpi_ptr, struct parsed_bpi *out)
 {
-	struct bpi_extlist_head *p;
+	struct bpi_extlist_head *p, *vp;
 	char signature_buf[9] = { 0 };
 	int ret;
 
@@ -104,13 +107,13 @@ static int parse_bpi(const struct bootparamsinterface *bpi_ptr, struct parsed_bp
 		         signature_buf);
 		return -EINVAL;
 	}
-	pr_info(PREFIX "BPI version %d\n", out->ver);
+	pr_info(PREFIX "found BPI version %d\n", out->ver);
 
 	if (out->ver >= BPI_VERSION_V2) {
 		out->is_efi_boot = (bpi_ptr->flags & BPI_FLAGS_UEFI_SUPPORTED) != 0;
 	}
 
-	pr_info(PREFIX "EFI system table at %p\n", bpi_ptr->systemtable);
+	pr_info(PREFIX "  EFI system table at %p\n", bpi_ptr->systemtable);
 	out->efi_systab = bpi_ptr->systemtable;
 
 	p = bpi_ptr->extlist;
@@ -120,18 +123,18 @@ static int parse_bpi(const struct bootparamsinterface *bpi_ptr, struct parsed_bp
 	}
 
 	while(p != NULL) {
-		pr_info(PREFIX "parsing extension table at %p\n", p);
+		vp = TO_CACHE((u64)p);
 
-		if (memcmp(&(p->signature), BPI_EXT_MEM_SIGNATURE, 3) == 0) {
-			if ((ret = parse_bpi_mem(p, out)) != 0) {
+		if (memcmp(&(vp->signature), BPI_EXT_MEM_SIGNATURE, 3) == 0) {
+			if ((ret = parse_bpi_mem(vp, out)) != 0) {
 				pr_err(PREFIX "failed to parse the MEM table\n");
 				return ret;
 			}
 			goto next;
 		}
 
-		if (memcmp(&(p->signature), BPI_EXT_VBIOS_SIGNATURE, 5) == 0) {
-			if ((ret = parse_bpi_vbios(p, out)) != 0) {
+		if (memcmp(&(vp->signature), BPI_EXT_VBIOS_SIGNATURE, 5) == 0) {
+			if ((ret = parse_bpi_vbios(vp, out)) != 0) {
 				pr_err(PREFIX "failed to parse the VBIOS table\n");
 				return ret;
 			}
@@ -139,8 +142,8 @@ static int parse_bpi(const struct bootparamsinterface *bpi_ptr, struct parsed_bp
 		}
 
 #ifdef CONFIG_VT
-		if (memcmp(&(p->signature), BPI_EXT_SINFO_SIGNATURE, 5) == 0) {
-			if ((ret = parse_bpi_sinfo(p, out)) != 0) {
+		if (memcmp(&(vp->signature), BPI_EXT_SINFO_SIGNATURE, 5) == 0) {
+			if ((ret = parse_bpi_sinfo(vp, out)) != 0) {
 				pr_err(PREFIX "failed to parse the SINFO table\n");
 				return ret;
 			}
@@ -148,12 +151,12 @@ static int parse_bpi(const struct bootparamsinterface *bpi_ptr, struct parsed_bp
 		}
 #endif
 
-		memcpy(signature_buf, &p->signature, 8);
+		memcpy(signature_buf, &vp->signature, 8);
 		pr_warn(PREFIX "unknown BPI table signature '%s', ignoring\n",
 		        signature_buf);
 
 next:
-		p = p->next;
+		p = vp->next;
 	}
 
 	return 0;
@@ -225,7 +228,9 @@ static int synthesize_efistub_fdt_from_bpi(const struct parsed_bpi *bpi)
 	u32 fdt_val32;
 	u64 fdt_val64;
 
+	pr_info(PREFIX "YYYYY 1\n");
 	synthesize_efi_memmaps(bpi->bpi_memmap);
+	pr_info(PREFIX "YYYYY 2\n");
 
 	ret = fdt_create_empty_tree(fdt, sizeof(synth_fdt_buf));
 	if (ret == 0) {
@@ -234,6 +239,7 @@ static int synthesize_efistub_fdt_from_bpi(const struct parsed_bpi *bpi)
 		goto fdt_set_fail;
 	}
 
+	pr_info(PREFIX "YYYYY 3\n");
 	node = fdt_add_subnode(fdt, 0, "chosen");
 	if (node < 0) {
 		ret = node;
@@ -271,6 +277,7 @@ static int synthesize_efistub_fdt_from_bpi(const struct parsed_bpi *bpi)
 	return 0;
 
 fdt_set_fail:
+	pr_info(PREFIX "YYYYY err %d\n", ret);
 	if (ret == -FDT_ERR_NOSPACE)
 		return -ENOMEM;
 
@@ -280,7 +287,6 @@ fdt_set_fail:
 void __init maybe_handle_bpi(void **fdt_ptr)
 {
 	struct bootparamsinterface *bpi_ptr;
-	enum bpi_version bpi_ver;
 	struct parsed_bpi bpi;
 	int ret;
 
@@ -290,7 +296,8 @@ void __init maybe_handle_bpi(void **fdt_ptr)
 	}
 
 	bpi_ptr = (struct bootparamsinterface *)early_memremap_ro(fw_arg2, SZ_64K);
-	pr_info(PREFIX "potential BPI at %lx mapped at %p\n", fw_arg2, bpi_ptr);
+	no_hash_pointers_enable(NULL);
+	pr_info(PREFIX "potential BPI at %p\n", (const void *)fw_arg2);
 
 	ret = parse_bpi(bpi_ptr, &bpi);
 	if (ret) {
@@ -298,9 +305,8 @@ void __init maybe_handle_bpi(void **fdt_ptr)
 		return;
 	}
 
-	pr_info(PREFIX "found valid BPI (version %d)\n", bpi_ver);
-
 	if (bpi.ver >= BPI_VERSION_V2) {
+		pr_info(PREFIX "EFI boot %s\n", bpi.is_efi_boot ? "enabled" : "disabled");
 		/*
 		 * Override the EFI_BOOT flag with BPI setting.
 		 * $a0 in the BPI boot flow is not the efi_boot flag anyway.
@@ -321,4 +327,5 @@ void __init maybe_handle_bpi(void **fdt_ptr)
 		return;
 	}
 	*fdt_ptr = synth_fdt_buf;
+	pr_info(PREFIX "synthesized FDT from BPI at %p\n", synth_fdt_buf);
 }

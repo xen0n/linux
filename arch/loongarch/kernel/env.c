@@ -46,18 +46,24 @@ void __init init_environ(void)
 
 	maybe_handle_bpi(&fdt_ptr);
 
+	pr_info("XXXXXXXXX1\n");
 	early_init_dt_scan(fdt_ptr);
+	pr_info("XXXXXXXXX2\n");
 	early_init_fdt_reserve_self();
+	pr_info("XXXXXXXXX3\n");
 	efi_system_table = efi_get_fdt_params(&data);
+	pr_info("XXXXXXXXX4\n");
 
 	efi_memmap_init_early(&data);
 	memblock_reserve(data.phys_map & PAGE_MASK,
 			 PAGE_ALIGN(data.size + (data.phys_map & ~PAGE_MASK)));
+	pr_info("XXXXXXXXX5\n");
 
 	register_addrs_set(smp_group, TO_UNCACHE(0x1fe01000), 16);
 	register_addrs_set(loongson_chipcfg, TO_UNCACHE(0x1fe00180), 16);
 	register_addrs_set(loongson_chiptemp, TO_UNCACHE(0x1fe0019c), 16);
 	register_addrs_set(loongson_freqctrl, TO_UNCACHE(0x1fe001d0), 16);
+	pr_info("XXXXXXXXX6\n");
 }
 
 static int __init init_cpu_fullname(void)
