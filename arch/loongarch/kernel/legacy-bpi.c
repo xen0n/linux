@@ -104,11 +104,13 @@ static int parse_bpi(const struct bootparamsinterface *bpi_ptr, struct parsed_bp
 		         signature_buf);
 		return -EINVAL;
 	}
+	pr_info(PREFIX "BPI version %d\n", out->ver);
 
 	if (out->ver >= BPI_VERSION_V2) {
 		out->is_efi_boot = (bpi_ptr->flags & BPI_FLAGS_UEFI_SUPPORTED) != 0;
 	}
 
+	pr_info(PREFIX "EFI system table at %p\n", bpi_ptr->systemtable);
 	out->efi_systab = bpi_ptr->systemtable;
 
 	p = bpi_ptr->extlist;
@@ -118,6 +120,8 @@ static int parse_bpi(const struct bootparamsinterface *bpi_ptr, struct parsed_bp
 	}
 
 	while(p != NULL) {
+		pr_info(PREFIX "parsing extension table at %p\n", p);
+
 		if (memcmp(&(p->signature), BPI_EXT_MEM_SIGNATURE, 3) == 0) {
 			if ((ret = parse_bpi_mem(p, out)) != 0) {
 				pr_err(PREFIX "failed to parse the MEM table\n");
@@ -286,6 +290,7 @@ void __init maybe_handle_bpi(void **fdt_ptr)
 	}
 
 	bpi_ptr = (struct bootparamsinterface *)early_memremap_ro(fw_arg2, SZ_64K);
+	pr_info(PREFIX "potential BPI at %lx mapped at %p\n", fw_arg2, bpi_ptr);
 
 	ret = parse_bpi(bpi_ptr, &bpi);
 	if (ret) {
