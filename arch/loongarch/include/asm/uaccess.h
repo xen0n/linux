@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2020-2021 Loongson Technology Corporation Limited
+ * Copyright (C) 2020-2022 Loongson Technology Corporation Limited
  *
  * Derived from MIPS:
  * Copyright (C) 1996, 1997, 1998, 1999, 2000, 03, 04 by Ralf Baechle
@@ -21,7 +21,6 @@ extern u64 __ua_limit;
 #define __UA_LIMIT	__ua_limit
 
 #define __UA_ADDR	".dword"
-#define __UA_ADDU	"add.d"
 #define __UA_LA		"la.abs"
 
 /*
@@ -177,7 +176,7 @@ static inline int __access_ok(const void __user *p, unsigned long size)
 									\
 	__pu_val = (x);							\
 	__chk_user_ptr(ptr);						\
-	__put_user_common(ptr, sizeof(*(ptr)));					\
+	__put_user_common(ptr, sizeof(*(ptr)));				\
 	__pu_err;							\
 })
 
@@ -190,32 +189,32 @@ do {									\
 	case 1: __get_data_asm(val, "ld.b", ptr); break;		\
 	case 2: __get_data_asm(val, "ld.h", ptr); break;		\
 	case 4: __get_data_asm(val, "ld.w", ptr); break;		\
-	case 8: __get_data_asm(val, "ld.d", ptr); break;			\
+	case 8: __get_data_asm(val, "ld.d", ptr); break;		\
 	default: BUILD_BUG(); break;					\
 	}								\
 } while (0)
 
 #define __get_kernel_common(val, size, ptr) __get_user_common(val, size, ptr)
 
-#define __get_data_asm(val, insn, addr)					\
+#define __get_data_asm(val, insn, ptr)					\
 {									\
 	long __gu_tmp;							\
 									\
 	__asm__ __volatile__(						\
-	"1:	" insn "	%1, %3				\n"	\
+	"1:	" insn "	%1, %2				\n"	\
 	"2:							\n"	\
 	"	.section .fixup,\"ax\"				\n"	\
-	"3:	li.w	%0, %4					\n"	\
+	"3:	li.w	%0, %3					\n"	\
 	"	or	%1, $r0, $r0				\n"	\
 	"	b	2b					\n"	\
 	"	.previous					\n"	\
 	"	.section __ex_table,\"a\"			\n"	\
 	"	"__UA_ADDR "\t1b, 3b				\n"	\
 	"	.previous					\n"	\
-	: "=r" (__gu_err), "=r" (__gu_tmp)				\
-	: "0" (0), "o" (__m(addr)), "i" (-EFAULT));			\
+	: "+r" (__gu_err), "=r" (__gu_tmp)				\
+	: "m" (__m(ptr)), "i" (-EFAULT));				\
 									\
-	(val) = (__typeof__(*(addr))) __gu_tmp;				\
+	(val) = (__typeof__(*(ptr))) __gu_tmp;				\
 }
 
 #define __put_user_common(ptr, size)					\
@@ -224,7 +223,7 @@ do {									\
 	case 1: __put_data_asm("st.b", ptr); break;			\
 	case 2: __put_data_asm("st.h", ptr); break;			\
 	case 4: __put_data_asm("st.w", ptr); break;			\
-	case 8: __put_data_asm("st.d", ptr); break;				\
+	case 8: __put_data_asm("st.d", ptr); break;			\
 	default: BUILD_BUG(); break;					\
 	}								\
 } while (0)
@@ -234,25 +233,24 @@ do {									\
 #define __put_data_asm(insn, ptr)					\
 {									\
 	__asm__ __volatile__(						\
-	"1:	" insn "	%z2, %3		# __put_user_asm\n"	\
+	"1:	" insn "	%z2, %1		# __put_user_asm\n"	\
 	"2:							\n"	\
 	"	.section	.fixup,\"ax\"			\n"	\
-	"3:	li.w	%0, %4					\n"	\
+	"3:	li.w	%0, %3					\n"	\
 	"	b	2b					\n"	\
 	"	.previous					\n"	\
 	"	.section	__ex_table,\"a\"		\n"	\
 	"	" __UA_ADDR "	1b, 3b				\n"	\
 	"	.previous					\n"	\
-	: "=r" (__pu_err)						\
-	: "0" (0), "Jr" (__pu_val), "o" (__m(ptr)),			\
-	  "i" (-EFAULT));						\
+	: "+r" (__pu_err), "=m" (__m(ptr))				\
+	: "Jr" (__pu_val), "i" (-EFAULT));				\
 }
 
 #define HAVE_GET_KERNEL_NOFAULT
 
 #define __get_kernel_nofault(dst, src, type, err_label)			\
 do {									\
-	int __gu_err = 0;							\
+	int __gu_err = 0;						\
 									\
 	__get_kernel_common(*((type *)(dst)), sizeof(type),		\
 			    (__force type *)(src));			\
@@ -262,7 +260,7 @@ do {									\
 
 #define __put_kernel_nofault(dst, src, type, err_label)			\
 do {									\
-	type __pu_val;					\
+	type __pu_val;							\
 	int __pu_err = 0;						\
 									\
 	__pu_val = *(__force type *)(src);				\
