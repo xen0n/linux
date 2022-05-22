@@ -183,11 +183,21 @@ static void synthesize_efi_memmaps(const struct bpi_ext_mem *bpi_memmap)
 		case ADDRESS_TYPE_PMEM:     type_str = "PMEM    "; break;
 		}
 
+		pr_info(PREFIX "memmap[%d]: type=%08x pad=%08x start=%016llx vaddr=%016llx size=%016llx attribute=%016llx\n",
+		        i,
+		        bpi_memmap->map[i].mem_type,
+		        bpi_memmap->map[i].padding,
+		        bpi_memmap->map[i].mem_start,
+		        bpi_memmap->map[i].mem_vaddr,
+		        bpi_memmap->map[i].mem_size,
+		        bpi_memmap->map[i].attribute
+		); // DEBUG
+		/*
 		pr_info(PREFIX "memmap[%d]: %s start=%p vaddr=%p size=%zd attribute=%llx\n",
 		        i, type_str, bpi_memmap->map[i].mem_start,
 		        bpi_memmap->map[i].mem_vaddr,
 		        bpi_memmap->map[i].mem_size,
-		        bpi_memmap->map[i].attribute);
+		        bpi_memmap->map[i].attribute);*/
 
 		switch (bpi_memmap->map[i].mem_type) {
 		case ADDRESS_TYPE_SYSRAM:
