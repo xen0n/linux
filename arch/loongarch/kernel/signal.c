@@ -27,7 +27,6 @@
 #include <linux/compiler.h>
 #include <linux/syscalls.h>
 #include <linux/uaccess.h>
-#include <linux/tracehook.h>
 
 #include <asm/asm.h>
 #include <asm/cacheflush.h>
@@ -58,7 +57,7 @@ struct rt_sigframe {
 };
 
 struct __ctx_layout {
-	struct context_info *addr;
+	struct sctx_info *addr;
 	unsigned int size;
 };
 
@@ -66,14 +65,12 @@ struct extctx_layout {
 	unsigned long size;
 	unsigned int flags;
 	struct __ctx_layout fpu;
-	struct __ctx_layout lsx;
-	struct __ctx_layout lasx;
 	struct __ctx_layout end;
 };
 
-static void __user *get_ctx_through_ctxinfo(struct context_info *info)
+static void __user *get_ctx_through_ctxinfo(struct sctx_info *info)
 {
-	return (void __user *)((char *)info + sizeof(struct context_info));
+	return (void __user *)((char *)info + sizeof(struct sctx_info));
 }
 
 /*
@@ -164,7 +161,7 @@ int fpcsr_pending(unsigned int __user *fpcsr)
 static int protected_save_fpu_context(struct extctx_layout __user *extctx)
 {
 	int err = 0;
-	struct context_info __user *info = extctx->fpu.addr;
+	struct sctx_info __user *info = extctx->fpu.addr;
 	struct fpu_context __user *fpu_ctx = (struct fpu_context *)get_ctx_through_ctxinfo(info);
 	uint64_t __user *regs	= (uint64_t *)&fpu_ctx->regs;
 	uint64_t __user *fcc	= &fpu_ctx->fcc;
@@ -198,7 +195,7 @@ static int protected_save_fpu_context(struct extctx_layout __user *extctx)
 static int protected_restore_fpu_context(struct extctx_layout __user *extctx)
 {
 	int err = 0, sig = 0, tmp __maybe_unused;
-	struct context_info __user *info = extctx->fpu.addr;
+	struct sctx_info __user *info = extctx->fpu.addr;
 	struct fpu_context __user *fpu_ctx = (struct fpu_context *)get_ctx_through_ctxinfo(info);
 	uint64_t __user *regs	= (uint64_t *)&fpu_ctx->regs;
 	uint64_t __user *fcc	= &fpu_ctx->fcc;
@@ -234,7 +231,7 @@ static int setup_sigcontext(struct pt_regs *regs, struct sigcontext __user *sc,
 			    struct extctx_layout *extctx)
 {
 	int i, err = 0;
-	struct context_info __user *info;
+	struct sctx_info __user *info;
 
 	err |= __put_user(regs->csr_era, &sc->sc_pc);
 	err |= __put_user(extctx->flags, &sc->sc_flags);
@@ -247,7 +244,7 @@ static int setup_sigcontext(struct pt_regs *regs, struct sigcontext __user *sc,
 		err |= protected_save_fpu_context(extctx);
 
 	/* Set the "end" magic */
-	info = (struct context_info *)extctx->end.addr;
+	info = (struct sctx_info *)extctx->end.addr;
 	err |= __put_user(0, &info->magic);
 	err |= __put_user(0, &info->size);
 
@@ -258,7 +255,7 @@ static int parse_extcontext(struct sigcontext __user *sc, struct extctx_layout *
 {
 	int err = 0;
 	unsigned int magic, size;
-	struct context_info __user *info = (struct context_info __user *)&sc->sc_extcontext;
+	struct sctx_info __user *info = (struct sctx_info __user *)&sc->sc_extcontext;
 
 	while(1) {
 		err |= __get_user(magic, &info->magic);
@@ -271,7 +268,7 @@ static int parse_extcontext(struct sigcontext __user *sc, struct extctx_layout *
 			goto done;
 
 		case FPU_CTX_MAGIC:
-			if (size < (sizeof(struct context_info) +
+			if (size < (sizeof(struct sctx_info) +
 				    sizeof(struct fpu_context)))
 				goto invalid;
 			extctx->fpu.addr = info;
@@ -281,7 +278,7 @@ static int parse_extcontext(struct sigcontext __user *sc, struct extctx_layout *
 			goto invalid;
 		}
 
-		info = (struct context_info *)((char *)info + size);
+		info = (struct sctx_info *)((char *)info + size);
 	}
 
 done:
@@ -306,13 +303,13 @@ static int restore_sigcontext(struct pt_regs *regs, struct sigcontext __user *sc
 	if (err)
 		goto bad;
 
-	conditional_used_math(extctx.flags & USED_FP);
+	conditional_used_math(extctx.flags & SC_USED_FP);
 
 	/*
 	 * The signal handler may have used FPU; give it up if the program
 	 * doesn't want it following sigreturn.
 	 */
-	if (!(extctx.flags & USED_FP))
+	if (!(extctx.flags & SC_USED_FP))
 		lose_fpu(0);
 
 	/* Always make any pending restarted system calls return -EINTR */
@@ -333,14 +330,14 @@ static unsigned int handle_flags(void)
 {
 	unsigned int flags = 0;
 
-	flags |= used_math() ? USED_FP : 0;
+	flags |= used_math() ? SC_USED_FP : 0;
 
 	switch (current->thread.error_code) {
 	case 1:
-		flags |= ADRERR_RD;
+		flags |= SC_ADDRERR_RD;
 		break;
 	case 2:
-		flags |= ADRERR_WR;
+		flags |= SC_ADDRERR_WR;
 		break;
 	}
 
@@ -354,7 +351,7 @@ static unsigned long extframe_alloc(struct extctx_layout *extctx,
 	unsigned long new_base = base - size;
 
 	new_base = round_down(new_base, (align < 16 ? 16 : align));
-	new_base -= sizeof(struct context_info);
+	new_base -= sizeof(struct sctx_info);
 
 	layout->addr = (void *)new_base;
 	layout->size = (unsigned int)(base - new_base);
@@ -372,12 +369,12 @@ static unsigned long setup_extcontext(struct extctx_layout *extctx, unsigned lon
 	extctx->flags = handle_flags();
 
 	/* Grow down, alloc "end" context info first. */
-	new_sp -= sizeof(struct context_info);
+	new_sp -= sizeof(struct sctx_info);
 	extctx->end.addr = (void *)new_sp;
-	extctx->end.size = (unsigned int)sizeof(struct context_info);
+	extctx->end.size = (unsigned int)sizeof(struct sctx_info);
 	extctx->size += extctx->end.size;
 
-	if (extctx->flags & USED_FP) {
+	if (extctx->flags & SC_USED_FP) {
 		if (cpu_has_fpu)
 			new_sp = extframe_alloc(extctx, &extctx->fpu,
 			  sizeof(struct fpu_context), FPU_CTX_ALIGN, new_sp);
