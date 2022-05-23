@@ -12,10 +12,11 @@
 #include <linux/posix_types.h>
 
 /* FP context was used */
-#define USED_FP			(1 << 0)
-/* Load/Store access flags for address error */
-#define ADRERR_RD		(1 << 30)
-#define ADRERR_WR		(1 << 31)
+#define SC_USED_FP		(1 << 0)
+/* Address error was due to memory load */
+#define SC_ADDRERR_RD		(1 << 30)
+/* Address error was due to memory store */
+#define SC_ADDRERR_WR		(1 << 31)
 
 struct sigcontext {
 	__u64	sc_pc;
@@ -25,7 +26,7 @@ struct sigcontext {
 };
 
 #define CONTEXT_INFO_ALIGN	16
-struct context_info {
+struct sctx_info {
 	__u32	magic;
 	__u32	size;
 	__u64	padding;	/* padding to 16 bytes */
@@ -38,26 +39,6 @@ struct fpu_context {
 	__u64	regs[32];
 	__u64	fcc;
 	__u32	fcsr;
-};
-
-/* LSX context */
-#define LSX_CTX_MAGIC		0x53580001
-#define LSX_CTX_ALIGN		16
-struct lsx_context {
-	__u64	regs[2*32];
-	__u64	fcc;
-	__u32	fcsr;
-	__u32	vcsr;
-};
-
-/* LASX context */
-#define LASX_CTX_MAGIC		0x41535801
-#define LASX_CTX_ALIGN		32
-struct lasx_context {
-	__u64	regs[4*32];
-	__u64	fcc;
-	__u32	fcsr;
-	__u32	vcsr;
 };
 
 #endif /* _UAPI_ASM_SIGCONTEXT_H */

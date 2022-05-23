@@ -15,9 +15,6 @@
 #include <asm/loongarch.h>
 #include <asm/regdef.h>
 
-#undef v0
-#undef v1
-
 #define FPU_REG_WIDTH		8
 #define LSX_REG_WIDTH		16
 #define LASX_REG_WIDTH		32

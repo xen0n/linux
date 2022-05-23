@@ -28,11 +28,13 @@
 #define NUM_FPU_REGS	32
 
 struct user_pt_regs {
-	/* Saved main processor registers. */
+	/* Main processor registers. */
 	unsigned long regs[32];
 
-	/* Saved special registers. */
+	/* Original syscall arg0. */
 	unsigned long orig_a0;
+
+	/* Special CSR registers. */
 	unsigned long csr_era;
 	unsigned long csr_badv;
 	unsigned long reserved[10];

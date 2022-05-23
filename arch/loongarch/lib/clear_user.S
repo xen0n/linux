@@ -11,7 +11,7 @@
 .macro fixup_ex from, to, offset, fix
 .if \fix
 	.section .fixup, "ax"
-\to:	addi.d	v0, a1, \offset
+\to:	addi.d	a0, a1, \offset
 	jr	ra
 	.previous
 .endif
@@ -34,7 +34,7 @@ SYM_FUNC_START(__clear_user)
 	addi.d	a1, a1, -1
 	bgt	a1, zero, 1b
 
-2:	move	v0, a1
+2:	move	a0, a1
 	jr	ra
 
 	fixup_ex 1, 3, 0, 1

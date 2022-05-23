@@ -10,9 +10,6 @@
 #include <asm/fpregdef.h>
 #include <asm/loongarch.h>
 
-#undef v0
-#undef v1
-
 	.macro	parse_v var val
 	\var	= \val
 	.endm
@@ -301,6 +298,4 @@
 	bge \r0, zero, \label
 .endm
 
-#define v0 $r4
-#define v1 $r5
 #endif /* _ASM_ASMMACRO_H */
