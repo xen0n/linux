@@ -74,7 +74,7 @@ static __always_inline int clock_getres_fallback(
 static __always_inline u64 __arch_get_hw_counter(s32 clock_mode,
 						 const struct vdso_data *vd)
 {
-	unsigned int count;
+	u64 count;
 
 	__asm__ __volatile__(
 	"	rdtime.d %0, $zero\n"
