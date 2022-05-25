@@ -26,11 +26,15 @@ extern char vdso_start[], vdso_end[];
 
 /* Kernel-provided data used by the VDSO. */
 static union loongarch_vdso_data {
-	u8 page[PAGE_SIZE];
-	struct vdso_data data[CS_BASES];
+	u8 page[VDSO_DATA_SIZE];
+	struct {
+		vdso_pcpu_data pdata[NR_CPUS];
+		struct vdso_data data[CS_BASES];
+	};
 } loongarch_vdso_data __page_aligned_data;
-struct vdso_data *vdso_data = loongarch_vdso_data.data;
+
 static struct page *vdso_pages[] = { NULL };
+struct vdso_data *vdso_data = loongarch_vdso_data.data;
 
 static int vdso_mremap(const struct vm_special_mapping *sm, struct vm_area_struct *new_vma)
 {
@@ -55,10 +59,13 @@ struct loongarch_vdso_info vdso_info = {
 
 static int __init init_vdso(void)
 {
-	unsigned long i, pfn;
+	unsigned long i, cpu, pfn;
 
 	BUG_ON(!PAGE_ALIGNED(vdso_info.vdso));
 	BUG_ON(!PAGE_ALIGNED(vdso_info.size));
+
+	for_each_possible_cpu(cpu)
+		loongarch_vdso_data.pdata[cpu].node = cpu_to_node(cpu);
 
 	pfn = __phys_to_pfn(__pa_symbol(vdso_info.vdso));
 	for (i = 0; i < vdso_info.size / PAGE_SIZE; i++)
@@ -93,9 +100,9 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 
 	/*
 	 * Determine total area size. This includes the VDSO data itself
-	 * and the data page.
+	 * and the data pages.
 	 */
-	vvar_size = PAGE_SIZE;
+	vvar_size = VDSO_DATA_SIZE;
 	size = vvar_size + info->size;
 
 	data_addr = get_unmapped_area(NULL, vdso_base(), size, 0, 0);
@@ -115,8 +122,8 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 
 	/* Map VDSO data page. */
 	ret = remap_pfn_range(vma, data_addr,
-			      virt_to_phys(vdso_data) >> PAGE_SHIFT,
-			      PAGE_SIZE, PAGE_READONLY);
+			      virt_to_phys(&loongarch_vdso_data) >> PAGE_SHIFT,
+			      vvar_size, PAGE_READONLY);
 	if (ret)
 		goto out;
 

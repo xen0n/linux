@@ -12,6 +12,10 @@
 
 #include <asm/barrier.h>
 
+typedef struct vdso_pcpu_data {
+	u32 node;
+} ____cacheline_aligned_in_smp vdso_pcpu_data;
+
 /*
  * struct loongarch_vdso_info - Details of a VDSO image.
  * @vdso: Pointer to VDSO image (page-aligned).
