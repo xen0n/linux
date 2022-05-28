@@ -359,7 +359,7 @@ static inline void prefill_possible_map(void) {}
 static u32 __iomem *ls7a_wdt_ctl;
 static u32 __iomem *ls7a_wdt_kick;
 
-static void ls7a_enable_wdt(bool enable)
+void ls7a_enable_wdt(bool enable)
 {
 	if (enable) {
 		writel(2, ls7a_wdt_ctl);
