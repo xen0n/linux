@@ -9,6 +9,8 @@
 #define ra	$r1	/* return address */
 #define tp	$r2
 #define sp	$r3	/* stack pointer */
+#define v0	$r4	/* return value - caller saved */
+#define v1	$r5
 #define a0	$r4	/* argument registers */
 #define a1	$r5
 #define a2	$r6

@@ -30,8 +30,10 @@
 #include <linux/smp.h>
 #include <linux/stddef.h>
 #include <linux/seccomp.h>
+#include <linux/tracehook.h>
 #include <linux/uaccess.h>
 
+#include <asm/abidefs.h>
 #include <asm/byteorder.h>
 #include <asm/cpu.h>
 #include <asm/cpu-info.h>

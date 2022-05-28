@@ -13,6 +13,8 @@
 #ifndef __ASM_ASM_H
 #define __ASM_ASM_H
 
+#include <asm/abidefs.h>
+
 /* LoongArch pref instruction. */
 #ifdef CONFIG_CPU_HAS_PREFETCH
 
@@ -32,8 +34,10 @@
 /*
  * Stack alignment
  */
+#if (_LOONGARCH_SIM == _LOONGARCH_SIM_ABILP64)
 #define ALSZ	15
 #define ALMASK	~15
+#endif
 
 /*
  * Macros to handle different pointer/register sizes for 32/64-bit code
@@ -52,14 +56,7 @@
  * Use the following macros in assemblercode to load/store registers,
  * pointers etc.
  */
-#if (SZREG == 4)
-#define REG_S		st.w
-#define REG_L		ld.w
-#define REG_SUBU	sub.w
-#define REG_ADDU	add.w
-#endif
-
-#if (SZREG == 8)
+#if (_LOONGARCH_SIM == _LOONGARCH_SIM_ABILP64)
 #define REG_S		st.d
 #define REG_L		ld.d
 #define REG_SUBU	sub.d
@@ -69,7 +66,7 @@
 /*
  * How to add/sub/load/store/shift C int variables.
  */
-#if (__SIZEOF_INT__ == 4)
+#if (_LOONGARCH_SZINT == 32)
 #define INT_ADDU	add.w
 #define INT_ADDIU	addi.w
 #define INT_SUBU	sub.w
@@ -83,7 +80,7 @@
 #define INT_SRAV	sra.w
 #endif
 
-#if (__SIZEOF_INT__ == 8)
+#if (_LOONGARCH_SZINT == 64)
 #define INT_ADDU	add.d
 #define INT_ADDIU	addi.d
 #define INT_SUBU	sub.d
@@ -93,14 +90,14 @@
 #define INT_SLLV	sll.d
 #define INT_SRL		srli.d
 #define INT_SRLV	srl.d
-#define INT_SRA		srai.d
+#define INT_SRA		sra.w
 #define INT_SRAV	sra.d
 #endif
 
 /*
  * How to add/sub/load/store/shift C long variables.
  */
-#if (__SIZEOF_LONG__ == 4)
+#if (_LOONGARCH_SZLONG == 32)
 #define LONG_ADDU	add.w
 #define LONG_ADDIU	addi.w
 #define LONG_SUBU	sub.w
@@ -122,7 +119,7 @@
 #define LONGLOG		2
 #endif
 
-#if (__SIZEOF_LONG__ == 8)
+#if (_LOONGARCH_SZLONG == 64)
 #define LONG_ADDU	add.d
 #define LONG_ADDIU	addi.d
 #define LONG_SUBU	sub.d
@@ -133,7 +130,7 @@
 #define LONG_SLLV	sll.d
 #define LONG_SRL	srli.d
 #define LONG_SRLV	srl.d
-#define LONG_SRA	srai.d
+#define LONG_SRA	sra.w
 #define LONG_SRAV	sra.d
 
 #ifdef __ASSEMBLY__
@@ -147,7 +144,7 @@
 /*
  * How to add/sub/load/store/shift pointers.
  */
-#if (__SIZEOF_POINTER__ == 4)
+#if (_LOONGARCH_SZPTR == 32)
 #define PTR_ADDU	add.w
 #define PTR_ADDIU	addi.w
 #define PTR_SUBU	sub.w
@@ -168,7 +165,7 @@
 #define PTRLOG		2
 #endif
 
-#if (__SIZEOF_POINTER__ == 8)
+#if (_LOONGARCH_SZPTR == 64)
 #define PTR_ADDU	add.d
 #define PTR_ADDIU	addi.d
 #define PTR_SUBU	sub.d

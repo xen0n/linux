@@ -2,7 +2,7 @@
 #ifndef __ASM_LOONGARCH_BITSPERLONG_H
 #define __ASM_LOONGARCH_BITSPERLONG_H
 
-#define __BITS_PER_LONG (__SIZEOF_LONG__ * 8)
+#define __BITS_PER_LONG _LOONGARCH_SZLONG
 
 #include <asm-generic/bitsperlong.h>
 

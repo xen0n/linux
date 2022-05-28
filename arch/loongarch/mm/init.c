@@ -15,7 +15,6 @@
 #include <linux/pagemap.h>
 #include <linux/ptrace.h>
 #include <linux/memblock.h>
-#include <linux/memremap.h>
 #include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/highmem.h>
