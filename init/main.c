@@ -1110,6 +1110,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 		efi_enter_virtual_mode();
 #endif
 	thread_stack_cache_init();
+	pr_info("XXXXXXXX init AAA\n");
 	cred_init();
 	fork_init();
 	proc_caches_init();
@@ -1117,6 +1118,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	key_init();
 	security_init();
 	dbg_late_init();
+	pr_info("XXXXXXXX init BBB\n");
 	net_ns_init();
 	vfs_caches_init();
 	pagecache_init();
@@ -1128,6 +1130,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	cgroup_init();
 	taskstats_init_early();
 	delayacct_init();
+	pr_info("XXXXXXXX init CCC\n");
 
 	poking_init();
 	check_bugs();
@@ -1135,9 +1138,11 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	acpi_subsystem_init();
 	arch_post_acpi_subsys_init();
 	kcsan_init();
+	pr_info("XXXXXXXX init DDD\n");
 
 	/* Do the rest non-__init'ed, we're now alive */
 	arch_call_rest_init();
+	pr_info("XXXXXXXX init EEE\n");
 
 	prevent_tail_call_optimization();
 }
