@@ -35,11 +35,8 @@ struct bpi_ext_mem {
 	u32 desc_version;
 	struct bpi_mem_entry {
 		u32 mem_type;
-		u32 padding;
 		u64 mem_start;
-		u64 mem_vaddr;
 		u64 mem_size;
-		u64 attribute;
 	} __packed map[BPI_MEMMAP_MAX];
 } __packed;
 

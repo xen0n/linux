@@ -183,21 +183,12 @@ static void synthesize_efi_memmaps(const struct bpi_ext_mem *bpi_memmap)
 		case ADDRESS_TYPE_PMEM:     type_str = "PMEM    "; break;
 		}
 
-		pr_info(PREFIX "memmap[%d]: type=%08x pad=%08x start=%016llx vaddr=%016llx size=%016llx attribute=%016llx\n",
+		pr_info(PREFIX "memmap[%d]: type=%08x start=%016llx size=%016llx\n",
 		        i,
 		        bpi_memmap->map[i].mem_type,
-		        bpi_memmap->map[i].padding,
 		        bpi_memmap->map[i].mem_start,
-		        bpi_memmap->map[i].mem_vaddr,
-		        bpi_memmap->map[i].mem_size,
-		        bpi_memmap->map[i].attribute
+		        bpi_memmap->map[i].mem_size
 		); // DEBUG
-		/*
-		pr_info(PREFIX "memmap[%d]: %s start=%p vaddr=%p size=%zd attribute=%llx\n",
-		        i, type_str, bpi_memmap->map[i].mem_start,
-		        bpi_memmap->map[i].mem_vaddr,
-		        bpi_memmap->map[i].mem_size,
-		        bpi_memmap->map[i].attribute);*/
 
 		switch (bpi_memmap->map[i].mem_type) {
 		case ADDRESS_TYPE_SYSRAM:
@@ -278,6 +269,7 @@ static int synthesize_efistub_fdt_from_bpi(const struct parsed_bpi *bpi)
 
 	if (fw_arg1) {
 		bpi_argv = (const char *)TO_CACHE(fw_arg1);
+		pr_info(PREFIX "BPI cmdline: %s\n", bpi_argv);
 		if (strlen(bpi_argv) > 0) {
 			ret = fdt_setprop(fdt, node, "bootargs", &bpi_argv, strlen(bpi_argv) + 1);
 			if (ret)
