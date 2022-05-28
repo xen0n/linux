@@ -141,8 +141,8 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	p->thread.csr_ecfg = csr_readl(LOONGARCH_CSR_ECFG);
 	if (unlikely(p->flags & (PF_KTHREAD | PF_IO_WORKER))) {
 		/* kernel thread */
-		p->thread.reg23 = usp; /* fn */
-		p->thread.reg24 = kthread_arg;
+		p->thread.reg23 = args->fn;
+		p->thread.reg24 = args->fn_arg;
 		p->thread.reg03 = childksp;
 		p->thread.reg01 = (unsigned long) ret_from_kernel_thread;
 		memset(childregs, 0, sizeof(struct pt_regs));
