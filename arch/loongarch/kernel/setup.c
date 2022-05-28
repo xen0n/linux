@@ -374,9 +374,6 @@ static void ls7a_enable_wdt(bool enable)
 
 void __init setup_arch(char **cmdline_p)
 {
-	setup_8250_early_printk_port(TO_UNCACHE(0x1fe001e0), 0, 1024);
-	setup_early_printk();
-
 	ls7a_wdt_ctl = (u32 __iomem *)TO_UNCACHE(0x100d0030);
 	ls7a_wdt_kick = (u32 __iomem *)TO_UNCACHE(0x100d0034);
 	ls7a_enable_wdt(true);
