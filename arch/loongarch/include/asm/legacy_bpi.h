@@ -32,7 +32,6 @@ struct bpi_extlist_head {
 struct bpi_ext_mem {
 	struct bpi_extlist_head header;
 	u8 map_count;
-	u32 desc_version;
 	struct bpi_mem_entry {
 		u32 mem_type;
 		u64 mem_start;

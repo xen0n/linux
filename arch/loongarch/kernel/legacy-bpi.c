@@ -170,8 +170,7 @@ static void synthesize_efi_memmaps(const struct bpi_ext_mem *bpi_memmap)
 {
 	int i;
 
-	pr_info(PREFIX "memmap: desc version %d, %d maps\n",
-	        bpi_memmap->desc_version, bpi_memmap->map_count);
+	pr_info(PREFIX "memmap: %d maps\n", bpi_memmap->map_count);
 
 	for (i = 0; i < bpi_memmap->map_count; i++) {
 		const char *type_str;
@@ -213,7 +212,7 @@ static void synthesize_efi_memmaps(const struct bpi_ext_mem *bpi_memmap)
 	}
 
 	synth_efi_memmap_data.phys_map = TO_PHYS((u64)&synth_efi_memmaps);
-	synth_efi_memmap_data.desc_version = bpi_memmap->desc_version;
+	synth_efi_memmap_data.desc_version = 1; // XXX not sure
 	synth_efi_memmap_data.desc_size =
 		sizeof(efi_memory_desc_t) * bpi_memmap->map_count;
 	synth_efi_memmap_data.size = synth_efi_memmap_data.desc_size;
