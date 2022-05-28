@@ -212,10 +212,9 @@ static void synthesize_efi_memmaps(const struct bpi_ext_mem *bpi_memmap)
 	}
 
 	synth_efi_memmap_data.phys_map = TO_PHYS((u64)&synth_efi_memmaps);
-	synth_efi_memmap_data.desc_version = 1; // XXX not sure
-	synth_efi_memmap_data.desc_size =
-		sizeof(efi_memory_desc_t) * bpi_memmap->map_count;
-	synth_efi_memmap_data.size = synth_efi_memmap_data.desc_size;
+	synth_efi_memmap_data.desc_version = 1; // indeed it's the current version
+	synth_efi_memmap_data.desc_size = sizeof(efi_memory_desc_t);
+	synth_efi_memmap_data.size = sizeof(efi_memory_desc_t) * bpi_memmap->map_count;
 }
 
 /* from efi/libstub/fdt.c */
