@@ -217,6 +217,32 @@ static void synthesize_efi_memmaps(const struct bpi_ext_mem *bpi_memmap)
 	synth_efi_memmap_data.size = sizeof(efi_memory_desc_t) * bpi_memmap->map_count;
 }
 
+/* adapted from MIPS arch code, as the BPI argv is processed the same way */
+static void __init cmdline_append(char *dst, const char *s, size_t max)
+{
+	if (!s[0] || !max)
+		return;
+
+	if (dst[0])
+		strlcat(dst, " ", COMMAND_LINE_SIZE);
+
+	strlcat(dst, s, max);
+}
+
+#define fw_argv(argv, index) ((char *)(long)argv[(index)])
+
+static void __init assemble_cmdline(int fw_argc, const long *fw_argv,
+				    char *dst, size_t len)
+{
+	int i;
+
+	dst[0] = '\0';
+
+	for (i = 1; i < fw_argc; i++) {
+		cmdline_append(dst, fw_argv(fw_argv, i), len);
+	}
+}
+
 /* from efi/libstub/fdt.c */
 #define EFI_DT_ADDR_CELLS_DEFAULT 2
 #define EFI_DT_SIZE_CELLS_DEFAULT 2
@@ -241,7 +267,7 @@ static void fdt_update_cell_size(void *fdt)
 static int synthesize_efistub_fdt_from_bpi(const struct parsed_bpi *bpi)
 {
 	void *fdt = synth_fdt_buf;
-	const char *bpi_argv;
+	char bpi_cmdline[COMMAND_LINE_SIZE];
 	int node, ret;
 	u32 fdt_val32;
 	u64 fdt_val64;
@@ -266,10 +292,12 @@ static int synthesize_efistub_fdt_from_bpi(const struct parsed_bpi *bpi)
 	pr_info(PREFIX "YYYYY 3.1\n");
 
 	if (fw_arg1) {
-		bpi_argv = (const char *)TO_CACHE(fw_arg1);
-		pr_info(PREFIX "BPI cmdline: %p\n", bpi_argv);
-		if (strlen(bpi_argv) > 0) {
-			ret = fdt_setprop(fdt, node, "bootargs", &bpi_argv, strlen(bpi_argv) + 1);
+		pr_info(PREFIX "BPI command line: argc = %ld, argv at %lx\n", fw_arg0, fw_arg1);
+
+		assemble_cmdline(fw_arg0, (const long *)fw_arg1, bpi_cmdline, sizeof(bpi_cmdline));
+		pr_info(PREFIX "       assembled: %s\n", bpi_cmdline);
+		if (strlen(bpi_cmdline) > 0) {
+			ret = fdt_setprop(fdt, node, "bootargs", bpi_cmdline, strlen(bpi_cmdline) + 1);
 			if (ret)
 				goto fdt_set_fail;
 		}
