@@ -124,7 +124,6 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 {
 	unsigned long clone_flags = args->flags;
 	unsigned long usp = args->stack;
-	unsigned long kthread_arg = args->stack_size;
 	unsigned long tls = args->tls;
 	unsigned long childksp;
 	struct pt_regs *childregs, *regs = current_pt_regs();
@@ -139,10 +138,10 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	p->thread.csr_crmd = csr_readl(LOONGARCH_CSR_CRMD);
 	p->thread.csr_prmd = csr_readl(LOONGARCH_CSR_PRMD);
 	p->thread.csr_ecfg = csr_readl(LOONGARCH_CSR_ECFG);
-	if (unlikely(p->flags & (PF_KTHREAD | PF_IO_WORKER))) {
+	if (unlikely(args->fn)) {
 		/* kernel thread */
-		p->thread.reg23 = args->fn;
-		p->thread.reg24 = args->fn_arg;
+		p->thread.reg23 = (unsigned long) args->fn;
+		p->thread.reg24 = (unsigned long) args->fn_arg;
 		p->thread.reg03 = childksp;
 		p->thread.reg01 = (unsigned long) ret_from_kernel_thread;
 		memset(childregs, 0, sizeof(struct pt_regs));
