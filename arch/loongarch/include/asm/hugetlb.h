@@ -42,10 +42,11 @@ static inline pte_t huge_ptep_get_and_clear(struct mm_struct *mm,
 }
 
 #define __HAVE_ARCH_HUGE_PTEP_CLEAR_FLUSH
-static inline void huge_ptep_clear_flush(struct vm_area_struct *vma,
-					 unsigned long addr, pte_t *ptep)
+static inline pte_t huge_ptep_clear_flush(struct vm_area_struct *vma,
+					  unsigned long addr, pte_t *ptep)
 {
 	flush_tlb_page(vma, addr & huge_page_mask(hstate_vma(vma)));
+	return *ptep;
 }
 
 #define __HAVE_ARCH_HUGE_PTE_NONE
