@@ -15,6 +15,7 @@ void __init memblock_init(void)
 	u32 mem_type;
 	u64 mem_start, mem_end, mem_size;
 	efi_memory_desc_t *md;
+	u32 i = 0;
 
 	/* Parse memory information */
 	for_each_efi_memory_desc(md) {
@@ -22,6 +23,12 @@ void __init memblock_init(void)
 		mem_start = md->phys_addr;
 		mem_size = md->num_pages << EFI_PAGE_SHIFT;
 		mem_end = mem_start + mem_size;
+
+		pr_info("efi_memory_desc[%d]\n", i++);
+		pr_info("  type  = %d\n", mem_type);
+		pr_info("  start = %016llx\n", mem_start);
+		pr_info("  end   = %016llx\n", mem_end);
+		pr_info("  size  = %016llx\n", mem_size);
 
 		switch (mem_type) {
 		case EFI_LOADER_CODE:

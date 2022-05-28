@@ -268,7 +268,7 @@ static int synthesize_efistub_fdt_from_bpi(const struct parsed_bpi *bpi)
 
 	if (fw_arg1) {
 		bpi_argv = (const char *)TO_CACHE(fw_arg1);
-		pr_info(PREFIX "BPI cmdline: %s\n", bpi_argv);
+		pr_info(PREFIX "BPI cmdline: %p\n", bpi_argv);
 		if (strlen(bpi_argv) > 0) {
 			ret = fdt_setprop(fdt, node, "bootargs", &bpi_argv, strlen(bpi_argv) + 1);
 			if (ret)
