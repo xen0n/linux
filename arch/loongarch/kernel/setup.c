@@ -382,8 +382,8 @@ void __init setup_arch(char **cmdline_p)
 	*cmdline_p = boot_command_line;
 
 	init_environ();
-	memblock_init();
 	parse_early_param();
+	memblock_init();
 
 	platform_init();
 	pagetable_init();
