@@ -491,24 +491,32 @@ static void __init prefill_possible_map(void)
 static inline void prefill_possible_map(void) {}
 #endif
 
+static u32 __iomem *ls7a_wdt_ctl;
+static u32 __iomem *ls7a_wdt_kick;
+static u32 __iomem *ls7a_wdt_cnt;
+
 static void ls7a_toggle_dog(bool enable)
 {
 	if (enable) {
-		*(volatile u32 *)(TO_UNCAC(0x100d0030)) = 2;
-		*(volatile u32 *)(TO_UNCAC(0x100d0034)) = 1;
+		writel(2, ls7a_wdt_ctl);
+		writel(1, ls7a_wdt_kick);
 		return;
 	}
 
-	*(volatile u32 *)(TO_UNCAC(0x100d0030)) = 0;
+	writel(0, ls7a_wdt_ctl);
 }
 
 static u32 ls7a_read_dog(void)
 {
-	return *(volatile u32 *)(TO_UNCAC(0x100d0038));
+	return readl(ls7a_wdt_cnt);
 }
 
 void __init setup_arch(char **cmdline_p)
 {
+	ls7a_wdt_ctl = (u32 __iomem *)TO_UNCAC(0x100d0030);
+	ls7a_wdt_kick = (u32 __iomem *)TO_UNCAC(0x100d0034);
+	ls7a_wdt_cnt = (u32 __iomem *)TO_UNCAC(0x100d0038);
+
 	pr_info("XXX watchdog countdown now 0x%x\n", ls7a_read_dog());
 	ls7a_toggle_dog(true);
 	pr_info("XXX watchdog enabled, countdown now 0x%x\n", ls7a_read_dog());
@@ -519,11 +527,14 @@ void __init setup_arch(char **cmdline_p)
 	fw_init_environ();
 	early_memblock_init();
 	bootcmdline_init(cmdline_p);
+	pr_info("XXX 1 watchdog countdown now 0x%x\n", ls7a_read_dog());
 
 	init_initrd();
 	platform_init();
+	pr_info("XXX 2 watchdog countdown now 0x%x\n", ls7a_read_dog());
 	pagetable_init();
 	finalize_initrd();
+	pr_info("XXX 3 watchdog countdown now 0x%x\n", ls7a_read_dog());
 
 	arch_mem_init(cmdline_p);
 
