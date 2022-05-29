@@ -16,6 +16,17 @@
 
 #define PREFIX "BPI: "
 
+static efi_memory_desc_t synth_efi_memmaps[BPI_MEMMAP_MAX];
+static struct efi_memory_map_data synth_efi_memmap_data;
+static char synth_fdt_buf[4096];
+
+static bool bpi_boot_flag = false;
+
+int is_booted_with_bpi(void)
+{
+	return bpi_boot_flag;
+}
+
 /* Parses BPI signature for version. */
 static enum bpi_version parse_bpi_signature(u64 signature)
 {
@@ -161,10 +172,6 @@ next:
 
 	return 0;
 }
-
-static efi_memory_desc_t synth_efi_memmaps[BPI_MEMMAP_MAX];
-static struct efi_memory_map_data synth_efi_memmap_data;
-static char synth_fdt_buf[4096];
 
 static void synthesize_efi_memmaps(const struct bpi_ext_mem *bpi_memmap)
 {
@@ -362,6 +369,8 @@ void __init maybe_handle_bpi(void **fdt_ptr)
 		pr_err(PREFIX "BPI is invalid, continuing with normal boot\n");
 		return;
 	}
+
+	bpi_boot_flag = true;
 
 	if (bpi.ver >= BPI_VERSION_V2) {
 		pr_info(PREFIX "EFI boot %s\n", bpi.is_efi_boot ? "enabled" : "disabled");

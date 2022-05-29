@@ -84,11 +84,11 @@ struct parsed_bpi {
 };
 
 #ifdef CONFIG_LEGACY_BPI
+extern int is_booted_with_bpi(void);
 extern void __init maybe_handle_bpi(void **fdt_ptr);
 #else
-static inline void maybe_handle_bpi(void **fdt_ptr)
-{
-}
+static inline int is_booted_with_bpi(void) { return 0; }
+static inline void maybe_handle_bpi(void **fdt_ptr) {}
 #endif
 
 #endif
