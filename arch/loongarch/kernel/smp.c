@@ -211,6 +211,11 @@ void loongson3_boot_secondary(int cpu, struct task_struct *idle)
 	cpuboot_data.stack = (unsigned long)__KSTK_TOS(idle);
 	cpuboot_data.thread_info = (unsigned long)task_thread_info(idle);
 
+	pr_info("  PC = 0x%016lx\n", entry);
+	pr_info("  SP = 0x%016lx\n", cpuboot_data.stack);
+	pr_info("  TP = 0x%016lx\n", cpuboot_data.thread_info);
+	pr_info("  map to %d\n", cpu_logical_map(cpu));
+
 	csr_mail_send(entry, cpu_logical_map(cpu), 0);
 
 	loongson3_send_ipi_single(cpu, SMP_BOOT_CPU);
