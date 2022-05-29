@@ -167,12 +167,10 @@ void __init efi_runtime_init(void)
 	if (!efi_systab->runtime)
 		return;
 
-	/*
 	pr_info("EFI EFI 1\n");
 	status = set_virtual_map();
 	if (status < 0)
 		return;
-		*/
 
 	pr_info("EFI EFI 2\n");
 	if (efi_runtime_disabled()) {
