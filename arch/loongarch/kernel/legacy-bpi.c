@@ -118,7 +118,7 @@ static int parse_bpi(const struct bootparamsinterface *bpi_ptr, struct parsed_bp
 		         signature_buf);
 		return -EINVAL;
 	}
-	pr_info(PREFIX "found BPI version %d\n", out->ver);
+	pr_info(PREFIX "found BPI version %d at %016llx\n", out->ver, (u64)bpi_ptr);
 
 	if (out->ver >= BPI_VERSION_V2) {
 		out->is_efi_boot = (bpi_ptr->flags & BPI_FLAGS_UEFI_SUPPORTED) != 0;
@@ -177,8 +177,6 @@ static void synthesize_efi_memmaps(const struct bpi_ext_mem *bpi_memmap)
 {
 	int i;
 
-	pr_info(PREFIX "memmap: %d maps\n", bpi_memmap->map_count);
-
 	for (i = 0; i < bpi_memmap->map_count; i++) {
 		const char *type_str;
 		switch (bpi_memmap->map[i].mem_type) {
@@ -189,9 +187,8 @@ static void synthesize_efi_memmaps(const struct bpi_ext_mem *bpi_memmap)
 		case ADDRESS_TYPE_PMEM:     type_str = "PMEM    "; break;
 		}
 
-		pr_info(PREFIX "memmap[%d]: type=%08x start=%016llx size=%016llx\n",
-		        i,
-		        bpi_memmap->map[i].mem_type,
+		pr_info(PREFIX "MEM: %s start=%016llx size=0x%llx\n",
+		        type_str,
 		        bpi_memmap->map[i].mem_start,
 		        bpi_memmap->map[i].mem_size
 		); // DEBUG
@@ -279,9 +276,7 @@ static int synthesize_efistub_fdt_from_bpi(const struct parsed_bpi *bpi)
 	u32 fdt_val32;
 	u64 fdt_val64;
 
-	pr_info(PREFIX "YYYYY 1\n");
 	synthesize_efi_memmaps(bpi->bpi_memmap);
-	pr_info(PREFIX "YYYYY 2\n");
 
 	ret = fdt_create_empty_tree(fdt, sizeof(synth_fdt_buf));
 	if (ret == 0) {
@@ -290,26 +285,23 @@ static int synthesize_efistub_fdt_from_bpi(const struct parsed_bpi *bpi)
 		goto fdt_set_fail;
 	}
 
-	pr_info(PREFIX "YYYYY 3\n");
 	node = fdt_add_subnode(fdt, 0, "chosen");
 	if (node < 0) {
 		ret = node;
 		goto fdt_set_fail;
 	}
-	pr_info(PREFIX "YYYYY 3.1\n");
 
 	if (fw_arg1) {
-		pr_info(PREFIX "BPI command line: argc = %ld, argv at %lx\n", fw_arg0, fw_arg1);
+		pr_debug(PREFIX "command line: argc = %ld, argv at %lx\n", fw_arg0, fw_arg1);
 
 		assemble_cmdline(fw_arg0, (const long *)fw_arg1, bpi_cmdline, sizeof(bpi_cmdline));
-		pr_info(PREFIX "       assembled: %s\n", bpi_cmdline);
+		pr_debug(PREFIX "   assembled: %s\n", bpi_cmdline);
 		if (strlen(bpi_cmdline) > 0) {
 			ret = fdt_setprop(fdt, node, "bootargs", bpi_cmdline, strlen(bpi_cmdline) + 1);
 			if (ret)
 				goto fdt_set_fail;
 		}
 	}
-	pr_info(PREFIX "YYYYY 3.2\n");
 
 #define SETxx(prop, bit, val) do { \
 	fdt_val##bit = cpu_to_fdt##bit(val); \
@@ -322,27 +314,20 @@ static int synthesize_efistub_fdt_from_bpi(const struct parsed_bpi *bpi)
 #define SET64(prop, val) SETxx(prop, 64, val)
 
 	SET64(EFISTUB_FDT_PROP_SYSTAB, bpi->efi_systab);
-	pr_info(PREFIX "YYYYY 3.3\n");
 	SET64(EFISTUB_FDT_PROP_MMBASE, synth_efi_memmap_data.phys_map);
-	pr_info(PREFIX "YYYYY 3.4\n");
 	SET32(EFISTUB_FDT_PROP_MMSIZE, synth_efi_memmap_data.size);
-	pr_info(PREFIX "YYYYY 3.5\n");
 	SET32(EFISTUB_FDT_PROP_DCSIZE, synth_efi_memmap_data.desc_size);
-	pr_info(PREFIX "YYYYY 3.6\n");
 	SET32(EFISTUB_FDT_PROP_DCVERS, synth_efi_memmap_data.desc_version);
 
 #undef SET32
 #undef SET64
 #undef SETxx
 
-	pr_info(PREFIX "YYYYY 4\n");
 	fdt_pack(fdt);
-	pr_info(PREFIX "YYYYY ok\n");
 
 	return 0;
 
 fdt_set_fail:
-	pr_info(PREFIX "YYYYY err %d\n", ret);
 	if (ret == -FDT_ERR_NOSPACE)
 		return -ENOMEM;
 
@@ -361,8 +346,6 @@ void __init maybe_handle_bpi(void **fdt_ptr)
 	}
 
 	bpi_ptr = (struct bootparamsinterface *)early_memremap_ro(fw_arg2, SZ_64K);
-	no_hash_pointers_enable(NULL);
-	pr_info(PREFIX "potential BPI at %p\n", (const void *)fw_arg2);
 
 	ret = parse_bpi(bpi_ptr, &bpi);
 	if (ret) {
@@ -394,5 +377,5 @@ void __init maybe_handle_bpi(void **fdt_ptr)
 		return;
 	}
 	*fdt_ptr = synth_fdt_buf;
-	pr_info(PREFIX "synthesized FDT from BPI at %p\n", synth_fdt_buf);
+	pr_debug(PREFIX "synthesized FDT from BPI at %p\n", synth_fdt_buf);
 }
