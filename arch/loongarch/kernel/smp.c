@@ -577,6 +577,8 @@ asmlinkage void start_secondary(void)
 	unsigned int cpu;
 
 	pr_info("XXXX start_secondary 1\n");
+	pr_info("     I saw sp = 0x%016lx\n", cpuboot_data.stack);
+	pr_info("     I saw tp = 0x%016lx\n", cpuboot_data.thread_info);
 
 	sync_counter();
 	pr_info("XXXX start_secondary 1.1\n");
