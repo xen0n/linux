@@ -61,7 +61,6 @@ static int __init early_initrdmem(char *p)
 		phys_initrd_start = start;
 		phys_initrd_size = size;
 	}
-	pr_info("XXXXX early_initrdmem: p=\"%s\" phys_initrd_start=%p phys_initrd_size=%d\n", p, phys_initrd_start, phys_initrd_size);
 	return 0;
 }
 early_param("initrdmem", early_initrdmem);
