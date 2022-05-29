@@ -180,9 +180,7 @@ void __init efi_runtime_init(void)
 		return;
 	}
 
-	pr_info("efi_systab = %p\n", efi_systab);
 	efi.runtime = (efi_runtime_services_t *)TO_CACHE((u64)efi_systab->runtime);
-	pr_info("efi.runtime = %p\n", efi.runtime);
 	efi.runtime_version = (unsigned int)efi.runtime->hdr.revision;
 
 	pr_info("EFI EFI 3\n");
