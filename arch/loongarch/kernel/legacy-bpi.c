@@ -60,7 +60,7 @@ static int parse_bpi_mem(const struct bpi_extlist_head *head, struct parsed_bpi 
 		return -EINVAL;
 	}
 
-	pr_info(PREFIX "  MEM table at %p (length=%d)\n", v, head->length);
+	pr_info(PREFIX "  MEM table at 0x%016lx (length=%d)\n", (u64)v, head->length);
 	out->bpi_memmap = v;
 	return 0;
 }
@@ -74,7 +74,7 @@ static int parse_bpi_vbios(struct bpi_extlist_head *head, struct parsed_bpi *out
 		return -EINVAL;
 	}
 
-	pr_info(PREFIX "  VBIOS table at %p (length=%d)\n", v, head->length);
+	pr_info(PREFIX "  VBIOS table at 0x%016lx (length=%d)\n", (u64)v, head->length);
 	out->vbios_addr = v->vbios_addr;
 	return 0;
 }
@@ -89,7 +89,7 @@ static int parse_bpi_sinfo(struct bpi_extlist_head *head, struct parsed_bpi *out
 		return -EINVAL;
 	}
 
-	pr_info(PREFIX "  SINFO table at %p (length=%d)\n", v, head->length);
+	pr_info(PREFIX "  SINFO table at 0x%016lx (length=%d)\n", (u64)v, head->length);
 	memcpy(&out->screen_info, &v->si, sizeof(out->screen_info));
 	return 0;
 }
@@ -124,7 +124,7 @@ static int parse_bpi(const struct bootparamsinterface *bpi_ptr, struct parsed_bp
 		out->is_efi_boot = (bpi_ptr->flags & BPI_FLAGS_UEFI_SUPPORTED) != 0;
 	}
 
-	pr_info(PREFIX "  EFI system table at %p\n", bpi_ptr->systemtable);
+	pr_info(PREFIX "  EFI system table at 0x%016lx\n", bpi_ptr->systemtable);
 	out->efi_systab = bpi_ptr->systemtable;
 
 	p = bpi_ptr->extlist;
@@ -292,7 +292,7 @@ static int synthesize_efistub_fdt_from_bpi(const struct parsed_bpi *bpi)
 	}
 
 	if (fw_arg1) {
-		pr_debug(PREFIX "command line: argc = %ld, argv at %lx\n", fw_arg0, fw_arg1);
+		pr_debug(PREFIX "command line: argc = %ld, argv at 0x%016lx\n", fw_arg0, fw_arg1);
 
 		assemble_cmdline(fw_arg0, (const long *)fw_arg1, bpi_cmdline, sizeof(bpi_cmdline));
 		pr_debug(PREFIX "   assembled: %s\n", bpi_cmdline);
@@ -377,5 +377,4 @@ void __init maybe_handle_bpi(void **fdt_ptr)
 		return;
 	}
 	*fdt_ptr = synth_fdt_buf;
-	pr_debug(PREFIX "synthesized FDT from BPI at %p\n", synth_fdt_buf);
 }
