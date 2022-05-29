@@ -684,7 +684,6 @@ noinline void __ref rest_init(void)
 	struct task_struct *tsk;
 	int pid;
 
-	pr_info(">>>>>>>>>> rest_init 1\n");
 	rcu_scheduler_starting();
 	/*
 	 * We need to spawn init first so that it obtains pid 1, however
@@ -692,7 +691,6 @@ noinline void __ref rest_init(void)
 	 * we schedule it before we create kthreadd, will OOPS.
 	 */
 	pid = user_mode_thread(kernel_init, NULL, CLONE_FS);
-	pr_info(">>>>>>>>>> rest_init 2\n");
 	/*
 	 * Pin init on the boot CPU. Task migration is not properly working
 	 * until sched_init_smp() has been run. It will set the allowed
@@ -703,14 +701,12 @@ noinline void __ref rest_init(void)
 	tsk->flags |= PF_NO_SETAFFINITY;
 	set_cpus_allowed_ptr(tsk, cpumask_of(smp_processor_id()));
 	rcu_read_unlock();
-	pr_info(">>>>>>>>>> rest_init 3\n");
 
 	numa_default_policy();
 	pid = kernel_thread(kthreadd, NULL, CLONE_FS | CLONE_FILES);
 	rcu_read_lock();
 	kthreadd_task = find_task_by_pid_ns(pid, &init_pid_ns);
 	rcu_read_unlock();
-	pr_info(">>>>>>>>>> rest_init 4\n");
 
 	/*
 	 * Enable might_sleep() and smp_processor_id() checks.
@@ -722,17 +718,14 @@ noinline void __ref rest_init(void)
 	system_state = SYSTEM_SCHEDULING;
 
 	complete(&kthreadd_done);
-	pr_info(">>>>>>>>>> rest_init 5\n");
 
 	/*
 	 * The boot idle thread must execute schedule()
 	 * at least once to get things moving:
 	 */
 	schedule_preempt_disabled();
-	pr_info(">>>>>>>>>> rest_init 6\n");
 	/* Call into cpu_idle with preempt disabled */
 	cpu_startup_entry(CPUHP_ONLINE);
-	pr_info(">>>>>>>>>> rest_init finished\n");
 }
 
 /* Check for early params. */
@@ -1117,7 +1110,6 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 		efi_enter_virtual_mode();
 #endif
 	thread_stack_cache_init();
-	pr_info("XXXXXXXX init AAA\n");
 	cred_init();
 	fork_init();
 	proc_caches_init();
@@ -1125,7 +1117,6 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	key_init();
 	security_init();
 	dbg_late_init();
-	pr_info("XXXXXXXX init BBB\n");
 	net_ns_init();
 	vfs_caches_init();
 	pagecache_init();
@@ -1137,7 +1128,6 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	cgroup_init();
 	taskstats_init_early();
 	delayacct_init();
-	pr_info("XXXXXXXX init CCC\n");
 
 	poking_init();
 	check_bugs();
@@ -1145,11 +1135,9 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	acpi_subsystem_init();
 	arch_post_acpi_subsys_init();
 	kcsan_init();
-	pr_info("XXXXXXXX init DDD\n");
 
 	/* Do the rest non-__init'ed, we're now alive */
 	arch_call_rest_init();
-	pr_info("XXXXXXXX init EEE\n");
 
 	prevent_tail_call_optimization();
 }

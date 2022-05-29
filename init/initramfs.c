@@ -619,8 +619,6 @@ void __init reserve_initrd_mem(void)
 	initrd_end = initrd_start + phys_initrd_size;
 	initrd_below_start_ok = 1;
 
-	pr_info(">>>>>>>> start=0x%08llx size=0x%08lx initrd_start=%p initrd_end=%p\n", (u64)start, size, (void *)initrd_start, (void *)initrd_end);
-
 	return;
 disable:
 	pr_cont(" - disabling initrd\n");
