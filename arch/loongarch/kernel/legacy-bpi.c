@@ -60,7 +60,7 @@ static int parse_bpi_mem(const struct bpi_extlist_head *head, struct parsed_bpi 
 		return -EINVAL;
 	}
 
-	pr_info(PREFIX "  MEM table at 0x%016lx (length=%d)\n", (u64)v, head->length);
+	pr_info(PREFIX "  MEM table at 0x%016llx (length=%d)\n", (u64)v, head->length);
 	out->bpi_memmap = v;
 	return 0;
 }
@@ -74,7 +74,7 @@ static int parse_bpi_vbios(struct bpi_extlist_head *head, struct parsed_bpi *out
 		return -EINVAL;
 	}
 
-	pr_info(PREFIX "  VBIOS table at 0x%016lx (length=%d)\n", (u64)v, head->length);
+	pr_info(PREFIX "  VBIOS table at 0x%016llx (length=%d)\n", (u64)v, head->length);
 	out->vbios_addr = v->vbios_addr;
 	return 0;
 }
@@ -89,7 +89,7 @@ static int parse_bpi_sinfo(struct bpi_extlist_head *head, struct parsed_bpi *out
 		return -EINVAL;
 	}
 
-	pr_info(PREFIX "  SINFO table at 0x%016lx (length=%d)\n", (u64)v, head->length);
+	pr_info(PREFIX "  SINFO table at 0x%016llx (length=%d)\n", (u64)v, head->length);
 	memcpy(&out->screen_info, &v->si, sizeof(out->screen_info));
 	return 0;
 }
@@ -118,13 +118,13 @@ static int parse_bpi(const struct bootparamsinterface *bpi_ptr, struct parsed_bp
 		         signature_buf);
 		return -EINVAL;
 	}
-	pr_info(PREFIX "found BPI version %d at %016llx\n", out->ver, (u64)bpi_ptr);
+	pr_info(PREFIX "found BPI version %d at 0x%016llx\n", out->ver, (u64)bpi_ptr);
 
 	if (out->ver >= BPI_VERSION_V2) {
 		out->is_efi_boot = (bpi_ptr->flags & BPI_FLAGS_UEFI_SUPPORTED) != 0;
 	}
 
-	pr_info(PREFIX "  EFI system table at 0x%016lx\n", bpi_ptr->systemtable);
+	pr_info(PREFIX "  EFI system table at 0x%016llx\n", (u64)bpi_ptr->systemtable);
 	out->efi_systab = bpi_ptr->systemtable;
 
 	p = bpi_ptr->extlist;
@@ -187,7 +187,7 @@ static void synthesize_efi_memmaps(const struct bpi_ext_mem *bpi_memmap)
 		case ADDRESS_TYPE_PMEM:     type_str = "PMEM    "; break;
 		}
 
-		pr_info(PREFIX "MEM: %s start=%016llx size=0x%llx\n",
+		pr_info(PREFIX "MEM: %s start=0x%016llx size=0x%llx\n",
 		        type_str,
 		        bpi_memmap->map[i].mem_start,
 		        bpi_memmap->map[i].mem_size
