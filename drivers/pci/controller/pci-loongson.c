@@ -134,10 +134,20 @@ static void __iomem *cfg0_map(struct loongson_pci *priv, int bus,
 	return priv->cfg0_base + addroff;
 }
 
+static bool pdev_is_existant(unsigned char bus, unsigned int device, unsigned int function)
+{
+	if ((bus == 0) && (device >= 9 && device <= 20) && (function > 0))
+		return false;
+
+	return true;
+}
+
 static void __iomem *pci_loongson_map_bus(struct pci_bus *bus, unsigned int devfn,
 			       int where)
 {
 	unsigned char busnum = bus->number;
+	unsigned int device = PCI_SLOT(devfn);
+	unsigned int function = PCI_FUNC(devfn);
 	struct loongson_pci *priv = pci_bus_to_loongson_pci(bus);
 
 	if (pci_is_root_bus(bus))
@@ -147,8 +157,13 @@ static void __iomem *pci_loongson_map_bus(struct pci_bus *bus, unsigned int devf
 	 * Do not read more than one device on the bus other than
 	 * the host bus.
 	 */
-	if (priv->data->flags & FLAG_DEV_FIX &&
-			!pci_is_root_bus(bus) && PCI_SLOT(devfn) > 0)
+	if ((priv->data->flags & FLAG_DEV_FIX) && bus->self) {
+		if (!pci_is_root_bus(bus) && (device > 0))
+			return NULL;
+	}
+
+	/* Don't access non-existant devices */
+	if (!pdev_is_existant(busnum, device, function))
 		return NULL;
 
 	/* CFG0 can only access standard space */
