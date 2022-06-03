@@ -163,13 +163,13 @@ static int eiointc_router_init(unsigned int cpu)
 
 		for (i = 0; i < VEC_COUNT / 32; i++) {
 			data = (((1 << (i * 2 + 1)) << 16) | (1 << (i * 2)));
-			iocsr_writel(data, EIOINTC_REG_NODEMAP + i * 4);
+			iocsr_write32(data, EIOINTC_REG_NODEMAP + i * 4);
 		}
 
 		for (i = 0; i < VEC_COUNT / 32 / 4; i++) {
 			bit = BIT(1 + index); /* Route to IP[1 + index] */
 			data = bit | (bit << 8) | (bit << 16) | (bit << 24);
-			iocsr_writel(data, EIOINTC_REG_IPMAP + i * 4);
+			iocsr_write32(data, EIOINTC_REG_IPMAP + i * 4);
 		}
 
 		for (i = 0; i < VEC_COUNT / 4; i++) {
@@ -180,13 +180,13 @@ static int eiointc_router_init(unsigned int cpu)
 				bit = (eiointc_priv[index]->node << 4) | 1;
 
 			data = bit | (bit << 8) | (bit << 16) | (bit << 24);
-			iocsr_writel(data, EIOINTC_REG_ROUTE + i * 4);
+			iocsr_write32(data, EIOINTC_REG_ROUTE + i * 4);
 		}
 
 		for (i = 0; i < VEC_COUNT / 32; i++) {
 			data = 0xffffffff;
-			iocsr_writel(data, EIOINTC_REG_ENABLE + i * 4);
-			iocsr_writel(data, EIOINTC_REG_BOUNCE + i * 4);
+			iocsr_write32(data, EIOINTC_REG_ENABLE + i * 4);
+			iocsr_write32(data, EIOINTC_REG_BOUNCE + i * 4);
 		}
 	}
 
@@ -204,8 +204,8 @@ static void eiointc_irq_dispatch(struct irq_desc *desc)
 	chained_irq_enter(chip, desc);
 
 	for (i = 0; i < VEC_REG_COUNT; i++) {
-		pending = iocsr_readq(EIOINTC_REG_ISR + (i << 3));
-		iocsr_writeq(pending, EIOINTC_REG_ISR + (i << 3));
+		pending = iocsr_read64(EIOINTC_REG_ISR + (i << 3));
+		iocsr_write64(pending, EIOINTC_REG_ISR + (i << 3));
 		while (pending) {
 			int bit = __ffs(pending);
 			int irq = bit + VEC_COUNT_PER_REG * i;
