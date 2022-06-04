@@ -54,6 +54,7 @@ int acpi_isa_irq_to_gsi(unsigned int isa_irq, u32 *gsi)
  */
 int acpi_register_gsi(struct device *dev, u32 gsi, int trigger, int polarity)
 {
+	int id;
 	struct irq_fwspec fwspec;
 
 	switch (gsi) {
@@ -76,11 +77,12 @@ int acpi_register_gsi(struct device *dev, u32 gsi, int trigger, int polarity)
 		return irq_create_fwspec_mapping(&fwspec);
 
 	case GSI_MIN_PCH_IRQ ... GSI_MAX_PCH_IRQ:
-		if (!pch_pic_domain[0])
+		id = find_pch_pic(gsi);
+		if (id < 0)
 			return -EINVAL;
 
-		fwspec.fwnode = pch_pic_domain[0]->fwnode;
-		fwspec.param[0] = gsi - GSI_MIN_PCH_IRQ;
+		fwspec.fwnode = pch_pic_domain[id]->fwnode;
+		fwspec.param[0] = gsi - acpi_pchpic[id]->gsi_base;
 		fwspec.param[1] = IRQ_TYPE_LEVEL_HIGH;
 		fwspec.param_count = 2;
 
@@ -169,18 +171,186 @@ static int set_processor_mask(u32 id, u32 flags)
 }
 #endif
 
+static int __init
+acpi_parse_cpuintc(union acpi_subtable_headers *header, const unsigned long end)
+{
+	struct acpi_madt_core_pic *processor = NULL;
+
+	processor = (struct acpi_madt_core_pic *)header;
+	if (BAD_MADT_ENTRY(processor, end))
+		return -EINVAL;
+
+	acpi_table_print_madt_entry(&header->common);
+#ifdef CONFIG_SMP
+	set_processor_mask(processor->core_id, processor->flags);
+#endif
+
+	return 0;
+}
+
+static int __init
+acpi_parse_liointc(union acpi_subtable_headers *header, const unsigned long end)
+{
+	struct acpi_madt_lio_pic *liointc = NULL;
+
+	liointc = (struct acpi_madt_lio_pic *)header;
+
+	if (BAD_MADT_ENTRY(liointc, end))
+		return -EINVAL;
+
+	acpi_liointc = liointc;
+
+	return 0;
+}
+
+static int __init
+acpi_parse_eiointc(union acpi_subtable_headers *header, const unsigned long end)
+{
+	static int id = 0;
+	struct acpi_madt_eio_pic *eiointc = NULL;
+
+	eiointc = (struct acpi_madt_eio_pic *)header;
+
+	if (BAD_MADT_ENTRY(eiointc, end))
+		return -EINVAL;
+
+	acpi_eiointc[id++] = eiointc;
+	loongson_sysconf.nr_io_pics = id;
+
+	return 0;
+}
+
+static int __init
+acpi_parse_htintc(union acpi_subtable_headers *header, const unsigned long end)
+{
+	struct acpi_madt_ht_pic *htintc = NULL;
+
+	htintc = (struct acpi_madt_ht_pic *)header;
+
+	if (BAD_MADT_ENTRY(htintc, end))
+		return -EINVAL;
+
+	acpi_htintc = htintc;
+	loongson_sysconf.nr_io_pics = 1;
+
+	return 0;
+}
+
+static int __init
+acpi_parse_pch_pic(union acpi_subtable_headers *header, const unsigned long end)
+{
+	static int id = 0;
+	struct acpi_madt_bio_pic *pchpic = NULL;
+
+	pchpic = (struct acpi_madt_bio_pic *)header;
+
+	if (BAD_MADT_ENTRY(pchpic, end))
+		return -EINVAL;
+
+	acpi_pchpic[id++] = pchpic;
+
+	return 0;
+}
+
+static int __init
+acpi_parse_pch_msi(union acpi_subtable_headers *header, const unsigned long end)
+{
+	static int id = 0;
+	struct acpi_madt_msi_pic *pchmsi = NULL;
+
+	pchmsi = (struct acpi_madt_msi_pic *)header;
+
+	if (BAD_MADT_ENTRY(pchmsi, end))
+		return -EINVAL;
+
+	acpi_pchmsi[id++] = pchmsi;
+
+	return 0;
+}
+
+static int __init
+acpi_parse_pch_lpc(union acpi_subtable_headers *header, const unsigned long end)
+{
+	struct acpi_madt_lpc_pic *pchlpc = NULL;
+
+	pchlpc = (struct acpi_madt_lpc_pic *)header;
+
+	if (BAD_MADT_ENTRY(pchlpc, end))
+		return -EINVAL;
+
+	acpi_pchlpc = pchlpc;
+
+	return 0;
+}
+
 static void __init acpi_process_madt(void)
 {
-#ifdef CONFIG_SMP
-	int i;
+	int i, error;
 
+#ifdef CONFIG_SMP
 	for (i = 0; i < NR_CPUS; i++) {
 		__cpu_number_map[i] = -1;
 		__cpu_logical_map[i] = -1;
 	}
 #endif
 
+	/* Parse MADT CPUINTC entries */
+	error = acpi_table_parse_madt(ACPI_MADT_TYPE_CORE_PIC, acpi_parse_cpuintc, MAX_CORE_PIC);
+	if (error < 0) {
+		disable_acpi();
+		pr_err(PREFIX "Invalid BIOS MADT (CPUINTC entries), ACPI disabled\n");
+		return;
+	}
+
 	loongson_sysconf.nr_cpus = num_processors;
+
+	/* Parse MADT LIOINTC entries */
+	error = acpi_table_parse_madt(ACPI_MADT_TYPE_LIO_PIC, acpi_parse_liointc, 1);
+	if (error < 0) {
+		disable_acpi();
+		pr_err(PREFIX "Invalid BIOS MADT (LIOINTC entries), ACPI disabled\n");
+		return;
+	}
+
+	/* Parse MADT EIOINTC entries */
+	error = acpi_table_parse_madt(ACPI_MADT_TYPE_EIO_PIC, acpi_parse_eiointc, MAX_IO_PICS);
+	if (error < 0) {
+		disable_acpi();
+		pr_err(PREFIX "Invalid BIOS MADT (EIOINTC entries), ACPI disabled\n");
+		return;
+	}
+
+	/* Parse MADT HTVEC entries */
+	error = acpi_table_parse_madt(ACPI_MADT_TYPE_HT_PIC, acpi_parse_htintc, 1);
+	if (error < 0) {
+		disable_acpi();
+		pr_err(PREFIX "Invalid BIOS MADT (HTVEC entries), ACPI disabled\n");
+		return;
+	}
+
+	/* Parse MADT PCHPIC entries */
+	error = acpi_table_parse_madt(ACPI_MADT_TYPE_BIO_PIC, acpi_parse_pch_pic, MAX_IO_PICS);
+	if (error < 0) {
+		disable_acpi();
+		pr_err(PREFIX "Invalid BIOS MADT (PCHPIC entries), ACPI disabled\n");
+		return;
+	}
+
+	/* Parse MADT PCHMSI entries */
+	error = acpi_table_parse_madt(ACPI_MADT_TYPE_MSI_PIC, acpi_parse_pch_msi, MAX_IO_PICS);
+	if (error < 0) {
+		disable_acpi();
+		pr_err(PREFIX "Invalid BIOS MADT (PCHMSI entries), ACPI disabled\n");
+		return;
+	}
+
+	/* Parse MADT PCHLPC entries */
+	error = acpi_table_parse_madt(ACPI_MADT_TYPE_LPC_PIC, acpi_parse_pch_lpc, 1);
+	if (error < 0) {
+		disable_acpi();
+		pr_err(PREFIX "Invalid BIOS MADT (PCHLPC entries), ACPI disabled\n");
+		return;
+	}
 }
 
 int __init acpi_boot_init(void)

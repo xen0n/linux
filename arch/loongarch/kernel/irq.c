@@ -25,11 +25,37 @@ DEFINE_PER_CPU(unsigned long, irq_stack);
 DEFINE_PER_CPU_SHARED_ALIGNED(irq_cpustat_t, irq_stat);
 EXPORT_PER_CPU_SYMBOL(irq_stat);
 
+struct acpi_madt_lio_pic *acpi_liointc;
+struct acpi_madt_eio_pic *acpi_eiointc[MAX_IO_PICS];
+
+struct acpi_madt_ht_pic *acpi_htintc;
+struct acpi_madt_lpc_pic *acpi_pchlpc;
+struct acpi_madt_msi_pic *acpi_pchmsi[MAX_IO_PICS];
+struct acpi_madt_bio_pic *acpi_pchpic[MAX_IO_PICS];
+
 struct irq_domain *cpu_domain;
 struct irq_domain *liointc_domain;
 struct irq_domain *pch_lpc_domain;
 struct irq_domain *pch_msi_domain[MAX_IO_PICS];
 struct irq_domain *pch_pic_domain[MAX_IO_PICS];
+
+int find_pch_pic(u32 gsi)
+{
+	int i, start, end;
+
+	/* Find the PCH_PIC that manages this GSI. */
+	for (i = 0; i < loongson_sysconf.nr_io_pics; i++) {
+		struct acpi_madt_bio_pic *irq_cfg = acpi_pchpic[i];
+
+		start = irq_cfg->gsi_base;
+		end   = irq_cfg->gsi_base + irq_cfg->size;
+		if (gsi >= start && gsi < end)
+			return i;
+	}
+
+	pr_err("ERROR: Unable to locate PCH_PIC for GSI %d\n", gsi);
+	return -1;
+}
 
 /*
  * 'what should we do if we get a hw irq event on an illegal vector'.
@@ -68,6 +94,9 @@ void __init init_IRQ(void)
 
 	clear_csr_ecfg(ECFG0_IM);
 	clear_csr_estat(ESTATF_IP);
+
+	if (!acpi_eiointc[0])
+		cpu_data[0].options &= ~LOONGARCH_CPU_EXTIOI;
 
 	irqchip_init();
 #ifdef CONFIG_SMP
