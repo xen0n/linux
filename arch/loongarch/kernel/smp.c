@@ -242,8 +242,17 @@ void loongson3_smp_finish(void)
 
 static bool io_master(int cpu)
 {
+	int i, node, master;
+
 	if (cpu == 0)
 		return true;
+
+	for (i = 1; i < loongson_sysconf.nr_io_pics; i++) {
+		node = eiointc_get_node(i);
+		master = cpu_number_map(node * CORES_PER_EIO_NODE);
+		if (cpu == master)
+			return true;
+	}
 
 	return false;
 }

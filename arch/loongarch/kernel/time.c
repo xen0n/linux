@@ -132,7 +132,7 @@ int constant_clockevent_init(void)
 	struct clock_event_device *cd;
 	static int timer_irq_installed = 0;
 
-	irq = EXCCODE_TIMER - EXCCODE_INT_START;
+	irq = get_timer_irq();
 
 	cd = &per_cpu(constant_clockevent_device, cpu);
 

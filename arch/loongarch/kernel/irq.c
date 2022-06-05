@@ -8,7 +8,6 @@
 #include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
-#include <linux/irqchip.h>
 #include <linux/kernel_stat.h>
 #include <linux/proc_fs.h>
 #include <linux/mm.h>
@@ -82,6 +81,35 @@ int arch_show_interrupts(struct seq_file *p, int prec)
 	return 0;
 }
 
+void __init setup_IRQ(void)
+{
+	int i;
+	struct irq_domain *parent_domain;
+
+	if (!acpi_eiointc[0])
+		cpu_data[0].options &= ~LOONGARCH_CPU_EXTIOI;
+
+	cpu_domain = loongarch_cpu_irq_init();
+	liointc_domain = liointc_acpi_init(cpu_domain, acpi_liointc);
+
+	if (cpu_has_extioi) {
+		pr_info("Using EIOINTC interrupt mode\n");
+		for (i = 0; i < loongson_sysconf.nr_io_pics; i++) {
+			parent_domain = eiointc_acpi_init(cpu_domain, acpi_eiointc[i]);
+			pch_pic_domain[i] = pch_pic_acpi_init(parent_domain, acpi_pchpic[i]);
+			pch_msi_domain[i] = pch_msi_acpi_init(parent_domain, acpi_pchmsi[i]);
+		}
+	} else {
+		pr_info("Using HTVECINTC interrupt mode\n");
+		parent_domain = htvec_acpi_init(liointc_domain, acpi_htintc);
+		pch_pic_domain[0] = pch_pic_acpi_init(parent_domain, acpi_pchpic[0]);
+		pch_msi_domain[0] = pch_msi_acpi_init(parent_domain, acpi_pchmsi[0]);
+	}
+
+	irq_set_default_host(pch_pic_domain[0]);
+	pch_lpc_domain = pch_lpc_acpi_init(pch_pic_domain[0], acpi_pchlpc);
+}
+
 void __init init_IRQ(void)
 {
 	int i;
@@ -95,12 +123,9 @@ void __init init_IRQ(void)
 	clear_csr_ecfg(ECFG0_IM);
 	clear_csr_estat(ESTATF_IP);
 
-	if (!acpi_eiointc[0])
-		cpu_data[0].options &= ~LOONGARCH_CPU_EXTIOI;
-
-	irqchip_init();
+	setup_IRQ();
 #ifdef CONFIG_SMP
-	ipi_irq = EXCCODE_IPI - EXCCODE_INT_START;
+	ipi_irq = get_ipi_irq();
 	irq_set_percpu_devid(ipi_irq);
 	r = request_percpu_irq(ipi_irq, loongson3_ipi_interrupt, "IPI", &ipi_dummy_dev);
 	if (r < 0)
