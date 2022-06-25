@@ -8,13 +8,6 @@
 
 #include <asm/asm.h>
 #include <asm/page.h>
-#include <asm/vdso.h>
-
-#if PAGE_SIZE < SZ_16K
-#define VDSO_DATA_SIZE SZ_16K
-#else
-#define VDSO_DATA_SIZE PAGE_SIZE
-#endif
 
 static inline unsigned long get_vdso_base(void)
 {
@@ -31,8 +24,7 @@ static inline unsigned long get_vdso_base(void)
 
 static inline const struct vdso_data *get_vdso_data(void)
 {
-	return (const struct vdso_data *)(get_vdso_base()
-			- VDSO_DATA_SIZE + SMP_CACHE_BYTES * NR_CPUS);
+	return (const struct vdso_data *)(get_vdso_base() - PAGE_SIZE);
 }
 
 #endif /* __ASSEMBLY__ */
