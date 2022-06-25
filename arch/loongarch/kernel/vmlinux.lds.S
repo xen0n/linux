@@ -35,6 +35,7 @@ SECTIONS
 	. = VMLINUX_LOAD_ADDRESS;
 
 	_text = .;
+	_stext = .;
 	HEAD_TEXT_SECTION
 
 	. = ALIGN(PECOFF_SEGMENT_ALIGN);
