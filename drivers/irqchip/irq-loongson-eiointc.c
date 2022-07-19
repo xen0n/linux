@@ -55,6 +55,11 @@ static void eiointc_enable(void)
 	iocsr_write64(misc, LOONGARCH_IOCSR_MISC_FUNC);
 }
 
+int eiointc_get_node(int id)
+{
+	return eiointc_priv[id]->node;
+}
+
 static int cpu_to_eio_node(int cpu)
 {
 	return cpu_logical_map(cpu) / CORES_PER_EIO_NODE;
