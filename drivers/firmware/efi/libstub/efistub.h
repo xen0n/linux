@@ -284,8 +284,8 @@ union efi_boot_services {
 		void *install_multiple_protocol_interfaces;
 		void *uninstall_multiple_protocol_interfaces;
 		void *calculate_crc32;
-		void *copy_mem;
-		void *set_mem;
+		void (__efiapi *copy_mem)(void *, const void *, unsigned long);
+		void (__efiapi *set_mem)(void *, unsigned long, unsigned char);
 		void *create_event_ex;
 	};
 	struct {
