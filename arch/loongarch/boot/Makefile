@@ -18,3 +18,11 @@ $(obj)/vmlinux.elf: vmlinux FORCE
 targets += vmlinux.efi
 $(obj)/vmlinux.efi: vmlinux FORCE
 	$(call if_changed,objcopy)
+
+ifneq ($(CONFIG_EFI_ZBOOT),)
+EFI_ZBOOT_PAYLOAD      := $(obj)/vmlinux.efi
+EFI_ZBOOT_BFD_TARGET   := elf64-loongarch
+EFI_ZBOOT_MACH_TYPE    := LOONGARCH64
+
+include $(srctree)/drivers/firmware/efi/libstub/Makefile.zboot
+endif
