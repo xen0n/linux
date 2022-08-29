@@ -8,6 +8,14 @@
 #include <asm/cmpxchg.h>
 #include <asm/loongarch.h>
 
+#if defined(MODULE) && defined(CONFIG_AS_HAS_EXPLICIT_RELOCS)
+/* The "address" (in fact, offset from $r21) of a per-CPU variable is close
+ * to the load address of main kernel image, but far from where the modules are
+ * loaded.  Tell the compiler this fact.
+ */
+# define PER_CPU_ATTRIBUTES __attribute__((model("extreme")))
+#endif
+
 /* Use r21 for fast access */
 register unsigned long __my_cpu_offset __asm__("$r21");
 

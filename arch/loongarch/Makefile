@@ -53,6 +53,9 @@ LDFLAGS_vmlinux			+= -G0 -static -n -nostdlib
 # combination of a "new" assembler and "old" compiler is not supported.  Either
 # upgrade the compiler or downgrade the assembler.
 ifdef CONFIG_AS_HAS_EXPLICIT_RELOCS
+ifeq ($(shell echo '__has_attribute(model)' | $(CC) -E -P - 2> /dev/null), 0)
+$(error "C compiler must support model attribute if using explicit relocs")
+endif
 cflags-y			+= -mexplicit-relocs
 else
 cflags-y			+= $(call cc-option,-mno-explicit-relocs)
