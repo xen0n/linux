@@ -15,6 +15,7 @@ LoongArch体系结构
 
    introduction
    irq-chip-model
+   syscall-abi
 
    features
 
