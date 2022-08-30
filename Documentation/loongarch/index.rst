@@ -10,6 +10,7 @@ LoongArch Architecture
 
    introduction
    irq-chip-model
+   syscall-abi
 
    features
 
