@@ -449,13 +449,6 @@ static void etnaviv_hw_identify(struct etnaviv_gpu *gpu)
 				gpu_read(gpu, VIVS_HI_CHIP_MINOR_FEATURE_5);
 	}
 
-	/* Loongson Workaround */
-	if (gpu->identity.model == chipModel_GC1000 &&
-	    gpu->identity.revision == 0x5037) {
-		gpu->identity.minor_features0 &= ~chipMinorFeatures0_HZ;
-		gpu->identity.minor_features2 &= ~chipMinorFeatures2_DYNAMIC_FREQUENCY_SCALING;
-	}
-
 	/* GC600 idle register reports zero bits where modules aren't present */
 	if (gpu->identity.model == chipModel_GC600)
 		gpu->idle_mask = VIVS_HI_IDLE_STATE_TX |
@@ -1416,7 +1409,7 @@ out_unlock:
 	return gpu_fence;
 }
 
-void sync_point_worker(struct work_struct *work)
+static void sync_point_worker(struct work_struct *work)
 {
 	struct etnaviv_gpu *gpu = container_of(work, struct etnaviv_gpu,
 					       sync_point_work);
@@ -1460,7 +1453,7 @@ static void dump_mmu_fault(struct etnaviv_gpu *gpu)
 	}
 }
 
-irqreturn_t irq_handler(int irq, void *data)
+static irqreturn_t irq_handler(int irq, void *data)
 {
 	struct etnaviv_gpu *gpu = data;
 	irqreturn_t ret = IRQ_NONE;
@@ -1799,10 +1792,6 @@ static int etnaviv_gpu_platform_probe(struct platform_device *pdev)
 	gpu->mmio = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(gpu->mmio))
 		return PTR_ERR(gpu->mmio);
-
-#ifdef CONFIG_CPU_LOONGSON3
-	dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32));
-#endif
 
 	/* Get Interrupt: */
 	gpu->irq = platform_get_irq(pdev, 0);
