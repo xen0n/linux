@@ -158,22 +158,34 @@ static void __show_regs(const struct pt_regs *regs)
 	const int field = 2 * sizeof(unsigned long);
 	unsigned int excsubcode;
 	unsigned int exccode;
-	int i;
 
 	show_regs_print_info(KERN_DEFAULT);
 
-	/*
-	 * Saved main processor registers
-	 */
-	for (i = 0; i < 32; ) {
-		if ((i % 4) == 0)
-			printk("$%2d   :", i);
-		pr_cont(" %0*lx", field, regs->regs[i]);
+	/* Print most of the GPRs, 3 per row to fit output in 75 columns */
+	pr_cont("tp %0*lx sp %0*lx a0 %0*lx\n",
+		field, regs->regs[2], field, regs->regs[3], field, regs->regs[4]);
+	pr_cont("a1 %0*lx a2 %0*lx a3 %0*lx\n",
+		field, regs->regs[5], field, regs->regs[6], field, regs->regs[7]);
+	pr_cont("a4 %0*lx a5 %0*lx a6 %0*lx\n",
+		field, regs->regs[8], field, regs->regs[9], field, regs->regs[10]);
+	pr_cont("a7 %0*lx t0 %0*lx t1 %0*lx\n",
+		field, regs->regs[11], field, regs->regs[12], field, regs->regs[13]);
+	pr_cont("t2 %0*lx t3 %0*lx t4 %0*lx\n",
+		field, regs->regs[14], field, regs->regs[15], field, regs->regs[16]);
+	pr_cont("t5 %0*lx t6 %0*lx t7 %0*lx\n",
+		field, regs->regs[17], field, regs->regs[18], field, regs->regs[19]);
+	pr_cont("t8 %0*lx u0 %0*lx s9 %0*lx\n",
+		field, regs->regs[20], field, regs->regs[21], field, regs->regs[22]);
+	pr_cont("s0 %0*lx s1 %0*lx s2 %0*lx\n",
+		field, regs->regs[23], field, regs->regs[24], field, regs->regs[25]);
+	pr_cont("s3 %0*lx s4 %0*lx s5 %0*lx\n",
+		field, regs->regs[26], field, regs->regs[27], field, regs->regs[28]);
+	pr_cont("s6 %0*lx s7 %0*lx s8 %0*lx\n",
+		field, regs->regs[29], field, regs->regs[30], field, regs->regs[31]);
 
-		i++;
-		if ((i % 4) == 0)
-			pr_cont("\n");
-	}
+	/* The slot for $zero is reused as the syscall restart flag */
+	if (regs->regs[0])
+		pr_cont("syscall restart flag: %0*lx\n", field, regs->regs[0]);
 
 	/*
 	 * Saved csr registers
