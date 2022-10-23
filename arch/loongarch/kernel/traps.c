@@ -161,22 +161,32 @@ static void __show_regs(const struct pt_regs *regs)
 	const int field = 2 * sizeof(unsigned long);
 	unsigned int excsubcode;
 	unsigned int exccode;
-	int i;
 
 	show_regs_print_info(KERN_DEFAULT);
 
-	/*
-	 * Saved main processor registers
-	 */
-	for (i = 0; i < 32; ) {
-		if ((i % 4) == 0)
-			printk("$%2d   :", i);
-		pr_cont(" %0*lx", field, regs->regs[i]);
-
-		i++;
-		if ((i % 4) == 0)
-			pr_cont("\n");
-	}
+	/* Print PC and GPRs, 3 per row to fit output in 75 columns */
+	pr_cont(" pc %0*lx ra %0*lx tp %0*lx\n",
+		field, regs->csr_era, field, regs->regs[1], field, regs->regs[2]);
+	pr_cont(" sp %0*lx a0 %0*lx a1 %0*lx\n",
+		field, regs->regs[3], field, regs->regs[4], field, regs->regs[5]);
+	pr_cont(" a2 %0*lx a3 %0*lx a4 %0*lx\n",
+		field, regs->regs[6], field, regs->regs[7], field, regs->regs[8]);
+	pr_cont(" a5 %0*lx a6 %0*lx a7 %0*lx\n",
+		field, regs->regs[9], field, regs->regs[10], field, regs->regs[11]);
+	pr_cont(" t0 %0*lx t1 %0*lx t2 %0*lx\n",
+		field, regs->regs[12], field, regs->regs[13], field, regs->regs[14]);
+	pr_cont(" t3 %0*lx t4 %0*lx t5 %0*lx\n",
+		field, regs->regs[15], field, regs->regs[16], field, regs->regs[17]);
+	pr_cont(" t6 %0*lx t7 %0*lx t8 %0*lx\n",
+		field, regs->regs[18], field, regs->regs[19], field, regs->regs[20]);
+	pr_cont("r21 %0*lx s9 %0*lx s0 %0*lx\n",
+		field, regs->regs[21], field, regs->regs[22], field, regs->regs[23]);
+	pr_cont(" s1 %0*lx s2 %0*lx s3 %0*lx\n",
+		field, regs->regs[24], field, regs->regs[25], field, regs->regs[26]);
+	pr_cont(" s4 %0*lx s5 %0*lx s6 %0*lx\n",
+		field, regs->regs[27], field, regs->regs[28], field, regs->regs[29]);
+	pr_cont(" s7 %0*lx s8 %0*lx\n",
+		field, regs->regs[30], field, regs->regs[31]);
 
 	/*
 	 * Saved csr registers
