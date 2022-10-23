@@ -155,25 +155,35 @@ static void show_code(unsigned int *pc, bool user)
 
 static void __show_regs(const struct pt_regs *regs)
 {
-	const int field = 2 * sizeof(unsigned long);
+	const int gpr_width = 2 * sizeof(unsigned long);
 	unsigned int excsubcode;
 	unsigned int exccode;
-	int i;
 
 	show_regs_print_info(KERN_DEFAULT);
 
-	/*
-	 * Saved main processor registers
-	 */
-	for (i = 0; i < 32; ) {
-		if ((i % 4) == 0)
-			printk("$%2d   :", i);
-		pr_cont(" %0*lx", field, regs->regs[i]);
+	/* Print GPRs except $zero, maintaining a grid layout */
+#define GPR_FIELD(x) gpr_width, regs->regs[REG_ ## x]
+	pr_cont("%*c ra %0*lx tp %0*lx sp %0*lx\n",
+		3 + field, ' ', GPR_FIELD(RA), GPR_FIELD(TP), GPR_FIELD(SP));
+	pr_cont("a0 %0*lx a1 %0*lx a2 %0*lx a3 %0*lx\n",
+		GPR_FIELD(A0), GPR_FIELD(A1), GPR_FIELD(A2), GPR_FIELD(A3));
+	pr_cont("a4 %0*lx a5 %0*lx a6 %0*lx a7 %0*lx\n",
+		GPR_FIELD(A4), GPR_FIELD(A5), GPR_FIELD(A6), GPR_FIELD(A7));
+	pr_cont("t0 %0*lx t1 %0*lx t2 %0*lx t3 %0*lx\n",
+		GPR_FIELD(T0), GPR_FIELD(T1), GPR_FIELD(T2), GPR_FIELD(T3));
+	pr_cont("t4 %0*lx t5 %0*lx t6 %0*lx t7 %0*lx\n",
+		GPR_FIELD(T4), GPR_FIELD(T5), GPR_FIELD(T6), GPR_FIELD(T7));
+	pr_cont("t8 %0*lx u0 %0*lx s9 %0*lx s0 %0*lx\n",
+		GPR_FIELD(T8), GPR_FIELD(U0), GPR_FIELD(FP), GPR_FIELD(S0));
+	pr_cont("s1 %0*lx s2 %0*lx s3 %0*lx s4 %0*lx\n",
+		GPR_FIELD(S1), GPR_FIELD(S2), GPR_FIELD(S3), GPR_FIELD(S4));
+	pr_cont("s5 %0*lx s6 %0*lx s7 %0*lx s8 %0*lx\n",
+		GPR_FIELD(S5), GPR_FIELD(S6), GPR_FIELD(S7), GPR_FIELD(S8));
 
-		i++;
-		if ((i % 4) == 0)
-			pr_cont("\n");
-	}
+	/* The slot for $zero is reused as the syscall restart flag */
+	if (regs->regs[0])
+		pr_cont("syscall restart flag: %0*lx\n", GPR_FIELD(ZERO));
+#undef GPR_FIELD
 
 	/*
 	 * Saved csr registers
