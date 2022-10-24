@@ -318,9 +318,9 @@ static __always_inline void iocsr_write64(u64 val, u32 reg)
 #define  CSR_ESTAT_ESUBCODE_SHIFT	22
 #define  CSR_ESTAT_ESUBCODE_WIDTH	9
 #define  CSR_ESTAT_ESUBCODE		(_ULCAST_(0x1ff) << CSR_ESTAT_ESUBCODE_SHIFT)
-#define  CSR_ESTAT_EXC_SHIFT		16
-#define  CSR_ESTAT_EXC_WIDTH		6
-#define  CSR_ESTAT_EXC			(_ULCAST_(0x3f) << CSR_ESTAT_EXC_SHIFT)
+#define  CSR_ESTAT_ECODE_SHIFT		16
+#define  CSR_ESTAT_ECODE_WIDTH		6
+#define  CSR_ESTAT_ECODE		(_ULCAST_(0x3f) << CSR_ESTAT_ECODE_SHIFT)
 #define  CSR_ESTAT_IS_SHIFT		0
 #define  CSR_ESTAT_IS_WIDTH		15
 #define  CSR_ESTAT_IS			(_ULCAST_(0x7fff) << CSR_ESTAT_IS_SHIFT)
@@ -1194,9 +1194,9 @@ static inline void csr_any_send(unsigned int addr, unsigned int data,
 	iocsr_write64(val, LOONGARCH_IOCSR_ANY_SEND);
 }
 
-static inline unsigned int read_csr_excode(void)
+static inline unsigned int read_csr_ecode(void)
 {
-	return (csr_read32(LOONGARCH_CSR_ESTAT) & CSR_ESTAT_EXC) >> CSR_ESTAT_EXC_SHIFT;
+	return (csr_read32(LOONGARCH_CSR_ESTAT) & CSR_ESTAT_ECODE) >> CSR_ESTAT_ECODE_SHIFT;
 }
 
 static inline void write_csr_index(unsigned int idx)
