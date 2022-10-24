@@ -37,13 +37,13 @@ static inline unsigned long mask_fcsr_x(unsigned long fcsr)
 
 static inline int is_fp_enabled(void)
 {
-	return (csr_read32(LOONGARCH_CSR_EUEN) & CSR_EUEN_FPEN) ?
+	return (csr_read32(LOONGARCH_CSR_EUEN) & CSR_EUEN_FPE) ?
 		1 : 0;
 }
 
-#define enable_fpu()		set_csr_euen(CSR_EUEN_FPEN)
+#define enable_fpu()		set_csr_euen(CSR_EUEN_FPE)
 
-#define disable_fpu()		clear_csr_euen(CSR_EUEN_FPEN)
+#define disable_fpu()		clear_csr_euen(CSR_EUEN_FPE)
 
 #define clear_fpu_owner()	clear_thread_flag(TIF_USEDFPU)
 
@@ -56,7 +56,7 @@ static inline void __own_fpu(void)
 {
 	enable_fpu();
 	set_thread_flag(TIF_USEDFPU);
-	KSTK_EUEN(current) |= CSR_EUEN_FPEN;
+	KSTK_EUEN(current) |= CSR_EUEN_FPE;
 }
 
 static inline void own_fpu_inatomic(int restore)
@@ -83,7 +83,7 @@ static inline void lose_fpu_inatomic(int save, struct task_struct *tsk)
 		disable_fpu();
 		clear_tsk_thread_flag(tsk, TIF_USEDFPU);
 	}
-	KSTK_EUEN(tsk) &= ~(CSR_EUEN_FPEN | CSR_EUEN_LSXEN | CSR_EUEN_LASXEN);
+	KSTK_EUEN(tsk) &= ~(CSR_EUEN_FPE | CSR_EUEN_SXE | CSR_EUEN_ASXE);
 }
 
 static inline void lose_fpu(int save)

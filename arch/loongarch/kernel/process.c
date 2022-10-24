@@ -79,7 +79,7 @@ void start_thread(struct pt_regs *regs, unsigned long pc, unsigned long sp)
 	prmd |= PLV_USER;
 	regs->csr_prmd = prmd;
 
-	euen = regs->csr_euen & ~(CSR_EUEN_FPEN);
+	euen = regs->csr_euen & ~(CSR_EUEN_FPE);
 	regs->csr_euen = euen;
 	lose_fpu(0);
 

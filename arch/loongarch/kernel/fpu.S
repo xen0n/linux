@@ -175,7 +175,7 @@ SYM_FUNC_END(_restore_fp)
  */
 
 SYM_FUNC_START(_init_fpu)
-	li.w	t1, CSR_EUEN_FPEN
+	li.w	t1, CSR_EUEN_FPE
 	csrxchg	t1, t1, LOONGARCH_CSR_EUEN
 
 	movgr2fcsr	fcsr0, a0
