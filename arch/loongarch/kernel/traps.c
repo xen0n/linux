@@ -187,6 +187,12 @@ static void print_memory_type_fragment(const char *key, unsigned long val)
 	}
 }
 
+static void print_intr_fragment(const char *key, unsigned long val)
+{
+	/* e.g. "LIE=0-1,3,5-7" */
+	pr_cont(" %s=%*pbl", key, INT_NUM, &val);
+}
+
 static void print_crmd(unsigned long x)
 {
 	pr_cont(" crmd: %08lx (", x);
@@ -216,6 +222,13 @@ static void print_euen(unsigned long x)
 	print_bool_fragment("ASXE", FIELD_GET(CSR_EUEN_ASXE, x), false);
 	print_bool_fragment("SXE", FIELD_GET(CSR_EUEN_SXE, x), false);
 	print_bool_fragment("FPE", FIELD_GET(CSR_EUEN_FPE, x), false);
+	pr_cont(")\n");
+}
+
+static void print_ecfg(unsigned long x)
+{
+	pr_cont(" ecfg: %08lx (VS=%d", x, (int) FIELD_GET(CSR_ECFG_VS, x));
+	print_intr_fragment("LIE", FIELD_GET(CSR_ECFG_LIE, x));
 	pr_cont(")\n");
 }
 
@@ -260,7 +273,7 @@ static void __show_regs(const struct pt_regs *regs)
 	print_crmd(regs->csr_crmd);
 	print_prmd(regs->csr_prmd);
 	print_euen(regs->csr_euen);
-	pr_cont(" ecfg: %08lx\n", regs->csr_ecfg);
+	print_ecfg(regs->csr_ecfg);
 	pr_cont("estat: %08lx\n", regs->csr_estat);
 
 	exccode = ((regs->csr_estat) & CSR_ESTAT_ECODE) >> CSR_ESTAT_ECODE_SHIFT;
