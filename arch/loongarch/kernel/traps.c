@@ -198,7 +198,7 @@ static void __show_regs(const struct pt_regs *regs)
 	excsubcode = ((regs->csr_estat) & CSR_ESTAT_ESUBCODE) >> CSR_ESTAT_ESUBCODE_SHIFT;
 	printk("ExcCode : %x (SubCode %x)\n", exccode, excsubcode);
 
-	if (exccode >= EXCCODE_TLBL && exccode <= EXCCODE_ALE)
+	if (exccode >= ECODE_PIL && exccode <= ECODE_ALE)
 		printk("BadVA : %0*lx\n", field, regs->csr_badvaddr);
 
 	printk("PrId  : %08x (%s)\n", read_cpucfg(LOONGARCH_CPUCFG0),
@@ -746,18 +746,18 @@ void __init trap_init(void)
 	for (i = EXCCODE_INT_START; i < EXCCODE_INT_END; i++)
 		set_handler(i * VECSIZE, handle_vint, VECSIZE);
 
-	set_handler(EXCCODE_ADE * VECSIZE, handle_ade, VECSIZE);
-	set_handler(EXCCODE_ALE * VECSIZE, handle_ale, VECSIZE);
-	set_handler(EXCCODE_SYS * VECSIZE, handle_sys, VECSIZE);
-	set_handler(EXCCODE_BP * VECSIZE, handle_bp, VECSIZE);
-	set_handler(EXCCODE_INE * VECSIZE, handle_ri, VECSIZE);
-	set_handler(EXCCODE_IPE * VECSIZE, handle_ri, VECSIZE);
-	set_handler(EXCCODE_FPDIS * VECSIZE, handle_fpu, VECSIZE);
-	set_handler(EXCCODE_LSXDIS * VECSIZE, handle_lsx, VECSIZE);
-	set_handler(EXCCODE_LASXDIS * VECSIZE, handle_lasx, VECSIZE);
-	set_handler(EXCCODE_FPE * VECSIZE, handle_fpe, VECSIZE);
-	set_handler(EXCCODE_BTDIS * VECSIZE, handle_lbt, VECSIZE);
-	set_handler(EXCCODE_WATCH * VECSIZE, handle_watch, VECSIZE);
+	set_handler(ECODE_ADE * VECSIZE, handle_ade, VECSIZE);
+	set_handler(ECODE_ALE * VECSIZE, handle_ale, VECSIZE);
+	set_handler(ECODE_SYS * VECSIZE, handle_sys, VECSIZE);
+	set_handler(ECODE_BRK * VECSIZE, handle_bp, VECSIZE);
+	set_handler(ECODE_INE * VECSIZE, handle_ri, VECSIZE);
+	set_handler(ECODE_IPE * VECSIZE, handle_ri, VECSIZE);
+	set_handler(ECODE_FPD * VECSIZE, handle_fpu, VECSIZE);
+	set_handler(ECODE_SXD * VECSIZE, handle_lsx, VECSIZE);
+	set_handler(ECODE_ASXD * VECSIZE, handle_lasx, VECSIZE);
+	set_handler(ECODE_FPE * VECSIZE, handle_fpe, VECSIZE);
+	set_handler(ECODE_BTD * VECSIZE, handle_lbt, VECSIZE);
+	set_handler(ECODE_WPE * VECSIZE, handle_watch, VECSIZE);
 
 	cache_error_setup();
 
