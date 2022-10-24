@@ -264,13 +264,13 @@ void setup_tlb_handler(int cpu)
 	if (cpu == 0) {
 		memcpy((void *)tlbrentry, handle_tlb_refill, 0x80);
 		local_flush_icache_range(tlbrentry, tlbrentry + 0x80);
-		set_handler(EXCCODE_TLBI * VECSIZE, handle_tlb_load, VECSIZE);
-		set_handler(EXCCODE_TLBL * VECSIZE, handle_tlb_load, VECSIZE);
-		set_handler(EXCCODE_TLBS * VECSIZE, handle_tlb_store, VECSIZE);
-		set_handler(EXCCODE_TLBM * VECSIZE, handle_tlb_modify, VECSIZE);
-		set_handler(EXCCODE_TLBNR * VECSIZE, handle_tlb_protect, VECSIZE);
-		set_handler(EXCCODE_TLBNX * VECSIZE, handle_tlb_protect, VECSIZE);
-		set_handler(EXCCODE_TLBPE * VECSIZE, handle_tlb_protect, VECSIZE);
+		set_handler(ECODE_PIF * VECSIZE, handle_tlb_load, VECSIZE);
+		set_handler(ECODE_PIL * VECSIZE, handle_tlb_load, VECSIZE);
+		set_handler(ECODE_PIS * VECSIZE, handle_tlb_store, VECSIZE);
+		set_handler(ECODE_PME * VECSIZE, handle_tlb_modify, VECSIZE);
+		set_handler(ECODE_PNR * VECSIZE, handle_tlb_protect, VECSIZE);
+		set_handler(ECODE_PNX * VECSIZE, handle_tlb_protect, VECSIZE);
+		set_handler(ECODE_PPI * VECSIZE, handle_tlb_protect, VECSIZE);
 	}
 #ifdef CONFIG_NUMA
 	else {
