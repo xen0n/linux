@@ -232,11 +232,76 @@ static void print_ecfg(unsigned long x)
 	pr_cont(")\n");
 }
 
+static const char *humanize_exc_name(unsigned int ecode, unsigned int esubcode)
+{
+	switch (ecode) {
+	case ECODE_INT: return "INT";
+	case ECODE_PIL: return "PIL";
+	case ECODE_PIS: return "PIS";
+	case ECODE_PIF: return "PIF";
+	case ECODE_PME: return "PME";
+	case ECODE_PNR: return "PNR";
+	case ECODE_PNX: return "PNX";
+	case ECODE_PPI: return "PPI";
+	case ECODE_ADE:
+		switch (esubcode) {
+		case ESUBCODE_ADEF: return "ADEF";
+		case ESUBCODE_ADEM: return "ADEM";
+		}
+		break;
+	case ECODE_ALE: return "ALE";
+	case ECODE_BCE: return "BCE";
+	case ECODE_SYS: return "SYS";
+	case ECODE_BRK: return "BRK";
+	case ECODE_INE: return "INE";
+	case ECODE_IPE: return "IPE";
+	case ECODE_FPD: return "FPD";
+	case ECODE_SXD: return "SXD";
+	case ECODE_ASXD: return "ASXD";
+	case ECODE_FPE:
+		switch (esubcode) {
+		case ESUBCODE_FPE: return "FPE";
+		case ESUBCODE_VFPE: return "VFPE";
+		}
+		break;
+	case ECODE_WPE:
+		switch (esubcode) {
+		case ESUBCODE_WPEF: return "WPEF";
+		case ESUBCODE_WPEM: return "WPEM";
+		}
+		break;
+	case ECODE_BTD: return "BTD";
+	case ECODE_BTE: return "BTE";
+	case ECODE_GSPR: return "GSPR";
+	case ECODE_HVC: return "HVC";
+	case ECODE_GCM:
+		switch (esubcode) {
+		case ESUBCODE_GCSC: return "GCSC";
+		case ESUBCODE_GCHC: return "GCHC";
+		}
+		break;
+	}
+
+	return "???";
+}
+
+static void print_estat(unsigned long x)
+{
+	unsigned int ecode = FIELD_GET(CSR_ESTAT_ECODE, x);
+	unsigned int esubcode = FIELD_GET(CSR_ESTAT_ESUBCODE, x);
+
+	pr_cont("estat: %08lx [%s] (EsubCode=%d ECode=%d", x,
+		humanize_exc_name(ecode, esubcode),
+		(int) FIELD_GET(CSR_ESTAT_ESUBCODE, x),
+		(int) FIELD_GET(CSR_ESTAT_ECODE, x));
+	print_intr_fragment("IS", FIELD_GET(CSR_ESTAT_IS, x));
+	pr_cont(")\n");
+}
+
 static void __show_regs(const struct pt_regs *regs)
 {
 	const int field = 2 * sizeof(unsigned long);
-	unsigned int excsubcode;
-	unsigned int exccode;
+	unsigned int ecode = FIELD_GET(CSR_ESTAT_ECODE, regs->csr_estat);
 
 	show_regs_print_info(KERN_DEFAULT);
 
@@ -274,13 +339,9 @@ static void __show_regs(const struct pt_regs *regs)
 	print_prmd(regs->csr_prmd);
 	print_euen(regs->csr_euen);
 	print_ecfg(regs->csr_ecfg);
-	pr_cont("estat: %08lx\n", regs->csr_estat);
+	print_estat(regs->csr_estat);
 
-	exccode = ((regs->csr_estat) & CSR_ESTAT_ECODE) >> CSR_ESTAT_ECODE_SHIFT;
-	excsubcode = ((regs->csr_estat) & CSR_ESTAT_ESUBCODE) >> CSR_ESTAT_ESUBCODE_SHIFT;
-	printk("ExcCode : %x (SubCode %x)\n", exccode, excsubcode);
-
-	if (exccode >= ECODE_PIL && exccode <= ECODE_ALE)
+	if (ecode >= ECODE_PIL && ecode <= ECODE_ALE)
 		printk("BadVA : %0*lx\n", field, regs->csr_badvaddr);
 
 	printk("PrId  : %08x (%s)\n", read_cpucfg(LOONGARCH_CPUCFG0),
