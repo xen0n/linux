@@ -1417,23 +1417,34 @@ __BUILD_CSR_OP(tlbidx)
 	#define ESUBCODE_GCHC		1	/* ..., Hardware Caused */
 #define ECODE_SE		25	/* Undocumented: Security */
 
-#define EXCCODE_INT_START   64
-#define EXCCODE_SIP0        64
-#define EXCCODE_SIP1        65
-#define EXCCODE_IP0         66
-#define EXCCODE_IP1         67
-#define EXCCODE_IP2         68
-#define EXCCODE_IP3         69
-#define EXCCODE_IP4         70
-#define EXCCODE_IP5         71
-#define EXCCODE_IP6         72
-#define EXCCODE_IP7         73
-#define EXCCODE_PMC         74 /* Performance Counter */
-#define EXCCODE_TIMER       75
-#define EXCCODE_IPI         76
-#define EXCCODE_NMI         77
-#define EXCCODE_INT_END     78
-#define EXCCODE_INT_NUM	    (EXCCODE_INT_END - EXCCODE_INT_START)
+/*
+ * Interrupt numbers
+ *
+ * The LoongArch ISA manual v1.02 says there are 13 interrupts in total (see
+ * the description about CSR.ESTAT, Volume 1, section 7.4.6), unfortunately
+ * in this case the manual is wrong, and the definitions here shall prevail.
+ * In other words, the widths of CSR.ECFG.LIE and CSR.ESTAT.IS are 14 bits,
+ * instead of 13 as the manual suggests otherwise.
+ */
+#define INT_SWI0	0	/* Software Interrupts */
+#define INT_SWI1	1
+#define INT_HWI0	2	/* Hardware Interrupts */
+#define INT_HWI1	3
+#define INT_HWI2	4
+#define INT_HWI3	5
+#define INT_HWI4	6
+#define INT_HWI5	7
+#define INT_HWI6	8
+#define INT_HWI7	9
+#define INT_PCOV	10	/* Performance Counter Overflow */
+#define INT_TI		11	/* Timer */
+#define INT_IPI		12
+#define INT_NMI		13
+#define INT_NUM		(INT_NMI - INT_SWI0)
+
+/* ECodes corresponding to interrupts */
+#define ECODE_INT_START	64
+#define ECODE_INT_END	(ECODE_INT_START + INT_NUM)
 
 /* FPU register names */
 #define LOONGARCH_FCSR0	$r0

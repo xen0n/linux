@@ -743,7 +743,7 @@ void __init trap_init(void)
 	long i;
 
 	/* Set interrupt vector handler */
-	for (i = EXCCODE_INT_START; i < EXCCODE_INT_END; i++)
+	for (i = ECODE_INT_START; i < ECODE_INT_END; i++)
 		set_handler(i * VECSIZE, handle_vint, VECSIZE);
 
 	set_handler(ECODE_ADE * VECSIZE, handle_ade, VECSIZE);
