@@ -78,7 +78,7 @@ static void __kprobes do_sigbus(struct pt_regs *regs,
 	 * or user mode.
 	 */
 	current->thread.csr_badvaddr = address;
-	current->thread.trap_nr = read_csr_excode();
+	current->thread.trap_nr = read_csr_ecode();
 	force_sig_fault(SIGBUS, BUS_ADRERR, (void __user *)address);
 }
 
@@ -100,7 +100,7 @@ static void __kprobes do_sigsegv(struct pt_regs *regs,
 		current->thread.error_code = 1;
 	else
 		current->thread.error_code = 2;
-	current->thread.trap_nr = read_csr_excode();
+	current->thread.trap_nr = read_csr_ecode();
 
 	if (show_unhandled_signals &&
 	    unhandled_signal(current, SIGSEGV) && __ratelimit(&ratelimit_state)) {

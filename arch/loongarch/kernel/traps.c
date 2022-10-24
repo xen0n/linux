@@ -194,7 +194,7 @@ static void __show_regs(const struct pt_regs *regs)
 
 	pr_cont("\n");
 
-	exccode = ((regs->csr_estat) & CSR_ESTAT_EXC) >> CSR_ESTAT_EXC_SHIFT;
+	exccode = ((regs->csr_estat) & CSR_ESTAT_ECODE) >> CSR_ESTAT_ECODE_SHIFT;
 	excsubcode = ((regs->csr_estat) & CSR_ESTAT_ESUBCODE) >> CSR_ESTAT_ESUBCODE_SHIFT;
 	printk("ExcCode : %x (SubCode %x)\n", exccode, excsubcode);
 
@@ -436,7 +436,7 @@ asmlinkage void noinstr do_bp(struct pt_regs *regs)
 	irqentry_state_t state = irqentry_enter(regs);
 
 	local_irq_enable();
-	current->thread.trap_nr = read_csr_excode();
+	current->thread.trap_nr = read_csr_ecode();
 	if (__get_inst(&opcode, (u32 *)era, user))
 		goto out_sigsegv;
 
@@ -520,7 +520,7 @@ asmlinkage void noinstr do_ri(struct pt_regs *regs)
 	irqentry_state_t state = irqentry_enter(regs);
 
 	local_irq_enable();
-	current->thread.trap_nr = read_csr_excode();
+	current->thread.trap_nr = read_csr_ecode();
 
 	if (notify_die(DIE_RI, "RI Fault", regs, 0, current->thread.trap_nr,
 		       SIGILL) == NOTIFY_STOP)
@@ -612,7 +612,7 @@ asmlinkage void noinstr do_reserved(struct pt_regs *regs)
 	 * caused by a fatal error after another hardware/software error.
 	 */
 	pr_err("Caught reserved exception %u on pid:%d [%s] - should not happen\n",
-		read_csr_excode(), current->pid, current->comm);
+		read_csr_ecode(), current->pid, current->comm);
 	die_if_kernel("do_reserved exception", regs);
 	force_sig(SIGUNUSED);
 
