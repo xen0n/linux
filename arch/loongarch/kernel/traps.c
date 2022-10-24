@@ -187,14 +187,15 @@ static void __show_regs(const struct pt_regs *regs)
 	if (regs->regs[0])
 		pr_cont("syscall restart flag: %0*lx\n", field, regs->regs[0]);
 
-	/*
-	 * Saved csr registers
-	 */
-	printk("era   : %0*lx %pS\n", field, regs->csr_era,
-	       (void *) regs->csr_era);
-	printk("ra    : %0*lx %pS\n", field, regs->regs[1],
-	       (void *) regs->regs[1]);
+	if (user_mode(regs)) {
+		pr_cont("  era: %0*lx\n", field, regs->csr_era);
+		pr_cont("   ra: %0*lx\n", field, regs->regs[1]);
+	} else {
+		pr_cont("  era: %0*lx %pS\n", field, regs->csr_era, (void *) regs->csr_era);
+		pr_cont("   ra: %0*lx %pS\n", field, regs->regs[1], (void *) regs->regs[1]);
+	}
 
+	/* Print important CSRs */
 	printk("CSR crmd: %08lx	", regs->csr_crmd);
 	printk("CSR prmd: %08lx	", regs->csr_prmd);
 	printk("CSR euen: %08lx	", regs->csr_euen);
