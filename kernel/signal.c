@@ -3086,6 +3086,32 @@ int sigprocmask(int how, sigset_t *set, sigset_t *oldset)
 }
 EXPORT_SYMBOL(sigprocmask);
 
+#ifdef CONFIG_LOONGARCH
+#define _OW_NSIG	128
+#define _OW_NSIG_WORDS	(_OW_NSIG / _NSIG_BPW)
+
+typedef struct {
+	unsigned long sig[_OW_NSIG_WORDS];
+} ow_sigset_t;
+#endif
+
+static inline int check_sigset_size(size_t sigsetsize)
+{
+#ifdef CONFIG_LOONGARCH
+	if (test_thread_flag(TIF_OLD_WORLD)) {
+		/* Old world */
+		return sigsetsize == sizeof(ow_sigset_t) ? 0 : -EINVAL;
+	}
+
+	/* New world */
+	return sigsetsize == sizeof(sigset_t) ? 0 : -EINVAL;
+#else
+	/* XXX: Don't preclude handling different sized sigset_t's.  */
+	if (sigsetsize != sizeof(sigset_t))
+		return -EINVAL;
+#endif
+}
+
 /*
  * The api helps set app-provided sigmasks.
  *
@@ -3101,7 +3127,7 @@ int set_user_sigmask(const sigset_t __user *umask, size_t sigsetsize)
 
 	if (!umask)
 		return 0;
-	if (sigsetsize != sizeof(sigset_t))
+	if (check_sigset_size(sigsetsize))
 		return -EINVAL;
 	if (copy_from_user(&kmask, umask, sizeof(sigset_t)))
 		return -EFAULT;
@@ -3147,9 +3173,9 @@ SYSCALL_DEFINE4(rt_sigprocmask, int, how, sigset_t __user *, nset,
 	sigset_t old_set, new_set;
 	int error;
 
-	/* XXX: Don't preclude handling different sized sigset_t's.  */
-	if (sigsetsize != sizeof(sigset_t))
-		return -EINVAL;
+	error = check_sigset_size(sigsetsize);
+	if (error)
+		return error;
 
 	old_set = current->blocked;
 
@@ -3637,9 +3663,9 @@ SYSCALL_DEFINE4(rt_sigtimedwait, const sigset_t __user *, uthese,
 	kernel_siginfo_t info;
 	int ret;
 
-	/* XXX: Don't preclude handling different sized sigset_t's.  */
-	if (sigsetsize != sizeof(sigset_t))
-		return -EINVAL;
+	ret = check_sigset_size(sigsetsize);
+	if (ret)
+		return ret;
 
 	if (copy_from_user(&these, uthese, sizeof(these)))
 		return -EFAULT;
@@ -3670,8 +3696,9 @@ SYSCALL_DEFINE4(rt_sigtimedwait_time32, const sigset_t __user *, uthese,
 	kernel_siginfo_t info;
 	int ret;
 
-	if (sigsetsize != sizeof(sigset_t))
-		return -EINVAL;
+	ret = check_sigset_size(sigsetsize);
+	if (ret)
+		return ret;
 
 	if (copy_from_user(&these, uthese, sizeof(these)))
 		return -EFAULT;
@@ -4418,9 +4445,9 @@ SYSCALL_DEFINE4(rt_sigaction, int, sig,
 	struct k_sigaction new_sa, old_sa;
 	int ret;
 
-	/* XXX: Don't preclude handling different sized sigset_t's.  */
-	if (sigsetsize != sizeof(sigset_t))
-		return -EINVAL;
+	ret = check_sigset_size(sigsetsize);
+	if (ret)
+		return ret;
 
 	if (act && copy_from_user(&new_sa.sa, act, sizeof(new_sa.sa)))
 		return -EFAULT;
@@ -4636,10 +4663,11 @@ static int sigsuspend(sigset_t *set)
 SYSCALL_DEFINE2(rt_sigsuspend, sigset_t __user *, unewset, size_t, sigsetsize)
 {
 	sigset_t newset;
+	int ret;
 
-	/* XXX: Don't preclude handling different sized sigset_t's.  */
-	if (sigsetsize != sizeof(sigset_t))
-		return -EINVAL;
+	ret = check_sigset_size(sigsetsize);
+	if (ret)
+		return ret;
 
 	if (copy_from_user(&newset, unewset, sizeof(newset)))
 		return -EFAULT;
