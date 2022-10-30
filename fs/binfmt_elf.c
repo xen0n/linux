@@ -820,6 +820,83 @@ static int parse_elf_properties(struct file *f, const struct elf_phdr *phdr,
 	return ret == -ENOENT ? 0 : ret;
 }
 
+static int parse_elf_abi_note(struct file *f, const struct elf_phdr *phdr,
+				struct arch_elf_state *arch)
+{
+#ifdef CONFIG_LOONGARCH
+	union {
+		struct elf_note nhdr;
+		char data[NOTE_DATA_SZ];
+	} note;
+	loff_t pos;
+	ssize_t n;
+	size_t off, datasz;
+	int ret;
+
+	if (/* !IS_ENABLED(CONFIG_ARCH_USE_GNU_PROPERTY) || */ !phdr)
+		return 0;
+
+#if 0
+	/* load_elf_binary() shouldn't call us unless this is true... */
+	if (WARN_ON_ONCE(phdr->p_type != PT_NOTE))
+		return -ENOEXEC;
+#endif
+
+	/* If the properties are crazy large, that's too bad (for now): */
+	if (phdr->p_filesz > sizeof(note))
+		return 0;
+
+	pos = phdr->p_offset;
+	n = kernel_read(f, &note, phdr->p_filesz, &pos);
+
+	BUILD_BUG_ON(sizeof(note) < sizeof(note.nhdr) + NOTE_NAME_SZ);
+	if (n < 0 || n < sizeof(note.nhdr) + NOTE_NAME_SZ)
+		return 0;
+
+	if (note.nhdr.n_type != NT_GNU_ABI_TAG ||
+	    note.nhdr.n_namesz != NOTE_NAME_SZ ||
+	    strncmp(note.data + sizeof(note.nhdr),
+		    GNU_PROPERTY_TYPE_0_NAME, n - sizeof(note.nhdr)))
+		return 0;
+
+	off = round_up(sizeof(note.nhdr) + NOTE_NAME_SZ,
+		       ELF_GNU_PROPERTY_ALIGN);
+	if (off > n)
+		return 0;
+
+	if (note.nhdr.n_descsz < 16 || note.nhdr.n_descsz > n - off)
+		return 0;
+	datasz = off + note.nhdr.n_descsz;
+
+	{
+#if 0
+		ret = parse_elf_property(note.data, &off, datasz, arch,
+					 have_prev_type, &prev_type);
+#else
+		const u32 *p = (const u32 *)(note.data + off);
+		const u32 os = *p;
+		const u32 major = *(p + 1);
+		const u32 minor = *(p + 2);
+		const u32 patch = *(p + 3);
+
+		if (os == GNU_ABI_TAG_LINUX && major < 5) {
+			pr_info("%d (%s): wants Linux %d.%d.%d ABI which is old world\n",
+				task_pid_nr(current), current->comm,
+				major, minor, patch);
+			arch->abi_flavor = 2; /* confirmed old world */
+		} else if (os == GNU_ABI_TAG_LINUX && major >= 5) {
+			arch->abi_flavor = 1; /* confirmed new world */
+		}
+		ret = 0;
+#endif
+	}
+
+	return ret == -ENOENT ? 0 : ret;
+#else
+	return 0;
+#endif
+}
+
 static int load_elf_binary(struct linux_binprm *bprm)
 {
 	struct file *interpreter = NULL; /* to shut gcc up */
@@ -867,6 +944,11 @@ static int load_elf_binary(struct linux_binprm *bprm)
 
 		if (elf_ppnt->p_type == PT_GNU_PROPERTY) {
 			elf_property_phdata = elf_ppnt;
+			continue;
+		}
+
+		if (elf_ppnt->p_type == PT_NOTE) {
+			parse_elf_abi_note(bprm->file, elf_ppnt, &arch_state);
 			continue;
 		}
 
@@ -967,6 +1049,10 @@ out_free_interp:
 		elf_ppnt = interp_elf_phdata;
 		for (i = 0; i < interp_elf_ex->e_phnum; i++, elf_ppnt++)
 			switch (elf_ppnt->p_type) {
+			case PT_NOTE:
+				parse_elf_abi_note(interpreter, elf_ppnt, &arch_state);
+				break;
+
 			case PT_GNU_PROPERTY:
 				elf_property_phdata = elf_ppnt;
 				break;

@@ -449,6 +449,7 @@ typedef struct elf64_shdr {
 #define NT_LOONGARCH_HW_WATCH	0xa06   /* LoongArch hardware watchpoint registers */
 
 /* Note types with note name "GNU" */
+#define NT_GNU_ABI_TAG		1
 #define NT_GNU_PROPERTY_TYPE_0	5
 
 /* Note header in a PT_NOTE section */
@@ -464,6 +465,9 @@ typedef struct elf64_note {
   Elf64_Word n_descsz;	/* Content size */
   Elf64_Word n_type;	/* Content type */
 } Elf64_Nhdr;
+
+/* Values used in GNU .note.ABI-tag notes (NT_GNU_ABI_TAG).  */
+#define GNU_ABI_TAG_LINUX	0
 
 /* .note.gnu.property types for EM_AARCH64: */
 #define GNU_PROPERTY_AARCH64_FEATURE_1_AND	0xc0000000
