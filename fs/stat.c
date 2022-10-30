@@ -273,7 +273,7 @@ int vfs_fstatat(int dfd, const char __user *filename,
 	return ret;
 }
 
-#ifdef __ARCH_WANT_OLD_STAT
+#if defined(__ARCH_WANT_OLD_STAT)
 
 /*
  * For backward compatibility?  Maybe this should be moved
@@ -355,7 +355,7 @@ SYSCALL_DEFINE2(fstat, unsigned int, fd, struct __old_kernel_stat __user *, stat
 
 #endif /* __ARCH_WANT_OLD_STAT */
 
-#ifdef __ARCH_WANT_NEW_STAT
+#if defined(__ARCH_WANT_NEW_STAT) || defined(CONFIG_LOONGARCH)
 
 #if BITS_PER_LONG == 32
 #  define choose_32_64(a,b) a
@@ -406,6 +406,7 @@ static int cp_new_stat(struct kstat *stat, struct stat __user *statbuf)
 	return copy_to_user(statbuf,&tmp,sizeof(tmp)) ? -EFAULT : 0;
 }
 
+#ifndef CONFIG_LOONGARCH
 SYSCALL_DEFINE2(newstat, const char __user *, filename,
 		struct stat __user *, statbuf)
 {
@@ -454,6 +455,39 @@ SYSCALL_DEFINE2(newfstat, unsigned int, fd, struct stat __user *, statbuf)
 
 	return error;
 }
+#else /* ifndef CONFIG_LOONGARCH */
+SYSCALL_DEFINE2(loongarch_ow_fstat, unsigned int, fd, struct stat __user *, statbuf)
+{
+	struct kstat stat;
+	int error;
+
+	if (!test_thread_flag(TIF_OLD_WORLD))
+		return -ENOSYS;
+
+	error = vfs_fstat(fd, &stat);
+
+	if (!error)
+		error = cp_new_stat(&stat, statbuf);
+
+	return error;
+}
+
+SYSCALL_DEFINE4(loongarch_ow_newfstatat, int, dfd, const char __user *, filename,
+		struct stat __user *, statbuf, int, flag)
+{
+	struct kstat stat;
+	int error;
+
+	if (!test_thread_flag(TIF_OLD_WORLD))
+		return -ENOSYS;
+
+	error = vfs_fstatat(dfd, filename, &stat, flag);
+	if (error)
+		return error;
+	return cp_new_stat(&stat, statbuf);
+}
+#endif /* ifndef CONFIG_LOONGARCH */
+
 #endif
 
 static int do_readlinkat(int dfd, const char __user *pathname,
