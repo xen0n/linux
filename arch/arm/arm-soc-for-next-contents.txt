@@ -17,6 +17,10 @@ soc/dt
 	patch
 		arm: dts: spear600: Fix clcd interrupt
 		arm: dts: spear600: Add ssp controller nodes
+	asahi/dt
+		https://github.com/AsahiLinux/linux tags/asahi-soc-dt-6.2
+	ux500/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik tags/ux500-dts-for-v6.2
 
 soc/drivers
 	patch
