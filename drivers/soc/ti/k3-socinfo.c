@@ -13,6 +13,7 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/sys_soc.h>
+#include <linux/module.h>
 
 #define CTRLMMR_WKUP_JTAGID_REG		0
 /*
@@ -141,6 +142,7 @@ static const struct of_device_id k3_chipinfo_of_match[] = {
 	{ .compatible = "ti,am654-chipid", },
 	{ /* sentinel */ },
 };
+MODULE_DEVICE_TABLE(of, k3_chipinfo_of_match);
 
 static struct platform_driver k3_chipinfo_driver = {
 	.driver = {
@@ -156,3 +158,12 @@ static int __init k3_chipinfo_init(void)
 	return platform_driver_register(&k3_chipinfo_driver);
 }
 subsys_initcall(k3_chipinfo_init);
+
+static void __exit k3_chipinfo_exit(void)
+{
+	platform_driver_unregister(&k3_chipinfo_driver);
+}
+module_exit(k3_chipinfo_exit);
+
+MODULE_DESCRIPTION("TI K3 SoC info driver");
+MODULE_LICENSE("GPL");
