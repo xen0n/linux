@@ -61,7 +61,9 @@ LDFLAGS_vmlinux			+= -G0 -static -n -nostdlib
 # combination of a "new" assembler and "old" compiler is not supported.  Either
 # upgrade the compiler or downgrade the assembler.
 ifdef CONFIG_AS_HAS_EXPLICIT_RELOCS
+ifndef CONFIG_CC_IS_CLANG
 cflags-y			+= -mexplicit-relocs
+endif
 KBUILD_CFLAGS_KERNEL		+= -mdirect-extern-access
 else
 cflags-y			+= $(call cc-option,-mno-explicit-relocs)
