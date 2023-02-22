@@ -1465,6 +1465,7 @@ static ssize_t btrfs_direct_write(struct kiocb *iocb, struct iov_iter *from)
 	ssize_t err;
 	unsigned int ilock_flags = 0;
 	struct iomap_dio *dio;
+	struct btrfs_ordered_extent *ordered_extent = NULL;
 
 	if (iocb->ki_flags & IOCB_NOWAIT)
 		ilock_flags |= BTRFS_ILOCK_TRY;
@@ -1526,7 +1527,7 @@ relock:
 	 * got -EFAULT, faulting in the pages before the retry.
 	 */
 	from->nofault = true;
-	dio = btrfs_dio_write(iocb, from, written);
+	dio = btrfs_dio_write(iocb, from, &ordered_extent, written);
 	from->nofault = false;
 
 	/*
@@ -1569,6 +1570,14 @@ relock:
 			goto relock;
 		}
 	}
+	/*
+	 * We can't loop back to btrfs_dio_write, so we can drop the cached
+	 * ordered extent. Typically btrfs_dio_iomap_end will run and put the
+	 * ordered_extent, but this is needed to clean up in case of an error
+	 * path breaking out of iomap_iter before the final iomap_end call.
+	 */
+	if (ordered_extent)
+		btrfs_put_ordered_extent(ordered_extent);
 
 	/*
 	 * If 'err' is -ENOTBLK or we have not written all data, then it means
