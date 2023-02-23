@@ -1746,11 +1746,7 @@ vhost_scsi_clear_endpoint(struct vhost_scsi *vs,
 			vhost_scsi_destroy_vq_cmds(vq);
 		}
 	}
-	/*
-	 * Act as synchronize_rcu to make sure access to
-	 * old vs->vs_tpg is finished.
-	 */
-	vhost_scsi_flush(vs);
+
 	kfree(vs->vs_tpg);
 	vs->vs_tpg = NULL;
 	WARN_ON(vs->vs_events_nr);
