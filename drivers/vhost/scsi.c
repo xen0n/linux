@@ -232,7 +232,7 @@ struct vhost_scsi_ctx {
 	struct iov_iter out_iter;
 };
 
-/* Global spinlock to protect vhost_scsi TPG list for vhost IOCTL access */
+/* Global mutex to protect vhost_scsi TPG list for vhost IOCTL access */
 static DEFINE_MUTEX(vhost_scsi_mutex);
 static LIST_HEAD(vhost_scsi_list);
 
@@ -2038,17 +2038,12 @@ static int vhost_scsi_port_link(struct se_portal_group *se_tpg,
 	INIT_LIST_HEAD(&tmf->queue_entry);
 	vhost_work_init(&tmf->vwork, vhost_scsi_tmf_resp_work);
 
-	mutex_lock(&vhost_scsi_mutex);
-
 	mutex_lock(&tpg->tv_tpg_mutex);
 	tpg->tv_tpg_port_count++;
 	list_add_tail(&tmf->queue_entry, &tpg->tmf_queue);
 	mutex_unlock(&tpg->tv_tpg_mutex);
 
 	vhost_scsi_hotplug(tpg, lun);
-
-	mutex_unlock(&vhost_scsi_mutex);
-
 	return 0;
 }
 
@@ -2059,8 +2054,6 @@ static void vhost_scsi_port_unlink(struct se_portal_group *se_tpg,
 				struct vhost_scsi_tpg, se_tpg);
 	struct vhost_scsi_tmf *tmf;
 
-	mutex_lock(&vhost_scsi_mutex);
-
 	mutex_lock(&tpg->tv_tpg_mutex);
 	tpg->tv_tpg_port_count--;
 	tmf = list_first_entry(&tpg->tmf_queue, struct vhost_scsi_tmf,
@@ -2070,8 +2063,6 @@ static void vhost_scsi_port_unlink(struct se_portal_group *se_tpg,
 	mutex_unlock(&tpg->tv_tpg_mutex);
 
 	vhost_scsi_hotunplug(tpg, lun);
-
-	mutex_unlock(&vhost_scsi_mutex);
 }
 
 static ssize_t vhost_scsi_tpg_attrib_fabric_prot_type_store(
