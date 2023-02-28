@@ -73,14 +73,7 @@ extern void __update_cache(pte_t pte);
 		mb();				\
 	} while(0)
 
-#define set_pte_at(mm, addr, pteptr, pteval)	\
-	do {					\
-		if (pte_present(pteval) &&	\
-		    pte_user(pteval))		\
-			__update_cache(pteval);	\
-		*(pteptr) = (pteval);		\
-		purge_tlb_entries(mm, addr);	\
-	} while (0)
+#define set_pte_at(mm, addr, ptep, pte) set_ptes(mm, addr, ptep, pte, 1)
 
 #endif /* !__ASSEMBLY__ */
 
@@ -391,11 +384,28 @@ static inline unsigned long pmd_page_vaddr(pmd_t pmd)
 
 extern void paging_init (void);
 
+static inline void set_ptes(struct mm_struct *mm, unsigned long addr,
+		pte_t *ptep, pte_t pte, unsigned int nr)
+{
+	if (pte_present(pte) && pte_user(pte))
+		__update_cache(pte);
+	for (;;) {
+		*ptep = pte;
+		purge_tlb_entries(mm, addr);
+		if (--nr == 0)
+			break;
+		ptep++;
+		pte_val(pte) += 1 << PFN_PTE_SHIFT;
+		addr += PAGE_SIZE;
+	}
+}
+
 /* Used for deferring calls to flush_dcache_page() */
 
 #define PG_dcache_dirty         PG_arch_1
 
-#define update_mmu_cache(vms,addr,ptep) __update_cache(*ptep)
+#define update_mmu_cache_range(vma, addr, ptep, nr) __update_cache(*ptep)
+#define update_mmu_cache(vma, addr, ptep) __update_cache(*ptep)
 
 /*
  * Encode/decode swap entries and swap PTEs. Swap PTEs are all PTEs that
