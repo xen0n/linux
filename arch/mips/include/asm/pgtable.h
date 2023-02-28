@@ -105,8 +105,10 @@ do {									\
 	}								\
 } while(0)
 
-static inline void set_pte_at(struct mm_struct *mm, unsigned long addr,
-			      pte_t *ptep, pte_t pteval);
+static inline void set_ptes(struct mm_struct *mm, unsigned long addr,
+		pte_t *ptep, pte_t pte, unsigned int nr);
+
+#define set_pte_at(mm, addr, ptep, pte) set_ptes(mm, addr, ptep, pte, 1)
 
 #if defined(CONFIG_PHYS_ADDR_T_64BIT) && defined(CONFIG_CPU_MIPS32)
 
@@ -204,19 +206,31 @@ static inline void pte_clear(struct mm_struct *mm, unsigned long addr, pte_t *pt
 }
 #endif
 
-static inline void set_pte_at(struct mm_struct *mm, unsigned long addr,
-			      pte_t *ptep, pte_t pteval)
+static inline void set_ptes(struct mm_struct *mm, unsigned long addr,
+		pte_t *ptep, pte_t pte, unsigned int nr)
 {
+	unsigned int i;
+	bool do_sync = false;
 
-	if (!pte_present(pteval))
-		goto cache_sync_done;
+	for (i = 0; i < nr; i++) {
+		if (!pte_present(pte))
+			continue;
+		if (pte_present(ptep[i]) &&
+		    (pte_pfn(ptep[i]) == pte_pfn(pte)))
+			continue;
+		do_sync = true;
+	}
 
-	if (pte_present(*ptep) && (pte_pfn(*ptep) == pte_pfn(pteval)))
-		goto cache_sync_done;
+	if (do_sync)
+		__update_cache(addr, pte);
 
-	__update_cache(addr, pteval);
-cache_sync_done:
-	set_pte(ptep, pteval);
+	for (;;) {
+		set_pte(ptep, pte);
+		if (--nr == 0)
+			break;
+		ptep++;
+		pte_val(pte) += 1 << _PFN_SHIFT;
+	}
 }
 
 /*
