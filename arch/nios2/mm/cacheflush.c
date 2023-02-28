@@ -147,6 +147,7 @@ void flush_icache_pages(struct vm_area_struct *vma, struct page *page,
 	__flush_dcache(start, end);
 	__flush_icache(start, end);
 }
+#define flush_icache_pages flush_icache_pages
 
 void flush_cache_page(struct vm_area_struct *vma, unsigned long vmaddr,
 			unsigned long pfn)
