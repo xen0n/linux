@@ -41,6 +41,12 @@ struct mm_struct;
 
 #ifndef __ASSEMBLY__
 
+void set_ptes(struct mm_struct *mm, unsigned long addr, pte_t *ptep,
+		pte_t pte, unsigned int nr);
+#define set_pte_at(mm, addr, ptep, pte) set_ptes(mm, addr, ptep, pte, 1)
+#define update_mmu_cache(vma, addr, ptep) \
+	update_mmu_cache_range(vma, addr, ptep, 1);
+
 #ifndef MAX_PTRS_PER_PGD
 #define MAX_PTRS_PER_PGD PTRS_PER_PGD
 #endif
