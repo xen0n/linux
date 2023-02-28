@@ -346,12 +346,24 @@ static inline int pte_exec(pte_t pte)
 #define set_pmd(pmdptr, pmdval) (*(pmdptr) = (pmdval))
 
 /*
- * set_pte_at - update page table and do whatever magic may be
+ * set_ptes - update page table and do whatever magic may be
  * necessary to make the underlying hardware/firmware take note.
  *
  * VM may require a virtual instruction to alert the MMU.
  */
-#define set_pte_at(mm, addr, ptep, pte) set_pte(ptep, pte)
+static inline void set_ptes(struct mm_struct *mm, unsigned long addr,
+		pte_t *ptep, pte_t pte, unsigned int nr)
+{
+	for (;;) {
+		set_pte(ptep, pte);
+		if (--nr == 0)
+			break;
+		ptep++;
+		pte_val(pte) += PAGE_SIZE;
+	}
+}
+
+#define set_pte_at(mm, addr, ptep, pte) set_ptes(mm, addr, ptep, pte, 1)
 
 static inline unsigned long pmd_page_vaddr(pmd_t pmd)
 {
