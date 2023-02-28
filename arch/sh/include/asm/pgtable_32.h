@@ -307,7 +307,19 @@ static inline void set_pte(pte_t *ptep, pte_t pte)
 #define set_pte(pteptr, pteval) (*(pteptr) = pteval)
 #endif
 
-#define set_pte_at(mm,addr,ptep,pteval) set_pte(ptep,pteval)
+static inline void set_ptes(struct mm_struct *mm, unsigned long addr,
+		pte_t *ptep, pte_t pte, unsigned int nr)
+{
+	for (;;) {
+		set_pte(ptep, pte);
+		if (--nr == 0)
+			break;
+		ptep++;
+		pte = __pte(pte_val(pte) + PAGE_SIZE);
+	}
+}
+
+#define set_pte_at(mm, addr, ptep, pte) set_ptes(mm, addr, ptep, pte, 1)
 
 /*
  * (pmds are folded into pgds so this doesn't get actually called,
@@ -323,7 +335,7 @@ static inline void set_pte(pte_t *ptep, pte_t pte)
 #define pte_none(x)		(!pte_val(x))
 #define pte_present(x)		((x).pte_low & (_PAGE_PRESENT | _PAGE_PROTNONE))
 
-#define pte_clear(mm,addr,xp) do { set_pte_at(mm, addr, xp, __pte(0)); } while (0)
+#define pte_clear(mm, addr, ptep) set_pte(ptep, __pte(0))
 
 #define pmd_none(x)	(!pmd_val(x))
 #define pmd_present(x)	(pmd_val(x))
