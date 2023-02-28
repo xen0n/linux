@@ -911,8 +911,20 @@ static inline void __set_pte_at(struct mm_struct *mm, unsigned long addr,
 	maybe_tlb_batch_add(mm, addr, ptep, orig, fullmm, PAGE_SHIFT);
 }
 
-#define set_pte_at(mm,addr,ptep,pte)	\
-	__set_pte_at((mm), (addr), (ptep), (pte), 0)
+static inline void set_ptes(struct mm_struct *mm, unsigned long addr,
+		pte_t *ptep, pte_t pte, unsigned int nr)
+{
+	for (;;) {
+		__set_pte_at(mm, addr, ptep, pte, 0);
+		if (--nr == 0)
+			break;
+		ptep++;
+		pte_val(pte) += PAGE_SIZE;
+		addr += PAGE_SIZE;
+	}
+}
+
+#define set_pte_at(mm, addr, ptep, pte) set_ptes(mm, addr, ptep, pte, 1);
 
 #define pte_clear(mm,addr,ptep)		\
 	set_pte_at((mm), (addr), (ptep), __pte(0UL))
@@ -931,8 +943,8 @@ static inline void __set_pte_at(struct mm_struct *mm, unsigned long addr,
 									\
 		if (pfn_valid(this_pfn) &&				\
 		    (((old_addr) ^ (new_addr)) & (1 << 13)))		\
-			flush_dcache_page_all(current->mm,		\
-					      pfn_to_page(this_pfn));	\
+			flush_dcache_folio_all(current->mm,		\
+				page_folio(pfn_to_page(this_pfn)));	\
 	}								\
 	newpte;								\
 })
@@ -947,7 +959,10 @@ struct seq_file;
 void mmu_info(struct seq_file *);
 
 struct vm_area_struct;
-void update_mmu_cache(struct vm_area_struct *, unsigned long, pte_t *);
+void update_mmu_cache_range(struct vm_area_struct *, unsigned long addr,
+		pte_t *ptep, unsigned int nr);
+#define update_mmu_cache(vma, addr, ptep) \
+	update_mmu_cache_range(vma, addr, ptep, 1)
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 void update_mmu_cache_pmd(struct vm_area_struct *vma, unsigned long addr,
 			  pmd_t *pmd);
