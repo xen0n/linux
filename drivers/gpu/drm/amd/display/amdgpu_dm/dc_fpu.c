@@ -33,6 +33,8 @@
 #include <asm/cputable.h>
 #elif defined(CONFIG_ARM64)
 #include <asm/neon.h>
+#elif defined(CONFIG_LOONGARCH)
+#include <asm/fpu.h>
 #endif
 
 /**
@@ -103,6 +105,8 @@ void dc_fpu_begin(const char *function_name, const int line)
 		}
 #elif defined(CONFIG_ARM64)
 		kernel_neon_begin();
+#elif defined(CONFIG_LOONGARCH)
+		own_fpu(1);
 #endif
 	}
 
@@ -142,6 +146,8 @@ void dc_fpu_end(const char *function_name, const int line)
 		}
 #elif defined(CONFIG_ARM64)
 		kernel_neon_end();
+#elif defined(CONFIG_LOONGARCH)
+		lose_fpu(1);
 #endif
 	}
 
