@@ -165,6 +165,7 @@ SYM_FUNC_START(_restore_fp)
 	fpu_restore_cc		a0 t1 t2	# clobbers t1, t2
 	jr			ra
 SYM_FUNC_END(_restore_fp)
+EXPORT_SYMBOL(_restore_fp)
 
 /*
  * Load the FPU with signalling NANS.  This bit pattern we're using has
