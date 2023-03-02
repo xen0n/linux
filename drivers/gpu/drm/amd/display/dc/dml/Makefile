@@ -39,7 +39,8 @@ dml_rcflags := -mgeneral-regs-only
 endif
 
 ifdef CONFIG_LOONGARCH
-dml_ccflags := -mdouble-float -mabi=lp64d
+dml_ccflags := -mabi=lp64s -mfpu=64
+dml_rcflags := -msoft-float
 endif
 
 ifdef CONFIG_CC_IS_GCC
