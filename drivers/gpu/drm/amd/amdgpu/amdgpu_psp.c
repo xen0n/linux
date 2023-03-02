@@ -603,7 +603,7 @@ psp_cmd_submit_buf(struct psp_context *psp,
 {
 	int ret;
 	int index, idx;
-	int timeout = 20000;
+	int timeout = 80000;
 	bool ras_intr = false;
 	bool skip_unsupport = false;
 	bool dev_entered;
