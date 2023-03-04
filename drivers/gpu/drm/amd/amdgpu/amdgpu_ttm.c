@@ -43,6 +43,7 @@
 #include <linux/sizes.h>
 #include <linux/module.h>
 
+#include <drm/drm_cache.h>
 #include <drm/drm_drv.h>
 #include <drm/ttm/ttm_bo.h>
 #include <drm/ttm/ttm_placement.h>
@@ -1746,8 +1747,19 @@ int amdgpu_ttm_init(struct amdgpu_device *adev)
 
 	else
 #endif
-		adev->mman.aper_base_kaddr = ioremap_wc(adev->gmc.aper_base,
-				adev->gmc.visible_vram_size);
+		/*
+		 * While it's violation of the PCI spec if a platform suffers
+		 * from cache coherency problems by mapping VRAM as write-combining,
+		 * a few publicly available architectures/platforms still have
+		 * problems dealing with such WC mappings. So only map with WC
+		 * if the drm_arch_can_wc_memory() helper thinks so.
+		 */
+		if (drm_arch_can_wc_memory())
+			adev->mman.aper_base_kaddr = ioremap_wc(adev->gmc.aper_base,
+					adev->gmc.visible_vram_size);
+		else
+			adev->mman.aper_base_kaddr = ioremap(adev->gmc.aper_base,
+					adev->gmc.visible_vram_size);
 #endif
 
 	/*
