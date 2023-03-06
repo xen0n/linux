@@ -557,6 +557,7 @@
 			Format: <string>
 			nosocket -- Disable socket memory accounting.
 			nokmem -- Disable kernel memory accounting.
+			nobpf -- Disable BPF memory accounting.
 
 	checkreqprot=	[SELINUX] Set initial checkreqprot flag value.
 			Format: { "0" | "1" }
@@ -1171,10 +1172,10 @@
 			specified, the serial port must already be setup and
 			configured.
 
-		uart[8250],io,<addr>[,options]
-		uart[8250],mmio,<addr>[,options]
-		uart[8250],mmio32,<addr>[,options]
-		uart[8250],mmio32be,<addr>[,options]
+		uart[8250],io,<addr>[,options[,uartclk]]
+		uart[8250],mmio,<addr>[,options[,uartclk]]
+		uart[8250],mmio32,<addr>[,options[,uartclk]]
+		uart[8250],mmio32be,<addr>[,options[,uartclk]]
 		uart[8250],0x<addr>[,options]
 			Start an early, polled-mode console on the 8250/16550
 			UART at the specified I/O port or MMIO address.
@@ -1183,7 +1184,9 @@
 			If none of [io|mmio|mmio32|mmio32be], <addr> is assumed
 			to be equivalent to 'mmio'. 'options' are specified
 			in the same format described for "console=ttyS<n>"; if
-			unspecified, the h/w is not initialized.
+			unspecified, the h/w is not initialized. 'uartclk' is
+			the uart clock frequency; if unspecified, it is set
+			to 'BASE_BAUD' * 16.
 
 		pl011,<addr>
 		pl011,mmio32,<addr>
@@ -1507,6 +1510,15 @@
 			This is useful if you need tracing information from kernel
 			boot up that is likely to be overridden by user space
 			start up functionality.
+
+			Optionally, the snapshot can also be defined for a tracing
+			instance that was created by the trace_instance= command
+			line parameter.
+
+			trace_instance=foo,sched_switch ftrace_boot_snapshot=foo
+
+			The above will cause the "foo" tracing instance to trigger
+			a snapshot at the end of boot up.
 
 	ftrace_dump_on_oops[=orig_cpu]
 			[FTRACE] will dump the trace buffers on oops.
@@ -2524,9 +2536,14 @@
 			protected: nVHE-based mode with support for guests whose
 				   state is kept private from the host.
 
+			nested: VHE-based mode with support for nested
+				virtualization. Requires at least ARMv8.3
+				hardware.
+
 			Defaults to VHE/nVHE based on hardware support. Setting
 			mode to "protected" will disable kexec and hibernation
-			for the host.
+			for the host. "nested" is experimental and should be
+			used with extreme caution.
 
 	kvm-arm.vgic_v3_group0_trap=
 			[KVM,ARM] Trap guest accesses to GICv3 group-0
@@ -2786,6 +2803,9 @@
 
 			* [no]setxfer: Indicate if transfer speed mode setting
 			  should be skipped.
+
+			* [no]fua: Disable or enable FUA (Force Unit Access)
+			  support for devices supporting this feature.
 
 			* dump_id: Dump IDENTIFY data.
 
@@ -4113,10 +4133,6 @@
 
 	pcbit=		[HW,ISDN]
 
-	pcd.		[PARIDE]
-			See header of drivers/block/paride/pcd.c.
-			See also Documentation/admin-guide/blockdev/paride.rst.
-
 	pci=option[,option...]	[PCI] various PCI subsystem options.
 
 				Some options herein operate on a specific device
@@ -4292,7 +4308,9 @@
 				specified, e.g., 12@pci:8086:9c22:103c:198f
 				for 4096-byte alignment.
 		ecrc=		Enable/disable PCIe ECRC (transaction layer
-				end-to-end CRC checking).
+				end-to-end CRC checking). Only effective if
+				OS has native AER control (either granted by
+				ACPI _OSC or forced via "pcie_ports=native")
 				bios: Use BIOS/firmware settings. This is the
 				the default.
 				off: Turn ECRC off
@@ -4379,9 +4397,6 @@
 			for debug and development, but should not be
 			needed on a platform with proper driver support.
 
-	pd.		[PARIDE]
-			See Documentation/admin-guide/blockdev/paride.rst.
-
 	pdcchassis=	[PARISC,HW] Disable/Enable PDC Chassis Status codes at
 			boot time.
 			Format: { 0 | 1 }
@@ -4393,12 +4408,6 @@
 			See comments in mm/percpu.c for details on each
 			allocator.  This parameter is primarily	for debugging
 			and performance comparison.
-
-	pf.		[PARIDE]
-			See Documentation/admin-guide/blockdev/paride.rst.
-
-	pg.		[PARIDE]
-			See Documentation/admin-guide/blockdev/paride.rst.
 
 	pirq=		[SMP,APIC] Manual mp-table setup
 			See Documentation/x86/i386/IO-APIC.rst.
@@ -4560,9 +4569,6 @@
 			0 = disabled, 1 = enabled (default).
 
 	pstore.backend=	Specify the name of the pstore backend to use
-
-	pt.		[PARIDE]
-			See Documentation/admin-guide/blockdev/paride.rst.
 
 	pti=		[X86-64] Control Page Table Isolation of user and
 			kernel address spaces.  Disabling this feature
@@ -5113,6 +5119,17 @@
 			rcupdate.rcu_cpu_stall_timeout to be used (after
 			conversion from seconds to milliseconds).
 
+	rcupdate.rcu_cpu_stall_cputime= [KNL]
+			Provide statistics on the cputime and count of
+			interrupts and tasks during the sampling period. For
+			multiple continuous RCU stalls, all sampling periods
+			begin at half of the first RCU stall timeout.
+
+	rcupdate.rcu_exp_stall_task_details= [KNL]
+			Print stack dumps of any tasks blocking the
+			current expedited RCU grace period during an
+			expedited RCU CPU stall warning.
+
 	rcupdate.rcu_expedited= [KNL]
 			Use expedited grace-period primitives, for
 			example, synchronize_rcu_expedited() instead
@@ -5221,7 +5238,7 @@
 	rdt=		[HW,X86,RDT]
 			Turn on/off individual RDT features. List is:
 			cmt, mbmtotal, mbmlocal, l3cat, l3cdp, l2cat, l2cdp,
-			mba.
+			mba, smba, bmec.
 			E.g. to turn on cmt and turn off mba use:
 				rdt=cmt,!mba
 
@@ -5731,9 +5748,9 @@
 			retpoline,generic - Retpolines
 			retpoline,lfence  - LFENCE; indirect branch
 			retpoline,amd     - alias for retpoline,lfence
-			eibrs		  - enhanced IBRS
-			eibrs,retpoline   - enhanced IBRS + Retpolines
-			eibrs,lfence      - enhanced IBRS + LFENCE
+			eibrs		  - Enhanced/Auto IBRS
+			eibrs,retpoline   - Enhanced/Auto IBRS + Retpolines
+			eibrs,lfence      - Enhanced/Auto IBRS + LFENCE
 			ibrs		  - use IBRS to protect kernel
 
 			Not specifying this option is equivalent to
@@ -6284,6 +6301,26 @@
 			comma-separated list of trace events to enable. See
 			also Documentation/trace/events.rst
 
+	trace_instance=[instance-info]
+			[FTRACE] Create a ring buffer instance early in boot up.
+			This will be listed in:
+
+				/sys/kernel/tracing/instances
+
+			Events can be enabled at the time the instance is created
+			via:
+
+				trace_instance=<name>,<system1>:<event1>,<system2>:<event2>
+
+			Note, the "<system*>:" portion is optional if the event is
+			unique.
+
+				trace_instance=foo,sched:sched_switch,irq_handler_entry,initcall
+
+			will enable the "sched_switch" event (note, the "sched:" is optional, and
+			the same thing would happen if it was left off). The irq_handler_entry
+			event, and all events under the "initcall" system.
+
 	trace_options=[option-list]
 			[FTRACE] Enable or disable tracer options at boot.
 			The option-list is a comma delimited list of options
@@ -6381,6 +6418,16 @@
 			in situations with strict latency requirements (where
 			interruptions from clocksource watchdog are not
 			acceptable).
+			[x86] recalibrate: force recalibration against a HW timer
+			(HPET or PM timer) on systems whose TSC frequency was
+			obtained from HW or FW using either an MSR or CPUID(0x15).
+			Warn if the difference is more than 500 ppm.
+			[x86] watchdog: Use TSC as the watchdog clocksource with
+			which to check other HW timers (HPET or PM timer), but
+			only on systems where TSC has been deemed trustworthy.
+			This will be suppressed by an earlier tsc=nowatchdog and
+			can be overridden by a later tsc=nowatchdog.  A console
+			message will flag any such suppression or overriding.
 
 	tsc_early_khz=  [X86] Skip early TSC calibration and use the given
 			value instead. Useful when the early TSC frequency discovery
@@ -7022,3 +7069,10 @@
 			  management firmware translates the requests into actual
 			  hardware states (core frequency, data fabric and memory
 			  clocks etc.)
+			active
+			  Use amd_pstate_epp driver instance as the scaling driver,
+			  driver provides a hint to the hardware if software wants
+			  to bias toward performance (0x0) or energy efficiency (0xff)
+			  to the CPPC firmware. then CPPC power algorithm will
+			  calculate the runtime workload and adjust the realtime cores
+			  frequency.
