@@ -84,7 +84,6 @@ register unsigned long current_stack_pointer __asm__("$sp");
 #define TIF_SINGLESTEP		16	/* Single Step */
 #define TIF_LSX_CTX_LIVE	17	/* LSX context must be preserved */
 #define TIF_LASX_CTX_LIVE	18	/* LASX context must be preserved */
-#define TIF_OLD_WORLD		19	/* Old world syscall ABI */
 
 #define _TIF_SIGPENDING		(1<<TIF_SIGPENDING)
 #define _TIF_NEED_RESCHED	(1<<TIF_NEED_RESCHED)
@@ -102,7 +101,6 @@ register unsigned long current_stack_pointer __asm__("$sp");
 #define _TIF_SINGLESTEP		(1<<TIF_SINGLESTEP)
 #define _TIF_LSX_CTX_LIVE	(1<<TIF_LSX_CTX_LIVE)
 #define _TIF_LASX_CTX_LIVE	(1<<TIF_LASX_CTX_LIVE)
-#define _TIF_OLD_WORLD		(1<<TIF_OLD_WORLD)
 
 #endif /* __KERNEL__ */
 #endif /* _ASM_THREAD_INFO_H */

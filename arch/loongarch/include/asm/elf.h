@@ -21,9 +21,6 @@
 #define EF_LOONGARCH_ABI_ILP32_SINGLE_FLOAT	0x6
 #define EF_LOONGARCH_ABI_ILP32_DOUBLE_FLOAT	0x7
 
-#define EF_LOONGARCH_OBJABI_V1		0x40
-#define EF_LOONGARCH_OBJABI_MASK	0xC0
-
 /* LoongArch relocation types used by the dynamic linker */
 #define R_LARCH_NONE				0
 #define R_LARCH_32				1
@@ -236,7 +233,6 @@ do {									\
 	current->thread.vdso = &vdso_info;				\
 									\
 	loongarch_set_personality_fcsr(state);				\
-	loongarch_set_personality_abi(state);				\
 									\
 	if (personality(current->personality) != PER_LINUX)		\
 		set_personality(PER_LINUX);				\
@@ -255,7 +251,6 @@ do {									\
 									\
 	current->thread.vdso = &vdso_info;				\
 	loongarch_set_personality_fcsr(state);				\
-	loongarch_set_personality_abi(state);				\
 									\
 	p = personality(current->personality);				\
 	if (p != PER_LINUX32 && p != PER_LINUX)				\
@@ -321,7 +316,6 @@ extern int arch_setup_additional_pages(struct linux_binprm *bprm,
 struct arch_elf_state {
 	int fp_abi;
 	int interp_fp_abi;
-	int abi_flavor;
 };
 
 #define LOONGARCH_ABI_FP_ANY	(0)
@@ -329,7 +323,6 @@ struct arch_elf_state {
 #define INIT_ARCH_ELF_STATE {			\
 	.fp_abi = LOONGARCH_ABI_FP_ANY,		\
 	.interp_fp_abi = LOONGARCH_ABI_FP_ANY,	\
-	.abi_flavor = 0,			\
 }
 
 extern int arch_elf_pt_proc(void *ehdr, void *phdr, struct file *elf,
@@ -339,6 +332,5 @@ extern int arch_check_elf(void *ehdr, bool has_interpreter, void *interp_ehdr,
 			  struct arch_elf_state *state);
 
 extern void loongarch_set_personality_fcsr(struct arch_elf_state *state);
-extern void loongarch_set_personality_abi(struct arch_elf_state *state);
 
 #endif /* _ASM_ELF_H */
