@@ -17,10 +17,6 @@
 #include <asm/switch_to.h>
 #include <asm-generic/syscalls.h>
 
-asmlinkage long sys_loongarch_ow_newfstatat(int dfd, const char __user *filename,
-					    struct stat __user *statbuf, int flag);
-asmlinkage long sys_loongarch_ow_fstat(unsigned int fd, struct stat __user *statbuf);
-
 #undef __SYSCALL
 #define __SYSCALL(nr, call)	[nr] = (call),
 
