@@ -479,9 +479,15 @@ int cifs_tree_connect(const unsigned int xid, struct cifs_tcon *tcon, const stru
 
 	/* only send once per connect */
 	spin_lock(&tcon->tc_lock);
-	if (tcon->ses->ses_status != SES_GOOD ||
-	    (tcon->status != TID_NEW &&
-	    tcon->status != TID_NEED_TCON)) {
+	if (tcon->status != TID_GOOD &&
+	    tcon->status != TID_NEW &&
+	    tcon->status != TID_NEED_RECON) {
+		spin_unlock(&tcon->tc_lock);
+		return -EHOSTDOWN;
+	}
+
+	if (tcon->status == TID_NEED_FILES_INVALIDATE ||
+	    tcon->status == TID_GOOD) {
 		spin_unlock(&tcon->tc_lock);
 		return 0;
 	}
@@ -529,12 +535,12 @@ out:
 	if (rc) {
 		spin_lock(&tcon->tc_lock);
 		if (tcon->status == TID_IN_TCON)
-			tcon->status = TID_NEED_TCON;
+			tcon->status = TID_NEED_RECON;
 		spin_unlock(&tcon->tc_lock);
 	} else {
 		spin_lock(&tcon->tc_lock);
 		if (tcon->status == TID_IN_TCON)
-			tcon->status = TID_GOOD;
+			tcon->status = TID_NEED_FILES_INVALIDATE;
 		spin_unlock(&tcon->tc_lock);
 		tcon->need_reconnect = false;
 	}
