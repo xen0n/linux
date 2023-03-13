@@ -149,7 +149,7 @@ static int nct6775_asuswmi_evaluate_method(u32 method_id, u8 bank, u8 reg, u8 va
 		return -EIO;
 
 	if (retval)
-		*retval = (u32)result & 0xFFFFFFFF;
+		*retval = result;
 
 	return 0;
 #else
@@ -1122,6 +1122,9 @@ static const char * const asus_msi_boards[] = {
 	"PRIME X670-P",
 	"PRIME X670-P WIFI",
 	"PRIME X670E-PRO WIFI",
+	"PRIME Z590-A",
+	"PRIME Z590-P",
+	"PRIME Z590M-PLUS",
 	"Pro B660M-C-D4",
 	"ProArt B660-CREATOR D4",
 	"ProArt X670E-CREATOR WIFI",
