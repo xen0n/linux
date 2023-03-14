@@ -51,6 +51,7 @@
 
 extern asmlinkage void handle_ade(void);
 extern asmlinkage void handle_ale(void);
+extern asmlinkage void handle_oob(void);
 extern asmlinkage void handle_sys(void);
 extern asmlinkage void handle_bp(void);
 extern asmlinkage void handle_ri(void);
@@ -589,6 +590,34 @@ static void bug_handler(struct pt_regs *regs)
 	}
 }
 
+asmlinkage void noinstr do_oob(struct pt_regs *regs)
+{
+	irqentry_state_t state = irqentry_enter(regs);
+
+	if (regs->csr_prmd & CSR_PRMD_PIE)
+		local_irq_enable();
+
+	current->thread.trap_nr = read_csr_excode();
+
+	/*
+	 * notify the kprobe handlers, if instruction is likely to
+	 * pertain to them.
+	 */
+	if (notify_die(DIE_BOUNDS_CHECK, "Bounds check error", regs, 0,
+		       current->thread.trap_nr, SIGTRAP) == NOTIFY_STOP)
+		goto out;
+
+	die_if_kernel("Bounds check error in kernel code", regs);
+	force_sig_fault(SIGTRAP, TRAP_BRKPT, (void __user *)regs->csr_era);
+
+out:
+	if (regs->csr_prmd & CSR_PRMD_PIE)
+		local_irq_disable();
+
+	irqentry_exit(regs, state);
+	return;
+}
+
 asmlinkage void noinstr do_bp(struct pt_regs *regs)
 {
 	bool user = user_mode(regs);
@@ -956,6 +985,7 @@ void __init trap_init(void)
 
 	set_handler(EXCCODE_ADE * VECSIZE, handle_ade, VECSIZE);
 	set_handler(EXCCODE_ALE * VECSIZE, handle_ale, VECSIZE);
+	set_handler(EXCCODE_OOB * VECSIZE, handle_oob, VECSIZE);
 	set_handler(EXCCODE_SYS * VECSIZE, handle_sys, VECSIZE);
 	set_handler(EXCCODE_BP * VECSIZE, handle_bp, VECSIZE);
 	set_handler(EXCCODE_INE * VECSIZE, handle_ri, VECSIZE);

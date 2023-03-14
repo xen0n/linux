@@ -18,6 +18,7 @@ enum die_val {
 	DIE_SSTEPBP,
 	DIE_UPROBE,
 	DIE_UPROBE_XOL,
+	DIE_BOUNDS_CHECK,
 };
 
 #endif /* _ASM_LOONGARCH_KDEBUG_H */
