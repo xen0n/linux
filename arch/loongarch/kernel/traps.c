@@ -597,6 +597,9 @@ asmlinkage void noinstr do_oob(struct pt_regs *regs)
 	if (regs->csr_prmd & CSR_PRMD_PIE)
 		local_irq_enable();
 
+	// DEBUG
+	__show_regs(regs);
+
 	current->thread.trap_nr = read_csr_excode();
 
 	/*
