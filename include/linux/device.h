@@ -243,9 +243,12 @@ void __iomem *devm_of_iomap(struct device *dev,
 			    resource_size_t *size);
 
 /* allows to add/remove a custom action to devres stack */
-int devm_add_action(struct device *dev, void (*action)(void *), void *data);
 void devm_remove_action(struct device *dev, void (*action)(void *), void *data);
 void devm_release_action(struct device *dev, void (*action)(void *), void *data);
+
+int __devm_add_action(struct device *dev, void (*action)(void *), void *data, const char *name);
+#define devm_add_action(release, action, data) \
+	__devm_add_action(release, action, data, #action)
 
 static inline int devm_add_action_or_reset(struct device *dev,
 					   void (*action)(void *), void *data)
@@ -1091,11 +1094,5 @@ int dev_err_probe(const struct device *dev, int err, const char *fmt, ...);
 	MODULE_ALIAS("char-major-" __stringify(major) "-" __stringify(minor))
 #define MODULE_ALIAS_CHARDEV_MAJOR(major) \
 	MODULE_ALIAS("char-major-" __stringify(major) "-*")
-
-#ifdef CONFIG_SYSFS_DEPRECATED
-extern long sysfs_deprecated;
-#else
-#define sysfs_deprecated 0
-#endif
 
 #endif /* _DEVICE_H_ */
