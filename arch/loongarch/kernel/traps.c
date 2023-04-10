@@ -352,7 +352,7 @@ static void __show_regs(const struct pt_regs *regs)
 	print_ecfg(regs->csr_ecfg);
 	print_estat(regs->csr_estat);
 
-	if (exccode >= EXCCODE_TLBL && exccode <= EXCCODE_ALE)
+	if (exccode >= EXCCODE_TLBL && exccode <= EXCCODE_OOB)
 		pr_cont(" BADV: %0*lx\n", field, regs->csr_badvaddr);
 
 	pr_cont(" PRID: %08x (%s)\n", read_cpucfg(LOONGARCH_CPUCFG0),
