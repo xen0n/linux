@@ -40,6 +40,12 @@
 #define fs6	$f30
 #define fs7	$f31
 
+#ifdef CONFIG_AS_HAS_FCSR_CLASS
+#define fcsr0	$fcsr0
+#define fcsr1	$fcsr1
+#define fcsr2	$fcsr2
+#define fcsr3	$fcsr3
+#else
 /*
  * Current binutils expects *GPRs* at FCSR position for the FCSR
  * operation instructions, so define aliases for those used.
@@ -48,5 +54,6 @@
 #define fcsr1	$r1
 #define fcsr2	$r2
 #define fcsr3	$r3
+#endif
 
 #endif /* _ASM_FPREGDEF_H */
