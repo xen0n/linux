@@ -49,7 +49,7 @@ static char disk_type(int d)
 	}
 }
 
-static int test_disks(int i, int j)
+static int test_disks(int i, int j, const char *test_case)
 {
 	int erra, errb;
 
@@ -69,8 +69,9 @@ static int test_disks(int i, int j)
 		   equivalent to a RAID-5 failure (XOR, then recompute Q) */
 		erra = errb = 0;
 	} else {
-		printf("algo=%-8s  faila=%3d(%c)  failb=%3d(%c)  %s\n",
+		printf("algo=%-8s  case=%-27s  faila=%3d(%c)  failb=%3d(%c)  %s\n",
 		       raid6_call.name,
+		       test_case,
 		       i, disk_type(i),
 		       j, disk_type(j),
 		       (!erra && !errb) ? "OK" :
@@ -90,6 +91,7 @@ int main(int argc, char *argv[])
 	const struct raid6_recov_calls *const *ra;
 	int i, j, p1, p2;
 	int err = 0;
+	char test_case[27]; /* max. len("xor(p1=13 p2=13 i=14 j=15)") + 1 = 27 */
 
 	makedata(0, NDISKS-1);
 
@@ -116,8 +118,10 @@ int main(int argc, char *argv[])
 						(void **)&dataptrs);
 
 			for (i = 0; i < NDISKS-1; i++)
-				for (j = i+1; j < NDISKS; j++)
-					err += test_disks(i, j);
+				for (j = i+1; j < NDISKS; j++) {
+					sprintf(test_case, "gen(i=%d j=%d)", i, j);
+					err += test_disks(i, j, test_case);
+				}
 
 			if (!raid6_call.xor_syndrome)
 				continue;
@@ -133,8 +137,10 @@ int main(int argc, char *argv[])
                                                                 (void **)&dataptrs);
 
 					for (i = 0; i < NDISKS-1; i++)
-						for (j = i+1; j < NDISKS; j++)
-							err += test_disks(i, j);
+						for (j = i+1; j < NDISKS; j++) {
+							sprintf(test_case, "xor(p1=%d p2=%d i=%d j=%d)", p1, p2, i, j);
+							err += test_disks(i, j, test_case);
+						}
 				}
 
 		}
