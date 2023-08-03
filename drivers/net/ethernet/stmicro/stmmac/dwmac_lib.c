@@ -103,63 +103,71 @@ int dwmac_dma_reset(struct stmmac_priv *priv, void __iomem *ioaddr)
 void dwmac_enable_dma_transmission(struct stmmac_priv *priv,
 				   void __iomem *ioaddr, u32 chan)
 {
-	writel(1, ioaddr + DMA_XMT_POLL_DEMAND);
+	u32 offset = priv->plat->dwmac_regs->addrs->chan_offset;
+
+	writel(1, ioaddr + DMA_XMT_POLL_DEMAND + chan * offset);
 }
 
 void dwmac_enable_dma_irq(struct stmmac_priv *priv, void __iomem *ioaddr,
 			  u32 chan, bool rx, bool tx)
 {
-	u32 value = readl(ioaddr + DMA_INTR_ENA);
+	u32 offset = priv->plat->dwmac_regs->addrs->chan_offset;
+	u32 value = readl(ioaddr + DMA_INTR_ENA + chan * offset);
 
 	if (rx)
 		value |= DMA_INTR_DEFAULT_RX;
 	if (tx)
 		value |= DMA_INTR_DEFAULT_TX;
 
-	writel(value, ioaddr + DMA_INTR_ENA);
+	writel(value, ioaddr + DMA_INTR_ENA + chan * offset);
 }
 
 void dwmac_disable_dma_irq(struct stmmac_priv *priv, void __iomem *ioaddr,
 			   u32 chan, bool rx, bool tx)
 {
-	u32 value = readl(ioaddr + DMA_INTR_ENA);
+	u32 offset = priv->plat->dwmac_regs->addrs->chan_offset;
+	u32 value = readl(ioaddr + DMA_INTR_ENA + chan * offset);
 
 	if (rx)
 		value &= ~DMA_INTR_DEFAULT_RX;
 	if (tx)
 		value &= ~DMA_INTR_DEFAULT_TX;
 
-	writel(value, ioaddr + DMA_INTR_ENA);
+	writel(value, ioaddr + DMA_INTR_ENA + chan * offset);
 }
 
 void dwmac_dma_start_tx(struct stmmac_priv *priv, void __iomem *ioaddr,
 			u32 chan)
 {
-	u32 value = readl(ioaddr + DMA_CONTROL);
+	u32 offset = priv->plat->dwmac_regs->addrs->chan_offset;
+	u32 value = readl(ioaddr + DMA_CONTROL + chan * offset);
 	value |= DMA_CONTROL_ST;
-	writel(value, ioaddr + DMA_CONTROL);
+	writel(value, ioaddr + DMA_CONTROL + chan * offset);
 }
 
 void dwmac_dma_stop_tx(struct stmmac_priv *priv, void __iomem *ioaddr, u32 chan)
 {
-	u32 value = readl(ioaddr + DMA_CONTROL);
+	u32 offset = priv->plat->dwmac_regs->addrs->chan_offset;
+	u32 value = readl(ioaddr + DMA_CONTROL + chan * offset);
 	value &= ~DMA_CONTROL_ST;
-	writel(value, ioaddr + DMA_CONTROL);
+	writel(value, ioaddr + DMA_CONTROL + chan * offset);
 }
 
 void dwmac_dma_start_rx(struct stmmac_priv *priv, void __iomem *ioaddr,
 			u32 chan)
 {
-	u32 value = readl(ioaddr + DMA_CONTROL);
+	u32 offset = priv->plat->dwmac_regs->addrs->chan_offset;
+	u32 value = readl(ioaddr + DMA_CONTROL + chan * offset);
 	value |= DMA_CONTROL_SR;
-	writel(value, ioaddr + DMA_CONTROL);
+	writel(value, ioaddr + DMA_CONTROL + chan * offset);
 }
 
 void dwmac_dma_stop_rx(struct stmmac_priv *priv, void __iomem *ioaddr, u32 chan)
 {
-	u32 value = readl(ioaddr + DMA_CONTROL);
+	u32 offset = priv->plat->dwmac_regs->addrs->chan_offset;
+	u32 value = readl(ioaddr + DMA_CONTROL + chan * offset);
 	value &= ~DMA_CONTROL_SR;
-	writel(value, ioaddr + DMA_CONTROL);
+	writel(value, ioaddr + DMA_CONTROL + chan * offset);
 }
 
 #ifdef DWMAC_DMA_DEBUG
@@ -240,9 +248,10 @@ int dwmac_dma_interrupt(struct stmmac_priv *priv, void __iomem *ioaddr,
 	struct stmmac_rxq_stats *rxq_stats = &priv->xstats.rxq_stats[chan];
 	struct stmmac_txq_stats *txq_stats = &priv->xstats.txq_stats[chan];
 	const struct dwmac_dma_status *status = priv->plat->dwmac_regs->status;
+	u32 offset = priv->plat->dwmac_regs->addrs->chan_offset;
 	int ret = 0;
 	/* read the status register (CSR5) */
-	u32 intr_status = readl(ioaddr + DMA_STATUS);
+	u32 intr_status = readl(ioaddr + DMA_STATUS + chan * offset);
 
 #ifdef DWMAC_DMA_DEBUG
 	/* Enable it to monitor DMA rx/tx status in case of critical problems */
