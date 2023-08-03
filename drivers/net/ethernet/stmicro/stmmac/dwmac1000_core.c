@@ -541,6 +541,9 @@ int dwmac1000_setup(struct stmmac_priv *priv)
 	else
 		priv->plat->dwmac_regs = &dwmac_default_dma_regs;
 
+	if (!priv->plat->dma_reset_times)
+		priv->plat->dma_reset_times = 1;
+
 	priv->dev->priv_flags |= IFF_UNICAST_FLT;
 	mac->pcsr = priv->ioaddr;
 	mac->multicast_filter_bins = priv->plat->multicast_filter_bins;
