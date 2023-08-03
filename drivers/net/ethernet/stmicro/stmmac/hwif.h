@@ -35,14 +35,14 @@ struct dma_edesc;
 /* Descriptors helpers */
 struct stmmac_desc_ops {
 	/* DMA RX descriptor ring initialization */
-	void (*init_rx_desc)(struct dma_desc *p, int disable_rx_ic, int mode,
-			int end, int bfsize);
+	void (*init_rx_desc)(struct stmmac_priv *priv, struct dma_desc *p,
+			int disable_rx_ic, int mode, int end, int bfsize);
 	/* DMA TX descriptor ring initialization */
 	void (*init_tx_desc)(struct dma_desc *p, int mode, int end);
 	/* Invoked by the xmit function to prepare the tx descriptor */
-	void (*prepare_tx_desc)(struct dma_desc *p, int is_fs, int len,
-			bool csum_flag, int mode, bool tx_own, bool ls,
-			unsigned int tot_pkt_len);
+	void (*prepare_tx_desc)(struct stmmac_priv *priv, struct dma_desc *p,
+			int is_fs, int len, bool csum_flag, int mode,
+			bool tx_own, bool ls, unsigned int tot_pkt_len);
 	void (*prepare_tso_tx_desc)(struct dma_desc *p, int is_fs, int len1,
 			int len2, bool tx_own, bool ls, unsigned int tcphdrlen,
 			unsigned int tcppayloadlen);
@@ -60,7 +60,7 @@ struct stmmac_desc_ops {
 	int (*tx_status)(struct stmmac_extra_stats *x,
 			 struct dma_desc *p, void __iomem *ioaddr);
 	/* Get the buffer size from the descriptor */
-	int (*get_tx_len)(struct dma_desc *p);
+	int (*get_tx_len)(struct stmmac_priv *priv, struct dma_desc *p);
 	/* Handle extra events on specific interrupts hw dependent */
 	void (*set_rx_owner)(struct dma_desc *p, int disable_rx_ic);
 	/* Get the receive frame size */
@@ -84,9 +84,10 @@ struct stmmac_desc_ops {
 	/* set MSS via context descriptor */
 	void (*set_mss)(struct dma_desc *p, unsigned int mss);
 	/* set descriptor skbuff address */
-	void (*set_addr)(struct dma_desc *p, dma_addr_t addr);
+	void (*set_addr)(struct stmmac_priv *priv, struct dma_desc *p,
+			dma_addr_t addr);
 	/* clear descriptor */
-	void (*clear)(struct dma_desc *p);
+	void (*clear)(struct stmmac_priv *priv, struct dma_desc *p);
 	/* RSS */
 	int (*get_rx_hash)(struct dma_desc *p, u32 *hash,
 			   enum pkt_hash_types *type);
@@ -100,11 +101,11 @@ struct stmmac_desc_ops {
 };
 
 #define stmmac_init_rx_desc(__priv, __args...) \
-	stmmac_do_void_callback(__priv, desc, init_rx_desc, __args)
+	stmmac_do_void_callback(__priv, desc, init_rx_desc, __priv, __args)
 #define stmmac_init_tx_desc(__priv, __args...) \
 	stmmac_do_void_callback(__priv, desc, init_tx_desc, __args)
 #define stmmac_prepare_tx_desc(__priv, __args...) \
-	stmmac_do_void_callback(__priv, desc, prepare_tx_desc, __args)
+	stmmac_do_void_callback(__priv, desc, prepare_tx_desc, __priv, __args)
 #define stmmac_prepare_tso_tx_desc(__priv, __args...) \
 	stmmac_do_void_callback(__priv, desc, prepare_tso_tx_desc, __args)
 #define stmmac_set_tx_owner(__priv, __args...) \
@@ -120,7 +121,7 @@ struct stmmac_desc_ops {
 #define stmmac_tx_status(__priv, __args...) \
 	stmmac_do_callback(__priv, desc, tx_status, __args)
 #define stmmac_get_tx_len(__priv, __args...) \
-	stmmac_do_callback(__priv, desc, get_tx_len, __args)
+	stmmac_do_callback(__priv, desc, get_tx_len, __priv, __args)
 #define stmmac_set_rx_owner(__priv, __args...) \
 	stmmac_do_void_callback(__priv, desc, set_rx_owner, __args)
 #define stmmac_get_rx_frame_len(__priv, __args...) \
@@ -142,9 +143,9 @@ struct stmmac_desc_ops {
 #define stmmac_set_mss(__priv, __args...) \
 	stmmac_do_void_callback(__priv, desc, set_mss, __args)
 #define stmmac_set_desc_addr(__priv, __args...) \
-	stmmac_do_void_callback(__priv, desc, set_addr, __args)
+	stmmac_do_void_callback(__priv, desc, set_addr, __priv, __args)
 #define stmmac_clear_desc(__priv, __args...) \
-	stmmac_do_void_callback(__priv, desc, clear, __args)
+	stmmac_do_void_callback(__priv, desc, clear, __priv, __args)
 #define stmmac_get_rx_hash(__priv, __args...) \
 	stmmac_do_callback(__priv, desc, get_rx_hash, __args)
 #define stmmac_get_rx_header_len(__priv, __args...) \
@@ -166,9 +167,9 @@ struct dma_features;
 /* Specific DMA helpers */
 struct stmmac_dma_ops {
 	/* DMA core initialization */
-	int (*reset)(void __iomem *ioaddr);
-	void (*init)(void __iomem *ioaddr, struct stmmac_dma_cfg *dma_cfg,
-		     int atds);
+	int (*reset)(struct stmmac_priv *priv, void __iomem *ioaddr);
+	void (*init)(struct stmmac_priv *priv, void __iomem *ioaddr,
+		     struct stmmac_dma_cfg *dma_cfg, int atds);
 	void (*init_chan)(struct stmmac_priv *priv, void __iomem *ioaddr,
 			  struct stmmac_dma_cfg *dma_cfg, u32 chan);
 	void (*init_rx_chan)(struct stmmac_priv *priv, void __iomem *ioaddr,
@@ -178,7 +179,8 @@ struct stmmac_dma_ops {
 			     struct stmmac_dma_cfg *dma_cfg,
 			     dma_addr_t phy, u32 chan);
 	/* Configure the AXI Bus Mode Register */
-	void (*axi)(void __iomem *ioaddr, struct stmmac_axi *axi);
+	void (*axi)(struct stmmac_priv *priv, void __iomem *ioaddr,
+		    struct stmmac_axi *axi);
 	/* Dump DMA registers */
 	void (*dump_regs)(struct stmmac_priv *priv, void __iomem *ioaddr,
 			  u32 *reg_space);
@@ -190,7 +192,8 @@ struct stmmac_dma_ops {
 	/* To track extra statistic (if supported) */
 	void (*dma_diagnostic_fr)(struct stmmac_extra_stats *x,
 				  void __iomem *ioaddr);
-	void (*enable_dma_transmission) (void __iomem *ioaddr);
+	void (*enable_dma_transmission)(struct stmmac_priv *priv,
+					void __iomem *ioaddr, u32 chan);
 	void (*enable_dma_irq)(struct stmmac_priv *priv, void __iomem *ioaddr,
 			       u32 chan, bool rx, bool tx);
 	void (*disable_dma_irq)(struct stmmac_priv *priv, void __iomem *ioaddr,
@@ -206,7 +209,7 @@ struct stmmac_dma_ops {
 	int (*dma_interrupt)(struct stmmac_priv *priv, void __iomem *ioaddr,
 			     struct stmmac_extra_stats *x, u32 chan, u32 dir);
 	/* If supported then get the optional core features */
-	int (*get_hw_feature)(void __iomem *ioaddr,
+	int (*get_hw_feature)(struct stmmac_priv *priv, void __iomem *ioaddr,
 			      struct dma_features *dma_cap);
 	/* Program the HW RX Watchdog */
 	void (*rx_watchdog)(struct stmmac_priv *priv, void __iomem *ioaddr,
@@ -232,7 +235,7 @@ struct stmmac_dma_ops {
 };
 
 #define stmmac_dma_init(__priv, __args...) \
-	stmmac_do_void_callback(__priv, dma, init, __args)
+	stmmac_do_void_callback(__priv, dma, init, __priv, __args)
 #define stmmac_init_chan(__priv, __args...) \
 	stmmac_do_void_callback(__priv, dma, init_chan, __priv, __args)
 #define stmmac_init_rx_chan(__priv, __args...) \
@@ -240,7 +243,7 @@ struct stmmac_dma_ops {
 #define stmmac_init_tx_chan(__priv, __args...) \
 	stmmac_do_void_callback(__priv, dma, init_tx_chan, __priv, __args)
 #define stmmac_axi(__priv, __args...) \
-	stmmac_do_void_callback(__priv, dma, axi, __args)
+	stmmac_do_void_callback(__priv, dma, axi, __priv, __args)
 #define stmmac_dump_dma_regs(__priv, __args...) \
 	stmmac_do_void_callback(__priv, dma, dump_regs, __priv, __args)
 #define stmmac_dma_rx_mode(__priv, __args...) \
@@ -250,7 +253,7 @@ struct stmmac_dma_ops {
 #define stmmac_dma_diagnostic_fr(__priv, __args...) \
 	stmmac_do_void_callback(__priv, dma, dma_diagnostic_fr, __args)
 #define stmmac_enable_dma_transmission(__priv, __args...) \
-	stmmac_do_void_callback(__priv, dma, enable_dma_transmission, __args)
+	stmmac_do_void_callback(__priv, dma, enable_dma_transmission, __priv, __args)
 #define stmmac_enable_dma_irq(__priv, __args...) \
 	stmmac_do_void_callback(__priv, dma, enable_dma_irq, __priv, __args)
 #define stmmac_disable_dma_irq(__priv, __args...) \
@@ -266,7 +269,7 @@ struct stmmac_dma_ops {
 #define stmmac_dma_interrupt_status(__priv, __args...) \
 	stmmac_do_callback(__priv, dma, dma_interrupt, __priv, __args)
 #define stmmac_get_hw_feature(__priv, __args...) \
-	stmmac_do_callback(__priv, dma, get_hw_feature, __args)
+	stmmac_do_callback(__priv, dma, get_hw_feature, __priv, __args)
 #define stmmac_rx_watchdog(__priv, __args...) \
 	stmmac_do_void_callback(__priv, dma, rx_watchdog, __priv, __args)
 #define stmmac_set_tx_ring_len(__priv, __args...) \
@@ -338,17 +341,21 @@ struct stmmac_ops {
 	int (*host_mtl_irq_status)(struct stmmac_priv *priv,
 				   struct mac_device_info *hw, u32 chan);
 	/* Multicast filter setting */
-	void (*set_filter)(struct mac_device_info *hw, struct net_device *dev);
+	void (*set_filter)(struct stmmac_priv *priv, struct mac_device_info *hw,
+			   struct net_device *dev);
 	/* Flow control setting */
 	void (*flow_ctrl)(struct mac_device_info *hw, unsigned int duplex,
 			  unsigned int fc, unsigned int pause_time, u32 tx_cnt);
 	/* Set power management mode (e.g. magic frame) */
 	void (*pmt)(struct mac_device_info *hw, unsigned long mode);
 	/* Set/Get Unicast MAC addresses */
-	void (*set_umac_addr)(struct mac_device_info *hw,
+	void (*set_umac_addr)(struct stmmac_priv *priv,
+			      struct mac_device_info *hw,
 			      const unsigned char *addr,
 			      unsigned int reg_n);
-	void (*get_umac_addr)(struct mac_device_info *hw, unsigned char *addr,
+	void (*get_umac_addr)(struct stmmac_priv *priv,
+			      struct mac_device_info *hw,
+			      unsigned char *addr,
 			      unsigned int reg_n);
 	void (*set_eee_mode)(struct mac_device_info *hw,
 			     bool en_tx_lpi_clockgating);
@@ -452,15 +459,15 @@ struct stmmac_ops {
 #define stmmac_host_mtl_irq_status(__priv, __args...) \
 	stmmac_do_callback(__priv, mac, host_mtl_irq_status, __priv, __args)
 #define stmmac_set_filter(__priv, __args...) \
-	stmmac_do_void_callback(__priv, mac, set_filter, __args)
+	stmmac_do_void_callback(__priv, mac, set_filter, __priv, __args)
 #define stmmac_flow_ctrl(__priv, __args...) \
 	stmmac_do_void_callback(__priv, mac, flow_ctrl, __args)
 #define stmmac_pmt(__priv, __args...) \
 	stmmac_do_void_callback(__priv, mac, pmt, __args)
 #define stmmac_set_umac_addr(__priv, __args...) \
-	stmmac_do_void_callback(__priv, mac, set_umac_addr, __args)
+	stmmac_do_void_callback(__priv, mac, set_umac_addr, __priv, __args)
 #define stmmac_get_umac_addr(__priv, __args...) \
-	stmmac_do_void_callback(__priv, mac, get_umac_addr, __args)
+	stmmac_do_void_callback(__priv, mac, get_umac_addr, __priv, __args)
 #define stmmac_set_eee_mode(__priv, __args...) \
 	stmmac_do_void_callback(__priv, mac, set_eee_mode, __args)
 #define stmmac_reset_eee_mode(__priv, __args...) \
@@ -563,8 +570,8 @@ struct stmmac_rx_queue;
 
 /* Helpers to manage the descriptors for chain and ring modes */
 struct stmmac_mode_ops {
-	void (*init) (void *des, dma_addr_t phy_addr, unsigned int size,
-		      unsigned int extend_desc);
+	void (*init) (struct stmmac_priv *priv, void *des, dma_addr_t phy_addr,
+		      unsigned int size, unsigned int extend_desc);
 	unsigned int (*is_jumbo_frm) (int len, int ehn_desc);
 	int (*jumbo_frm)(struct stmmac_tx_queue *tx_q, struct sk_buff *skb,
 			 int csum);
@@ -575,7 +582,7 @@ struct stmmac_mode_ops {
 };
 
 #define stmmac_mode_init(__priv, __args...) \
-	stmmac_do_void_callback(__priv, mode, init, __args)
+	stmmac_do_void_callback(__priv, mode, init, __priv, __args)
 #define stmmac_is_jumbo_frm(__priv, __args...) \
 	stmmac_do_callback(__priv, mode, is_jumbo_frm, __args)
 #define stmmac_jumbo_frm(__priv, __args...) \

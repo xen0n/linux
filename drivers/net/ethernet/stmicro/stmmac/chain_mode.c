@@ -95,8 +95,9 @@ static unsigned int is_jumbo_frm(int len, int enh_desc)
 	return ret;
 }
 
-static void init_dma_chain(void *des, dma_addr_t phy_addr,
-				  unsigned int size, unsigned int extend_desc)
+static void init_dma_chain(struct stmmac_priv *priv, void *des,
+			   dma_addr_t phy_addr, unsigned int size,
+			   unsigned int extend_desc)
 {
 	/*
 	 * In chained mode the des3 points to the next element in the ring.

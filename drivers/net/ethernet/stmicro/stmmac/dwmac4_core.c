@@ -335,7 +335,8 @@ static void dwmac4_pmt(struct mac_device_info *hw, unsigned long mode)
 	writel(pmt, ioaddr + GMAC_PMT);
 }
 
-static void dwmac4_set_umac_addr(struct mac_device_info *hw,
+static void dwmac4_set_umac_addr(struct stmmac_priv *priv,
+				 struct mac_device_info *hw,
 				 const unsigned char *addr, unsigned int reg_n)
 {
 	void __iomem *ioaddr = hw->pcsr;
@@ -344,7 +345,8 @@ static void dwmac4_set_umac_addr(struct mac_device_info *hw,
 				   GMAC_ADDR_LOW(reg_n));
 }
 
-static void dwmac4_get_umac_addr(struct mac_device_info *hw,
+static void dwmac4_get_umac_addr(struct stmmac_priv *priv,
+				 struct mac_device_info *hw,
 				 unsigned char *addr, unsigned int reg_n)
 {
 	void __iomem *ioaddr = hw->pcsr;
@@ -593,7 +595,8 @@ static void dwmac4_restore_hw_vlan_rx_fltr(struct net_device *dev,
 	}
 }
 
-static void dwmac4_set_filter(struct mac_device_info *hw,
+static void dwmac4_set_filter(struct stmmac_priv *priv,
+			      struct mac_device_info *hw,
 			      struct net_device *dev)
 {
 	void __iomem *ioaddr = (void __iomem *)dev->base_addr;
@@ -669,7 +672,7 @@ static void dwmac4_set_filter(struct mac_device_info *hw,
 		int reg = 1;
 
 		netdev_for_each_uc_addr(ha, dev) {
-			dwmac4_set_umac_addr(hw, ha->addr, reg);
+			dwmac4_set_umac_addr(priv, hw, ha->addr, reg);
 			reg++;
 		}
 
