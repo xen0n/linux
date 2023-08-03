@@ -176,15 +176,20 @@ const struct dwmac_regs dwmac_loongson64_dma_regs = {
 
 int dwmac_dma_reset(struct stmmac_priv *priv, void __iomem *ioaddr)
 {
+	int err;
+	int cnt = priv->plat->dma_reset_times;
 	u32 value = readl(ioaddr + DMA_BUS_MODE);
 
-	/* DMA SW reset */
-	value |= DMA_BUS_MODE_SFT_RESET;
-	writel(value, ioaddr + DMA_BUS_MODE);
+	do {
+		value |= DMA_BUS_MODE_SFT_RESET;
+		writel(value, ioaddr + DMA_BUS_MODE);
 
-	return readl_poll_timeout(ioaddr + DMA_BUS_MODE, value,
-				 !(value & DMA_BUS_MODE_SFT_RESET),
-				 10000, 200000);
+		err = readl_poll_timeout(ioaddr + DMA_BUS_MODE, value,
+					 !(value & DMA_BUS_MODE_SFT_RESET),
+					 10000, 200000);
+	} while (cnt-- && err);
+
+	return err;
 }
 
 /* CSR1 enables the transmit DMA to check for new descriptor */
