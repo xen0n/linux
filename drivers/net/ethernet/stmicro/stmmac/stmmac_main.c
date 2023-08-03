@@ -1249,7 +1249,7 @@ static int stmmac_phy_setup(struct stmmac_priv *priv)
 	}
 
 	/* Half-Duplex can only work with single queue */
-	if (priv->plat->tx_queues_to_use > 1)
+	if (priv->plat->tx_queues_to_use > 1 || priv->plat->disable_half_duplex)
 		priv->phylink_config.mac_capabilities &=
 			~(MAC_10HD | MAC_100HD | MAC_1000HD);
 	priv->phylink_config.mac_managed_pm = true;
