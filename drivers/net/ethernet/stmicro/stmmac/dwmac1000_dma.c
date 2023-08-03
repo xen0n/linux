@@ -15,10 +15,12 @@
 #include <asm/io.h>
 #include "dwmac1000.h"
 #include "dwmac_dma.h"
+#include "stmmac.h"
 
 static void dwmac1000_dma_axi(struct stmmac_priv *priv, void __iomem *ioaddr,
 			      struct stmmac_axi *axi)
 {
+	const struct dwmac_dma_axi *dma_axi = priv->plat->dwmac_regs->axi;
 	u32 value = readl(ioaddr + DMA_AXI_BUS_MODE);
 	int i;
 
@@ -30,13 +32,13 @@ static void dwmac1000_dma_axi(struct stmmac_priv *priv, void __iomem *ioaddr,
 	if (axi->axi_xit_frm)
 		value |= DMA_AXI_LPI_XIT_FRM;
 
-	value &= ~DMA_AXI_WR_OSR_LMT;
-	value |= (axi->axi_wr_osr_lmt & DMA_AXI_WR_OSR_LMT_MASK) <<
-		 DMA_AXI_WR_OSR_LMT_SHIFT;
+	value &= ~dma_axi->wr_osr_lmt;
+	value |= (axi->axi_wr_osr_lmt & dma_axi->wr_osr_lmt_mask) <<
+		 dma_axi->wr_osr_lmt_shift;
 
-	value &= ~DMA_AXI_RD_OSR_LMT;
-	value |= (axi->axi_rd_osr_lmt & DMA_AXI_RD_OSR_LMT_MASK) <<
-		 DMA_AXI_RD_OSR_LMT_SHIFT;
+	value &= ~dma_axi->rd_osr_lmt;
+	value |= (axi->axi_rd_osr_lmt & dma_axi->rd_osr_lmt_mask) <<
+		 dma_axi->rd_osr_lmt_shift;
 
 	/* Depending on the UNDEF bit the Master AXI will perform any burst
 	 * length according to the BLEN programmed (by default all BLEN are
@@ -74,6 +76,7 @@ static void dwmac1000_dma_axi(struct stmmac_priv *priv, void __iomem *ioaddr,
 static void dwmac1000_dma_init(struct stmmac_priv *priv, void __iomem *ioaddr,
 			       struct stmmac_dma_cfg *dma_cfg, int atds)
 {
+	u32 mask = priv->plat->dwmac_regs->intr_ena->default_mask;
 	u32 value = readl(ioaddr + DMA_BUS_MODE);
 	int txpbl = dma_cfg->txpbl ?: dma_cfg->pbl;
 	int rxpbl = dma_cfg->rxpbl ?: dma_cfg->pbl;
@@ -108,7 +111,7 @@ static void dwmac1000_dma_init(struct stmmac_priv *priv, void __iomem *ioaddr,
 	writel(value, ioaddr + DMA_BUS_MODE);
 
 	/* Mask interrupts by writing to CSR7 */
-	writel(DMA_INTR_DEFAULT_MASK, ioaddr + DMA_INTR_ENA);
+	writel(mask, ioaddr + DMA_INTR_ENA);
 }
 
 static void dwmac1000_dma_init_rx(struct stmmac_priv *priv,
@@ -116,8 +119,10 @@ static void dwmac1000_dma_init_rx(struct stmmac_priv *priv,
 				  struct stmmac_dma_cfg *dma_cfg,
 				  dma_addr_t dma_rx_phy, u32 chan)
 {
+	u32 addr = priv->plat->dwmac_regs->addrs->rcv_base_addr;
+
 	/* RX descriptor base address list must be written into DMA CSR3 */
-	writel(lower_32_bits(dma_rx_phy), ioaddr + DMA_RCV_BASE_ADDR);
+	writel(lower_32_bits(dma_rx_phy), ioaddr + addr);
 }
 
 static void dwmac1000_dma_init_tx(struct stmmac_priv *priv,
@@ -125,8 +130,10 @@ static void dwmac1000_dma_init_tx(struct stmmac_priv *priv,
 				  struct stmmac_dma_cfg *dma_cfg,
 				  dma_addr_t dma_tx_phy, u32 chan)
 {
+	u32 addr = priv->plat->dwmac_regs->addrs->tx_base_addr;
+
 	/* TX descriptor base address list must be written into DMA CSR4 */
-	writel(lower_32_bits(dma_tx_phy), ioaddr + DMA_TX_BASE_ADDR);
+	writel(lower_32_bits(dma_tx_phy), ioaddr + addr);
 }
 
 static u32 dwmac1000_configure_fc(u32 csr6, int rxfifosz)
