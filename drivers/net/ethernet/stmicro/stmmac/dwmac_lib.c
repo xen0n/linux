@@ -14,6 +14,78 @@
 
 #define GMAC_HI_REG_AE		0x80000000
 
+static const struct dwmac_dma_addrs default_dma_addrs = {
+	.rcv_base_addr = 0x0000100c,
+	.tx_base_addr = 0x00001010,
+	.cur_tx_buf_addr = 0x00001050,
+	.cur_rx_buf_addr = 0x00001054,
+};
+
+static const struct dwmac_dma_axi default_dma_axi = {
+	.wr_osr_lmt = GENMASK(23, 20),
+	.wr_osr_lmt_shift = 20,
+	.wr_osr_lmt_mask = 0xf,
+	.rd_osr_lmt = GENMASK(19, 16),
+	.rd_osr_lmt_shift = 16,
+	.rd_osr_lmt_mask = 0xf,
+	.osr_max = 0xf,
+	/* max_osr_limit = (osr_max << wr_osr_lmt_shift) |
+	 *                 (osr_max << rd_osr_lmt_shift)
+	 */
+	.max_osr_limit = (0xf << 20) | (0xf << 16),
+};
+
+static const struct dwmac_dma_intr_ena default_dma_intr_ena = {
+	.nie = 0x00010000,
+	/* normal = nie | DMA_INTR_ENA_RIE | DMA_INTR_ENA_TIE */
+	.normal = 0x00010000 | DMA_INTR_ENA_RIE | DMA_INTR_ENA_TIE,
+	.aie = 0x00008000,
+	/* abnormal = aie | DMA_INTR_ENA_FBE | DMA_INTR_ENA_UNE */
+	.abnormal = 0x00008000 | DMA_INTR_ENA_FBE | DMA_INTR_ENA_UNE,
+	/* default_mask = normal | abnormal */
+	.default_mask = (0x00010000 | DMA_INTR_ENA_RIE | DMA_INTR_ENA_TIE) |
+			(0x00008000 | DMA_INTR_ENA_FBE | DMA_INTR_ENA_UNE),
+};
+
+static const struct dwmac_dma_status default_dma_status = {
+	.glpii = 0x40000000,
+	.gpi = 0x10000000,
+	.gmi = 0x08000000,
+	.gli = 0x04000000,
+	.intr_mask = 0x1ffff,
+	.eb_mask = 0x00380000,
+	.ts_mask = 0x00700000,
+	.ts_shift = 20,
+	.rs_mask = 0x000e0000,
+	.rs_shift = 17,
+	.nis = 0x00010000,
+	.ais = 0x00008000,
+	.fbi = 0x00002000,
+	/* msk_common = nis | ais | fbi */
+	.msk_common = 0x00010000 | 0x00008000 | 0x00002000,
+	/* msk_rx = DMA_STATUS_ERI | DMA_STATUS_RWT |  DMA_STATUS_RPS |
+	 *          DMA_STATUS_RU | DMA_STATUS_RI | DMA_STATUS_OVF |
+	 *          msk_common
+	 */
+	.msk_rx = DMA_STATUS_ERI | DMA_STATUS_RWT | DMA_STATUS_RPS |
+		  DMA_STATUS_RU | DMA_STATUS_RI | DMA_STATUS_OVF |
+		  0x00010000 | 0x00008000 | 0x00002000,
+	/* msk_tx = DMA_STATUS_ETI | DMA_STATUS_UNF | DMA_STATUS_TJT |
+	 *          DMA_STATUS_TU | DMA_STATUS_TPS | DMA_STATUS_TI |
+	 *          msk_common
+	 */
+	.msk_tx = DMA_STATUS_ETI | DMA_STATUS_UNF | DMA_STATUS_TJT |
+		  DMA_STATUS_TU | DMA_STATUS_TPS | DMA_STATUS_TI |
+		  0x00010000 | 0x00008000 | 0x00002000,
+};
+
+const struct dwmac_regs dwmac_default_dma_regs = {
+	.addrs = &default_dma_addrs,
+	.axi = &default_dma_axi,
+	.intr_ena = &default_dma_intr_ena,
+	.status = &default_dma_status,
+};
+
 int dwmac_dma_reset(struct stmmac_priv *priv, void __iomem *ioaddr)
 {
 	u32 value = readl(ioaddr + DMA_BUS_MODE);
@@ -93,8 +165,9 @@ void dwmac_dma_stop_rx(struct stmmac_priv *priv, void __iomem *ioaddr, u32 chan)
 #ifdef DWMAC_DMA_DEBUG
 static void show_tx_process_state(unsigned int status)
 {
+	u32 status = priv->plat->dwmac_regs->status;
 	unsigned int state;
-	state = (status & DMA_STATUS_TS_MASK) >> DMA_STATUS_TS_SHIFT;
+	state = (status & status->ts_mask) >> status->ts_shift;
 
 	switch (state) {
 	case 0:
@@ -124,8 +197,9 @@ static void show_tx_process_state(unsigned int status)
 
 static void show_rx_process_state(unsigned int status)
 {
+	u32 status = priv->plat->dwmac_regs->status;
 	unsigned int state;
-	state = (status & DMA_STATUS_RS_MASK) >> DMA_STATUS_RS_SHIFT;
+	state = (status & status->rs_mask) >> status->rs_shift;
 
 	switch (state) {
 	case 0:
@@ -165,6 +239,7 @@ int dwmac_dma_interrupt(struct stmmac_priv *priv, void __iomem *ioaddr,
 {
 	struct stmmac_rxq_stats *rxq_stats = &priv->xstats.rxq_stats[chan];
 	struct stmmac_txq_stats *txq_stats = &priv->xstats.txq_stats[chan];
+	const struct dwmac_dma_status *status = priv->plat->dwmac_regs->status;
 	int ret = 0;
 	/* read the status register (CSR5) */
 	u32 intr_status = readl(ioaddr + DMA_STATUS);
@@ -177,12 +252,12 @@ int dwmac_dma_interrupt(struct stmmac_priv *priv, void __iomem *ioaddr,
 #endif
 
 	if (dir == DMA_DIR_RX)
-		intr_status &= DMA_STATUS_MSK_RX;
+		intr_status &= status->msk_rx;
 	else if (dir == DMA_DIR_TX)
-		intr_status &= DMA_STATUS_MSK_TX;
+		intr_status &= status->msk_tx;
 
 	/* ABNORMAL interrupts */
-	if (unlikely(intr_status & DMA_STATUS_AIS)) {
+	if (unlikely(intr_status & status->ais)) {
 		if (unlikely(intr_status & DMA_STATUS_UNF)) {
 			ret = tx_hard_error_bump_tc;
 			x->tx_undeflow_irq++;
@@ -205,13 +280,13 @@ int dwmac_dma_interrupt(struct stmmac_priv *priv, void __iomem *ioaddr,
 			x->tx_process_stopped_irq++;
 			ret = tx_hard_error;
 		}
-		if (unlikely(intr_status & DMA_STATUS_FBI)) {
+		if (unlikely(intr_status & status->fbi)) {
 			x->fatal_bus_error_irq++;
 			ret = tx_hard_error;
 		}
 	}
 	/* TX/RX NORMAL interrupts */
-	if (likely(intr_status & DMA_STATUS_NIS)) {
+	if (likely(intr_status & status->nis)) {
 		if (likely(intr_status & DMA_STATUS_RI)) {
 			u32 value = readl(ioaddr + DMA_INTR_ENA);
 			/* to schedule NAPI on real RIE event. */
@@ -232,12 +307,11 @@ int dwmac_dma_interrupt(struct stmmac_priv *priv, void __iomem *ioaddr,
 			x->rx_early_irq++;
 	}
 	/* Optional hardware blocks, interrupts should be disabled */
-	if (unlikely(intr_status &
-		     (DMA_STATUS_GPI | DMA_STATUS_GMI | DMA_STATUS_GLI)))
+	if (unlikely(intr_status & (status->gpi | status->gmi | status->gli)))
 		pr_warn("%s: unexpected status %08x\n", __func__, intr_status);
 
-	/* Clear the interrupt by writing a logic 1 to the CSR5[15-0] */
-	writel((intr_status & 0x1ffff), ioaddr + DMA_STATUS);
+	/* Clear the interrupt by writing a logic 1 to the CSR5 */
+	writel((intr_status & status->intr_mask), ioaddr + DMA_STATUS);
 
 	return ret;
 }

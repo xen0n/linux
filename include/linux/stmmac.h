@@ -221,6 +221,66 @@ struct dwmac4_addrs {
 #define STMMAC_FLAG_EN_TX_LPI_CLOCKGATING	BIT(11)
 #define STMMAC_FLAG_HWTSTAMP_CORRECT_LATENCY	BIT(12)
 
+/* DMA addresses that may be customized by a platform */
+struct dwmac_dma_addrs {
+	u32 chan_offset;
+	u32 rcv_base_addr;
+	u32 rcv_base_addr_shadow1;
+	u32 rcv_base_addr_shadow2;
+	u32 tx_base_addr;
+	u32 cur_tx_buf_addr;
+	u32 cur_rx_buf_addr;
+};
+
+/* DMA AXI registers that may be customized by a platform */
+struct dwmac_dma_axi {
+	u32 wr_osr_lmt;
+	u32 wr_osr_lmt_shift;
+	u32 wr_osr_lmt_mask;
+	u32 rd_osr_lmt;
+	u32 rd_osr_lmt_shift;
+	u32 rd_osr_lmt_mask;
+	u32 osr_max;
+	u32 max_osr_limit;
+};
+
+/* DMA normal and abnormal interrupt that may be customized by a platform */
+struct dwmac_dma_intr_ena {
+	u32 nie;
+	u32 normal;
+	u32 aie;
+	u32 abnormal;
+	u32 default_mask;
+};
+
+/* DMA Status register that may be customized by a platform */
+struct dwmac_dma_status {
+	u32 glpii;
+	u32 gpi;
+	u32 gmi;
+	u32 gli;
+	u32 intr_mask;
+	u32 eb_mask;
+	u32 ts_mask;
+	u32 ts_shift;
+	u32 rs_mask;
+	u32 rs_shift;
+	u32 nis;
+	u32 ais;
+	u32 fbi;
+	u32 msk_common;
+	u32 msk_rx;
+	u32 msk_tx;
+};
+
+/* Registers that may be customized by a platform */
+struct dwmac_regs {
+	const struct dwmac_dma_addrs *addrs;
+	const struct dwmac_dma_axi *axi;
+	const struct dwmac_dma_intr_ena *intr_ena;
+	const struct dwmac_dma_status *status;
+};
+
 struct plat_stmmacenet_data {
 	int bus_id;
 	int phy_addr;
@@ -313,5 +373,7 @@ struct plat_stmmacenet_data {
 	int msi_tx_base_vec;
 	const struct dwmac4_addrs *dwmac4_addrs;
 	unsigned int flags;
+	bool has_integrated_pcs;
+	const struct dwmac_regs *dwmac_regs;
 };
 #endif

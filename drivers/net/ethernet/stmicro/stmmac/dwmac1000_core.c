@@ -19,6 +19,7 @@
 #include "stmmac.h"
 #include "stmmac_pcs.h"
 #include "dwmac1000.h"
+#include "dwmac_dma.h"
 
 static void dwmac1000_core_init(struct mac_device_info *hw,
 				struct net_device *dev)
@@ -532,6 +533,8 @@ int dwmac1000_setup(struct stmmac_priv *priv)
 	struct mac_device_info *mac = priv->hw;
 
 	dev_info(priv->device, "\tDWMAC1000\n");
+
+	priv->plat->dwmac_regs = &dwmac_default_dma_regs;
 
 	priv->dev->priv_flags |= IFF_UNICAST_FLT;
 	mac->pcsr = priv->ioaddr;

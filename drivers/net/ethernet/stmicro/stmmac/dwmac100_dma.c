@@ -17,32 +17,39 @@
 #include <asm/io.h>
 #include "dwmac100.h"
 #include "dwmac_dma.h"
+#include "stmmac.h"
 
 static void dwmac100_dma_init(struct stmmac_priv *priv, void __iomem *ioaddr,
 			      struct stmmac_dma_cfg *dma_cfg, int atds)
 {
+	u32 mask = priv->plat->dwmac_regs->intr_ena->default_mask;
+
 	/* Enable Application Access by writing to DMA CSR0 */
 	writel(DMA_BUS_MODE_DEFAULT | (dma_cfg->pbl << DMA_BUS_MODE_PBL_SHIFT),
 	       ioaddr + DMA_BUS_MODE);
 
 	/* Mask interrupts by writing to CSR7 */
-	writel(DMA_INTR_DEFAULT_MASK, ioaddr + DMA_INTR_ENA);
+	writel(mask, ioaddr + DMA_INTR_ENA);
 }
 
 static void dwmac100_dma_init_rx(struct stmmac_priv *priv, void __iomem *ioaddr,
 				 struct stmmac_dma_cfg *dma_cfg,
 				 dma_addr_t dma_rx_phy, u32 chan)
 {
+	u32 addr = priv->plat->dwmac_regs->addrs->rcv_base_addr;
+
 	/* RX descriptor base addr lists must be written into DMA CSR3 */
-	writel(lower_32_bits(dma_rx_phy), ioaddr + DMA_RCV_BASE_ADDR);
+	writel(lower_32_bits(dma_rx_phy), ioaddr + addr);
 }
 
 static void dwmac100_dma_init_tx(struct stmmac_priv *priv, void __iomem *ioaddr,
 				 struct stmmac_dma_cfg *dma_cfg,
 				 dma_addr_t dma_tx_phy, u32 chan)
 {
+	u32 addr = priv->plat->dwmac_regs->addrs->tx_base_addr;
+
 	/* TX descriptor base addr lists must be written into DMA CSR4 */
-	writel(lower_32_bits(dma_tx_phy), ioaddr + DMA_TX_BASE_ADDR);
+	writel(lower_32_bits(dma_tx_phy), ioaddr + addr);
 }
 
 /* Store and Forward capability is not used at all.
@@ -69,16 +76,17 @@ static void dwmac100_dma_operation_mode_tx(struct stmmac_priv *priv,
 static void dwmac100_dump_dma_regs(struct stmmac_priv *priv,
 				   void __iomem *ioaddr, u32 *reg_space)
 {
+	const struct dwmac_dma_addrs *addrs = priv->plat->dwmac_regs->addrs;
 	int i;
 
 	for (i = 0; i < NUM_DWMAC100_DMA_REGS; i++)
 		reg_space[DMA_BUS_MODE / 4 + i] =
 			readl(ioaddr + DMA_BUS_MODE + i * 4);
 
-	reg_space[DMA_CUR_TX_BUF_ADDR / 4] =
-		readl(ioaddr + DMA_CUR_TX_BUF_ADDR);
-	reg_space[DMA_CUR_RX_BUF_ADDR / 4] =
-		readl(ioaddr + DMA_CUR_RX_BUF_ADDR);
+	reg_space[addrs->cur_tx_buf_addr / 4] =
+		readl(ioaddr + addrs->cur_tx_buf_addr);
+	reg_space[addrs->cur_rx_buf_addr / 4] =
+		readl(ioaddr + addrs->cur_rx_buf_addr);
 }
 
 /* DMA controller has two counters to track the number of the missed frames. */
