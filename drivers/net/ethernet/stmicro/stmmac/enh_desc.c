@@ -76,7 +76,7 @@ static int enh_desc_get_tx_status(struct stmmac_extra_stats *x,
 	return ret;
 }
 
-static int enh_desc_get_tx_len(struct dma_desc *p)
+static int enh_desc_get_tx_len(struct stmmac_priv *priv, struct dma_desc *p)
 {
 	return (le32_to_cpu(p->des1) & ETDES1_BUFFER1_SIZE_MASK);
 }
@@ -249,8 +249,8 @@ static int enh_desc_get_rx_status(struct stmmac_extra_stats *x,
 	return ret;
 }
 
-static void enh_desc_init_rx_desc(struct dma_desc *p, int disable_rx_ic,
-				  int mode, int end, int bfsize)
+static void enh_desc_init_rx_desc(struct stmmac_priv *priv, struct dma_desc *p,
+				  int disable_rx_ic, int mode, int end, int bfsize)
 {
 	int bfsize1;
 
@@ -308,9 +308,9 @@ static void enh_desc_release_tx_desc(struct dma_desc *p, int mode)
 		enh_desc_end_tx_desc_on_ring(p, ter);
 }
 
-static void enh_desc_prepare_tx_desc(struct dma_desc *p, int is_fs, int len,
-				     bool csum_flag, int mode, bool tx_own,
-				     bool ls, unsigned int tot_pkt_len)
+static void enh_desc_prepare_tx_desc(struct stmmac_priv *priv, struct dma_desc *p,
+				     int is_fs, int len, bool csum_flag, int mode,
+				     bool tx_own, bool ls, unsigned int tot_pkt_len)
 {
 	unsigned int tdes0 = le32_to_cpu(p->des0);
 
@@ -435,12 +435,13 @@ static void enh_desc_display_ring(void *head, unsigned int size, bool rx,
 	pr_info("\n");
 }
 
-static void enh_desc_set_addr(struct dma_desc *p, dma_addr_t addr)
+static void enh_desc_set_addr(struct stmmac_priv *priv, struct dma_desc *p,
+			      dma_addr_t addr)
 {
 	p->des2 = cpu_to_le32(addr);
 }
 
-static void enh_desc_clear(struct dma_desc *p)
+static void enh_desc_clear(struct stmmac_priv *priv, struct dma_desc *p)
 {
 	p->des2 = 0;
 }

@@ -13,7 +13,7 @@
 #include "dwmac4.h"
 #include "stmmac.h"
 
-int dwmac4_dma_reset(void __iomem *ioaddr)
+int dwmac4_dma_reset(struct stmmac_priv *priv, void __iomem *ioaddr)
 {
 	u32 value = readl(ioaddr + DMA_BUS_MODE);
 

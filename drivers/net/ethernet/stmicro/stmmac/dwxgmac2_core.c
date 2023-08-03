@@ -367,7 +367,8 @@ static void dwxgmac2_pmt(struct mac_device_info *hw, unsigned long mode)
 	writel(val, ioaddr + XGMAC_PMT);
 }
 
-static void dwxgmac2_set_umac_addr(struct mac_device_info *hw,
+static void dwxgmac2_set_umac_addr(struct stmmac_priv *priv,
+				   struct mac_device_info *hw,
 				   const unsigned char *addr,
 				   unsigned int reg_n)
 {
@@ -381,7 +382,8 @@ static void dwxgmac2_set_umac_addr(struct mac_device_info *hw,
 	writel(value, ioaddr + XGMAC_ADDRx_LOW(reg_n));
 }
 
-static void dwxgmac2_get_umac_addr(struct mac_device_info *hw,
+static void dwxgmac2_get_umac_addr(struct stmmac_priv *priv,
+				   struct mac_device_info *hw,
 				   unsigned char *addr, unsigned int reg_n)
 {
 	void __iomem *ioaddr = hw->pcsr;
@@ -470,7 +472,8 @@ static void dwxgmac2_set_mchash(void __iomem *ioaddr, u32 *mcfilterbits,
 		writel(mcfilterbits[regs], ioaddr + XGMAC_HASH_TABLE(regs));
 }
 
-static void dwxgmac2_set_filter(struct mac_device_info *hw,
+static void dwxgmac2_set_filter(struct stmmac_priv *priv,
+				struct mac_device_info *hw,
 				struct net_device *dev)
 {
 	void __iomem *ioaddr = (void __iomem *)dev->base_addr;
@@ -515,7 +518,7 @@ static void dwxgmac2_set_filter(struct mac_device_info *hw,
 		int reg = 1;
 
 		netdev_for_each_uc_addr(ha, dev) {
-			dwxgmac2_set_umac_addr(hw, ha->addr, reg);
+			dwxgmac2_set_umac_addr(priv, hw, ha->addr, reg);
 			reg++;
 		}
 

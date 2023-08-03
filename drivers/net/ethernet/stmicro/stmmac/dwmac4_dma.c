@@ -15,7 +15,8 @@
 #include "dwmac4_dma.h"
 #include "stmmac.h"
 
-static void dwmac4_dma_axi(void __iomem *ioaddr, struct stmmac_axi *axi)
+static void dwmac4_dma_axi(struct stmmac_priv *priv, void __iomem *ioaddr,
+			   struct stmmac_axi *axi)
 {
 	u32 value = readl(ioaddr + DMA_SYS_BUS_MODE);
 	int i;
@@ -152,7 +153,7 @@ static void dwmac410_dma_init_channel(struct stmmac_priv *priv,
 	       ioaddr + DMA_CHAN_INTR_ENA(dwmac4_addrs, chan));
 }
 
-static void dwmac4_dma_init(void __iomem *ioaddr,
+static void dwmac4_dma_init(struct stmmac_priv *priv, void __iomem *ioaddr,
 			    struct stmmac_dma_cfg *dma_cfg, int atds)
 {
 	u32 value = readl(ioaddr + DMA_SYS_BUS_MODE);
@@ -374,7 +375,8 @@ static void dwmac4_dma_tx_chan_op_mode(struct stmmac_priv *priv,
 	writel(mtl_tx_op, ioaddr +  MTL_CHAN_TX_OP_MODE(dwmac4_addrs, channel));
 }
 
-static int dwmac4_get_hw_feature(void __iomem *ioaddr,
+static int dwmac4_get_hw_feature(struct stmmac_priv *priv,
+				 void __iomem *ioaddr,
 				 struct dma_features *dma_cap)
 {
 	u32 hw_cap = readl(ioaddr + GMAC_HW_FEATURE0);

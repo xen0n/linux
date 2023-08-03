@@ -8,7 +8,7 @@
 #include "stmmac.h"
 #include "dwxgmac2.h"
 
-static int dwxgmac2_dma_reset(void __iomem *ioaddr)
+static int dwxgmac2_dma_reset(struct stmmac_priv *priv, void __iomem *ioaddr)
 {
 	u32 value = readl(ioaddr + XGMAC_DMA_MODE);
 
@@ -19,7 +19,7 @@ static int dwxgmac2_dma_reset(void __iomem *ioaddr)
 				  !(value & XGMAC_SWR), 0, 100000);
 }
 
-static void dwxgmac2_dma_init(void __iomem *ioaddr,
+static void dwxgmac2_dma_init(struct stmmac_priv *priv, void __iomem *ioaddr,
 			      struct stmmac_dma_cfg *dma_cfg, int atds)
 {
 	u32 value = readl(ioaddr + XGMAC_DMA_SYSBUS_MODE);
@@ -81,7 +81,8 @@ static void dwxgmac2_dma_init_tx_chan(struct stmmac_priv *priv,
 	writel(lower_32_bits(phy), ioaddr + XGMAC_DMA_CH_TxDESC_LADDR(chan));
 }
 
-static void dwxgmac2_dma_axi(void __iomem *ioaddr, struct stmmac_axi *axi)
+static void dwxgmac2_dma_axi(struct stmmac_priv *priv, void __iomem *ioaddr,
+			     struct stmmac_axi *axi)
 {
 	u32 value = readl(ioaddr + XGMAC_DMA_SYSBUS_MODE);
 	int i;
@@ -386,7 +387,8 @@ static int dwxgmac2_dma_interrupt(struct stmmac_priv *priv,
 	return ret;
 }
 
-static int dwxgmac2_get_hw_feature(void __iomem *ioaddr,
+static int dwxgmac2_get_hw_feature(struct stmmac_priv *priv,
+				   void __iomem *ioaddr,
 				   struct dma_features *dma_cap)
 {
 	u32 hw_cap;

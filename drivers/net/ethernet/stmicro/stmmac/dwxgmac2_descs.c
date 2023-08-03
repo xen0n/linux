@@ -39,7 +39,7 @@ static int dwxgmac2_get_rx_status(struct stmmac_extra_stats *x,
 	return good_frame;
 }
 
-static int dwxgmac2_get_tx_len(struct dma_desc *p)
+static int dwxgmac2_get_tx_len(struct stmmac_priv *priv, struct dma_desc *p)
 {
 	return (le32_to_cpu(p->des2) & XGMAC_TDES2_B1L);
 }
@@ -126,8 +126,8 @@ static int dwxgmac2_get_rx_timestamp_status(void *desc, void *next_desc,
 	return !ret;
 }
 
-static void dwxgmac2_init_rx_desc(struct dma_desc *p, int disable_rx_ic,
-				  int mode, int end, int bfsize)
+static void dwxgmac2_init_rx_desc(struct stmmac_priv *priv, struct dma_desc *p,
+				  int disable_rx_ic, int mode, int end, int bfsize)
 {
 	dwxgmac2_set_rx_owner(p, disable_rx_ic);
 }
@@ -140,9 +140,9 @@ static void dwxgmac2_init_tx_desc(struct dma_desc *p, int mode, int end)
 	p->des3 = 0;
 }
 
-static void dwxgmac2_prepare_tx_desc(struct dma_desc *p, int is_fs, int len,
-				     bool csum_flag, int mode, bool tx_own,
-				     bool ls, unsigned int tot_pkt_len)
+static void dwxgmac2_prepare_tx_desc(struct stmmac_priv *priv, struct dma_desc *p,
+				     int is_fs, int len, bool csum_flag, int mode,
+				     bool tx_own, bool ls, unsigned int tot_pkt_len)
 {
 	unsigned int tdes3 = le32_to_cpu(p->des3);
 
@@ -239,13 +239,14 @@ static void dwxgmac2_set_mss(struct dma_desc *p, unsigned int mss)
 	p->des3 = cpu_to_le32(XGMAC_TDES3_CTXT | XGMAC_TDES3_TCMSSV);
 }
 
-static void dwxgmac2_set_addr(struct dma_desc *p, dma_addr_t addr)
+static void dwxgmac2_set_addr(struct stmmac_priv *priv, struct dma_desc *p,
+			      dma_addr_t addr)
 {
 	p->des0 = cpu_to_le32(lower_32_bits(addr));
 	p->des1 = cpu_to_le32(upper_32_bits(addr));
 }
 
-static void dwxgmac2_clear(struct dma_desc *p)
+static void dwxgmac2_clear(struct stmmac_priv *priv, struct dma_desc *p)
 {
 	p->des0 = 0;
 	p->des1 = 0;
