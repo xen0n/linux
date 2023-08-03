@@ -46,7 +46,10 @@ static void stmmac_dwmac_mode_quirk(struct stmmac_priv *priv)
 	} else {
 		dev_info(priv->device, "Ring mode enabled\n");
 		priv->mode = STMMAC_RING_MODE;
-		mac->mode = &ring_mode_ops;
+		if (priv->plat->dma_cfg->dma64)
+			mac->mode = &ring_mode64_ops;
+		else
+			mac->mode = &ring_mode_ops;
 	}
 }
 

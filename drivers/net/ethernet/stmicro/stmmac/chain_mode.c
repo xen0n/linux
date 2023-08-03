@@ -36,6 +36,9 @@ static int jumbo_frm(struct stmmac_tx_queue *tx_q, struct sk_buff *skb,
 	des2 = dma_map_single(priv->device, skb->data,
 			      bmax, DMA_TO_DEVICE);
 	desc->des2 = cpu_to_le32(des2);
+	if (priv->plat->dma_cfg->dma64)
+		desc->des3 = cpu_to_le32(upper_32_bits(des2));
+
 	if (dma_mapping_error(priv->device, des2))
 		return -1;
 	tx_q->tx_skbuff_dma[entry].buf = des2;
@@ -54,12 +57,16 @@ static int jumbo_frm(struct stmmac_tx_queue *tx_q, struct sk_buff *skb,
 					      (skb->data + bmax * i),
 					      bmax, DMA_TO_DEVICE);
 			desc->des2 = cpu_to_le32(des2);
+			if (priv->plat->dma_cfg->dma64)
+				desc->des3 = cpu_to_le32(upper_32_bits(des2));
 			if (dma_mapping_error(priv->device, des2))
 				return -1;
 			tx_q->tx_skbuff_dma[entry].buf = des2;
 			tx_q->tx_skbuff_dma[entry].len = bmax;
 			stmmac_prepare_tx_desc(priv, desc, 0, bmax, csum,
-					STMMAC_CHAIN_MODE, 1, false, skb->len);
+					       STMMAC_CHAIN_MODE,
+					       !priv->plat->dma_cfg->dma64,
+					       false, skb->len);
 			len -= bmax;
 			i++;
 		} else {
@@ -67,6 +74,8 @@ static int jumbo_frm(struct stmmac_tx_queue *tx_q, struct sk_buff *skb,
 					      (skb->data + bmax * i), len,
 					      DMA_TO_DEVICE);
 			desc->des2 = cpu_to_le32(des2);
+			if (priv->plat->dma_cfg->dma64)
+				desc->des3 = cpu_to_le32(upper_32_bits(des2));
 			if (dma_mapping_error(priv->device, des2))
 				return -1;
 			tx_q->tx_skbuff_dma[entry].buf = des2;
@@ -110,7 +119,12 @@ static void init_dma_chain(struct stmmac_priv *priv, void *des,
 		struct dma_extended_desc *p = (struct dma_extended_desc *)des;
 		for (i = 0; i < (size - 1); i++) {
 			dma_phy += sizeof(struct dma_extended_desc);
-			p->basic.des3 = cpu_to_le32((unsigned int)dma_phy);
+			if (priv->plat->dma_cfg->dma64) {
+				p->des6 = cpu_to_le32((unsigned int)dma_phy);
+				p->des7 = cpu_to_le32(upper_32_bits(dma_phy));
+			} else {
+				p->basic.des3 = cpu_to_le32((unsigned int)dma_phy);
+			}
 			p++;
 		}
 		p->basic.des3 = cpu_to_le32((unsigned int)phy_addr);
@@ -130,6 +144,9 @@ static void refill_desc3(struct stmmac_rx_queue *rx_q, struct dma_desc *p)
 {
 	struct stmmac_priv *priv = rx_q->priv_data;
 
+	if (priv->plat->dma_cfg->dma64)
+		return;
+
 	if (priv->hwts_rx_en && !priv->extend_desc)
 		/* NOTE: Device will overwrite des3 with timestamp value if
 		 * 1588-2002 time stamping is enabled, hence reinitialize it
@@ -145,6 +162,9 @@ static void clean_desc3(struct stmmac_tx_queue *tx_q, struct dma_desc *p)
 {
 	struct stmmac_priv *priv = tx_q->priv_data;
 	unsigned int entry = tx_q->dirty_tx;
+
+	if (priv->plat->dma_cfg->dma64)
+		return;
 
 	if (tx_q->tx_skbuff_dma[entry].last_segment && !priv->extend_desc &&
 	    priv->hwts_tx_en)
