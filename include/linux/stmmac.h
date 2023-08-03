@@ -376,5 +376,6 @@ struct plat_stmmacenet_data {
 	unsigned int flags;
 	bool has_integrated_pcs;
 	const struct dwmac_regs *dwmac_regs;
+	bool fix_channel_num;
 };
 #endif
