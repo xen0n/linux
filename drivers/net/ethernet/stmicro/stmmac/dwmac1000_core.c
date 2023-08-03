@@ -534,7 +534,12 @@ int dwmac1000_setup(struct stmmac_priv *priv)
 
 	dev_info(priv->device, "\tDWMAC1000\n");
 
-	priv->plat->dwmac_regs = &dwmac_default_dma_regs;
+	if (priv->synopsys_id == DWLGMAC_CORE_1_00)
+		priv->plat->dwmac_regs = &dwmac_loongson_dma_regs;
+	else if (priv->plat->dma_cfg->dma64)
+		priv->plat->dwmac_regs = &dwmac_loongson64_dma_regs;
+	else
+		priv->plat->dwmac_regs = &dwmac_default_dma_regs;
 
 	priv->dev->priv_flags |= IFF_UNICAST_FLT;
 	mac->pcsr = priv->ioaddr;
