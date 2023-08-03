@@ -608,6 +608,7 @@ void stmmac_dwmac4_set_mac(void __iomem *ioaddr, bool enable);
 void dwmac_dma_flush_tx_fifo(void __iomem *ioaddr);
 
 extern const struct stmmac_mode_ops ring_mode_ops;
+extern const struct stmmac_mode_ops ring_mode64_ops;
 extern const struct stmmac_mode_ops chain_mode_ops;
 extern const struct stmmac_desc_ops dwmac4_desc_ops;
 

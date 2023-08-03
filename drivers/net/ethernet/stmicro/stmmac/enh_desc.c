@@ -11,6 +11,7 @@
 #include <linux/stmmac.h>
 #include "common.h"
 #include "descs_com.h"
+#include "stmmac.h"
 
 static int enh_desc_get_tx_status(struct stmmac_extra_stats *x,
 				  struct dma_desc *p, void __iomem *ioaddr)
@@ -78,7 +79,10 @@ static int enh_desc_get_tx_status(struct stmmac_extra_stats *x,
 
 static int enh_desc_get_tx_len(struct stmmac_priv *priv, struct dma_desc *p)
 {
-	return (le32_to_cpu(p->des1) & ETDES1_BUFFER1_SIZE_MASK);
+	if (priv->plat->dma_cfg->dma64)
+		return (le32_to_cpu(p->des1) & E64TDES1_BUFFER1_SIZE_MASK);
+	else
+		return (le32_to_cpu(p->des1) & ETDES1_BUFFER1_SIZE_MASK);
 }
 
 static int enh_desc_coe_rdes0(int ipc_err, int type, int payload_err)
@@ -257,12 +261,15 @@ static void enh_desc_init_rx_desc(struct stmmac_priv *priv, struct dma_desc *p,
 	p->des0 |= cpu_to_le32(RDES0_OWN);
 
 	bfsize1 = min(bfsize, BUF_SIZE_8KiB);
-	p->des1 |= cpu_to_le32(bfsize1 & ERDES1_BUFFER1_SIZE_MASK);
+	if (priv->plat->dma_cfg->dma64)
+		p->des1 |= cpu_to_le32(bfsize1 & E64RDES1_BUFFER1_SIZE_MASK);
+	else
+		p->des1 |= cpu_to_le32(bfsize1 & ERDES1_BUFFER1_SIZE_MASK);
 
 	if (mode == STMMAC_CHAIN_MODE)
 		ehn_desc_rx_set_on_chain(p);
 	else
-		ehn_desc_rx_set_on_ring(p, end, bfsize);
+		ehn_desc_rx_set_on_ring(p, end, bfsize, priv->plat->dma_cfg->dma64);
 
 	if (disable_rx_ic)
 		p->des1 |= cpu_to_le32(ERDES1_DISABLE_IC);
@@ -315,9 +322,9 @@ static void enh_desc_prepare_tx_desc(struct stmmac_priv *priv, struct dma_desc *
 	unsigned int tdes0 = le32_to_cpu(p->des0);
 
 	if (mode == STMMAC_CHAIN_MODE)
-		enh_set_tx_desc_len_on_chain(p, len);
+		enh_set_tx_desc_len_on_chain(p, len, priv->plat->dma_cfg->dma64);
 	else
-		enh_set_tx_desc_len_on_ring(p, len);
+		enh_set_tx_desc_len_on_ring(p, len, priv->plat->dma_cfg->dma64);
 
 	if (is_fs)
 		tdes0 |= ETDES0_FIRST_SEGMENT;
@@ -439,11 +446,15 @@ static void enh_desc_set_addr(struct stmmac_priv *priv, struct dma_desc *p,
 			      dma_addr_t addr)
 {
 	p->des2 = cpu_to_le32(addr);
+	if (priv->plat->dma_cfg->dma64)
+		p->des3 = cpu_to_le32(upper_32_bits(addr));
 }
 
 static void enh_desc_clear(struct stmmac_priv *priv, struct dma_desc *p)
 {
 	p->des2 = 0;
+	if (priv->plat->dma_cfg->dma64)
+		p->des3 = 0;
 }
 
 const struct stmmac_desc_ops enh_desc_ops = {
