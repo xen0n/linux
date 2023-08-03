@@ -59,7 +59,8 @@ static int dwmac100_irq_status(struct mac_device_info *hw,
 	return 0;
 }
 
-static void dwmac100_set_umac_addr(struct mac_device_info *hw,
+static void dwmac100_set_umac_addr(struct stmmac_priv *priv,
+				   struct mac_device_info *hw,
 				   const unsigned char *addr,
 				   unsigned int reg_n)
 {
@@ -67,7 +68,8 @@ static void dwmac100_set_umac_addr(struct mac_device_info *hw,
 	stmmac_set_mac_addr(ioaddr, addr, MAC_ADDR_HIGH, MAC_ADDR_LOW);
 }
 
-static void dwmac100_get_umac_addr(struct mac_device_info *hw,
+static void dwmac100_get_umac_addr(struct stmmac_priv *priv,
+				   struct mac_device_info *hw,
 				   unsigned char *addr,
 				   unsigned int reg_n)
 {
@@ -75,7 +77,8 @@ static void dwmac100_get_umac_addr(struct mac_device_info *hw,
 	stmmac_get_mac_addr(ioaddr, addr, MAC_ADDR_HIGH, MAC_ADDR_LOW);
 }
 
-static void dwmac100_set_filter(struct mac_device_info *hw,
+static void dwmac100_set_filter(struct stmmac_priv *priv,
+				struct mac_device_info *hw,
 				struct net_device *dev)
 {
 	void __iomem *ioaddr = (void __iomem *)dev->base_addr;

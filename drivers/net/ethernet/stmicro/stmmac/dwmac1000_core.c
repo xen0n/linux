@@ -94,7 +94,8 @@ static void dwmac1000_dump_regs(struct mac_device_info *hw, u32 *reg_space)
 		reg_space[i] = readl(ioaddr + i * 4);
 }
 
-static void dwmac1000_set_umac_addr(struct mac_device_info *hw,
+static void dwmac1000_set_umac_addr(struct stmmac_priv *priv,
+				    struct mac_device_info *hw,
 				    const unsigned char *addr,
 				    unsigned int reg_n)
 {
@@ -103,7 +104,8 @@ static void dwmac1000_set_umac_addr(struct mac_device_info *hw,
 			    GMAC_ADDR_LOW(reg_n));
 }
 
-static void dwmac1000_get_umac_addr(struct mac_device_info *hw,
+static void dwmac1000_get_umac_addr(struct stmmac_priv *priv,
+				    struct mac_device_info *hw,
 				    unsigned char *addr,
 				    unsigned int reg_n)
 {
@@ -137,7 +139,8 @@ static void dwmac1000_set_mchash(void __iomem *ioaddr, u32 *mcfilterbits,
 		       ioaddr + GMAC_EXTHASH_BASE + regs * 4);
 }
 
-static void dwmac1000_set_filter(struct mac_device_info *hw,
+static void dwmac1000_set_filter(struct stmmac_priv *priv,
+				 struct mac_device_info *hw,
 				 struct net_device *dev)
 {
 	void __iomem *ioaddr = (void __iomem *)dev->base_addr;
