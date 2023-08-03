@@ -18,6 +18,7 @@
 #include <asm/io.h>
 #include "stmmac.h"
 #include "dwmac100.h"
+#include "dwmac_dma.h"
 
 static void dwmac100_core_init(struct mac_device_info *hw,
 			       struct net_device *dev)
@@ -176,6 +177,8 @@ int dwmac100_setup(struct stmmac_priv *priv)
 	struct mac_device_info *mac = priv->hw;
 
 	dev_info(priv->device, "\tDWMAC100\n");
+
+	priv->plat->dwmac_regs = &dwmac_default_dma_regs;
 
 	mac->pcsr = priv->ioaddr;
 	mac->link.duplex = MAC_CONTROL_F;
