@@ -20,12 +20,18 @@
 
 /* Enhanced descriptors */
 static inline void ehn_desc_rx_set_on_ring(struct dma_desc *p, int end,
-					   int bfsize)
+					   int bfsize, bool dma64)
 {
-	if (bfsize == BUF_SIZE_16KiB)
-		p->des1 |= cpu_to_le32((BUF_SIZE_8KiB
-				<< ERDES1_BUFFER2_SIZE_SHIFT)
-			   & ERDES1_BUFFER2_SIZE_MASK);
+	if (bfsize == BUF_SIZE_16KiB) {
+		if (dma64)
+			p->des1 |= cpu_to_le32((BUF_SIZE_8KiB
+					<< ERDES1_BUFFER2_SIZE_SHIFT)
+				   & E64RDES1_BUFFER2_SIZE_MASK);
+		else
+			p->des1 |= cpu_to_le32((BUF_SIZE_8KiB
+					<< ERDES1_BUFFER2_SIZE_SHIFT)
+				   & ERDES1_BUFFER2_SIZE_MASK);
+	}
 
 	if (end)
 		p->des1 |= cpu_to_le32(ERDES1_END_RING);
@@ -39,7 +45,7 @@ static inline void enh_desc_end_tx_desc_on_ring(struct dma_desc *p, int end)
 		p->des0 &= cpu_to_le32(~ETDES0_END_RING);
 }
 
-static inline void enh_set_tx_desc_len_on_ring(struct dma_desc *p, int len)
+static inline void enh_set_tx_desc32_len_on_ring(struct dma_desc *p, int len)
 {
 	if (unlikely(len > BUF_SIZE_4KiB)) {
 		p->des1 |= cpu_to_le32((((len - BUF_SIZE_4KiB)
@@ -48,6 +54,27 @@ static inline void enh_set_tx_desc_len_on_ring(struct dma_desc *p, int len)
 			    & ETDES1_BUFFER1_SIZE_MASK));
 	} else
 		p->des1 |= cpu_to_le32((len & ETDES1_BUFFER1_SIZE_MASK));
+}
+
+static inline void enh_set_tx_desc64_len_on_ring(struct dma_desc *p, int len)
+{
+	if (unlikely(len > BUF_SIZE_4KiB)) {
+		p->des1 |= cpu_to_le32((((len - BUF_SIZE_8KiB)
+					<< E64TDES1_BUFFER2_SIZE_SHIFT)
+			    & E64TDES1_BUFFER2_SIZE_MASK) | (BUF_SIZE_8KiB
+			    & E64TDES1_BUFFER1_SIZE_MASK));
+	} else {
+		p->des1 |= cpu_to_le32((len & E64TDES1_BUFFER1_SIZE_MASK));
+	}
+}
+
+static inline void enh_set_tx_desc_len_on_ring(struct dma_desc *p, int len,
+					       bool dma64)
+{
+	if (dma64)
+		enh_set_tx_desc64_len_on_ring(p, len);
+	else
+		enh_set_tx_desc32_len_on_ring(p, len);
 }
 
 /* Normal descriptors */
@@ -98,9 +125,13 @@ static inline void enh_desc_end_tx_desc_on_chain(struct dma_desc *p)
 	p->des0 |= cpu_to_le32(ETDES0_SECOND_ADDRESS_CHAINED);
 }
 
-static inline void enh_set_tx_desc_len_on_chain(struct dma_desc *p, int len)
+static inline void enh_set_tx_desc_len_on_chain(struct dma_desc *p, int len,
+						bool dma64)
 {
-	p->des1 |= cpu_to_le32(len & ETDES1_BUFFER1_SIZE_MASK);
+	if (dma64)
+		p->des1 |= cpu_to_le32(len & E64TDES1_BUFFER1_SIZE_MASK);
+	else
+		p->des1 |= cpu_to_le32(len & ETDES1_BUFFER1_SIZE_MASK);
 }
 
 /* Normal descriptors */
