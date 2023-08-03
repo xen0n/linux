@@ -24,12 +24,16 @@
 static void dwmac1000_core_init(struct mac_device_info *hw,
 				struct net_device *dev)
 {
+	struct stmmac_priv *priv = netdev_priv(dev);
 	void __iomem *ioaddr = hw->pcsr;
 	u32 value = readl(ioaddr + GMAC_CONTROL);
 	int mtu = dev->mtu;
 
 	/* Configure GMAC core */
 	value |= GMAC_CORE_INIT;
+
+	if (priv->plat->control_value)
+		value |= priv->plat->control_value;
 
 	if (mtu > 1500)
 		value |= GMAC_CONTROL_2K;

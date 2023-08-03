@@ -377,5 +377,6 @@ struct plat_stmmacenet_data {
 	const struct dwmac_regs *dwmac_regs;
 	bool fix_channel_num;
 	bool dma_reset_times;
+	u32 control_value;
 };
 #endif
