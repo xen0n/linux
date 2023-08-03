@@ -21,6 +21,25 @@ static const struct dwmac_dma_addrs default_dma_addrs = {
 	.cur_rx_buf_addr = 0x00001054,
 };
 
+static const struct dwmac_dma_addrs loongson_dma_addrs = {
+	.chan_offset = 0x100,
+	.rcv_base_addr = 0x0000100c,
+	.tx_base_addr = 0x00001010,
+	.cur_tx_buf_addr = 0x00001050,
+	.cur_rx_buf_addr = 0x00001054,
+	.rcv_base_addr_shadow1 = 0x00001068,
+	.rcv_base_addr_shadow2 = 0x000010a8,
+};
+
+static const struct dwmac_dma_addrs loongson64_dma_addrs = {
+	.rcv_base_addr = 0x00001090,
+	.tx_base_addr = 0x00001098,
+	.cur_tx_buf_addr = 0x000010b0,
+	.cur_rx_buf_addr = 0x000010b8,
+	.rcv_base_addr_shadow1 = 0x00001068,
+	.rcv_base_addr_shadow2 = 0x000010a8,
+};
+
 static const struct dwmac_dma_axi default_dma_axi = {
 	.wr_osr_lmt = GENMASK(23, 20),
 	.wr_osr_lmt_shift = 20,
@@ -35,6 +54,20 @@ static const struct dwmac_dma_axi default_dma_axi = {
 	.max_osr_limit = (0xf << 20) | (0xf << 16),
 };
 
+static const struct dwmac_dma_axi loongson_dma_axi = {
+	.wr_osr_lmt = BIT(20),
+	.wr_osr_lmt_shift = 20,
+	.wr_osr_lmt_mask = 0x1,
+	.rd_osr_lmt = BIT(16),
+	.rd_osr_lmt_shift = 16,
+	.rd_osr_lmt_mask = 0x1,
+	.osr_max = 0x1,
+	/* max_osr_limit = (osr_max << wr_osr_lmt_shift) |
+	 *                 (osr_max << rd_osr_lmt_shift)
+	 */
+	.max_osr_limit = (0x1 << 20) | (0x1 << 16),
+};
+
 static const struct dwmac_dma_intr_ena default_dma_intr_ena = {
 	.nie = 0x00010000,
 	/* normal = nie | DMA_INTR_ENA_RIE | DMA_INTR_ENA_TIE */
@@ -45,6 +78,18 @@ static const struct dwmac_dma_intr_ena default_dma_intr_ena = {
 	/* default_mask = normal | abnormal */
 	.default_mask = (0x00010000 | DMA_INTR_ENA_RIE | DMA_INTR_ENA_TIE) |
 			(0x00008000 | DMA_INTR_ENA_FBE | DMA_INTR_ENA_UNE),
+};
+
+static const struct dwmac_dma_intr_ena loongson_dma_intr_ena = {
+	.nie = 0x00060000,
+	/* normal = nie | DMA_INTR_ENA_RIE | DMA_INTR_ENA_TIE */
+	.normal = 0x00060000 | DMA_INTR_ENA_RIE | DMA_INTR_ENA_TIE,
+	.aie = 0x00018000,
+	/* abnormal = aie | DMA_INTR_ENA_FBE | DMA_INTR_ENA_UNE */
+	.abnormal = 0x00018000 | DMA_INTR_ENA_FBE | DMA_INTR_ENA_UNE,
+	/* default_mask = normal | abnormal */
+	.default_mask = (0x00060000 | DMA_INTR_ENA_RIE | DMA_INTR_ENA_TIE) |
+			(0x00018000 | DMA_INTR_ENA_FBE | DMA_INTR_ENA_UNE),
 };
 
 static const struct dwmac_dma_status default_dma_status = {
@@ -79,9 +124,52 @@ static const struct dwmac_dma_status default_dma_status = {
 		  0x00010000 | 0x00008000 | 0x00002000,
 };
 
+static const struct dwmac_dma_status loongson_dma_status = {
+	.glpii = 0x10000000,
+	.intr_mask = 0x7ffff,
+	.eb_mask = 0x0e000000,
+	.ts_mask = 0x01c00000,
+	.ts_shift = 22,
+	.rs_mask = 0x00380000,
+	.rs_shift = 19,
+	.nis = 0x00060000,
+	.ais = 0x00018000,
+	.fbi = 0x00003000,
+	/* msk_common = nis | ais | fbi */
+	.msk_common = 0x00060000 | 0x00018000 | 0x00003000,
+	/* msk_rx = DMA_STATUS_ERI | DMA_STATUS_RWT |  DMA_STATUS_RPS |
+	 *          DMA_STATUS_RU | DMA_STATUS_RI | DMA_STATUS_OVF |
+	 *          msk_common
+	 */
+	.msk_rx = DMA_STATUS_ERI | DMA_STATUS_RWT | DMA_STATUS_RPS |
+		  DMA_STATUS_RU | DMA_STATUS_RI | DMA_STATUS_OVF |
+		  0x00060000 | 0x00018000 | 0x00003000,
+	/* msk_tx = DMA_STATUS_ETI | DMA_STATUS_UNF | DMA_STATUS_TJT |
+	 *          DMA_STATUS_TU | DMA_STATUS_TPS | DMA_STATUS_TI |
+	 *          msk_common
+	 */
+	.msk_tx = DMA_STATUS_ETI | DMA_STATUS_UNF | DMA_STATUS_TJT |
+		  DMA_STATUS_TU | DMA_STATUS_TPS | DMA_STATUS_TI |
+		  0x00060000 | 0x00018000 | 0x00003000,
+};
+
 const struct dwmac_regs dwmac_default_dma_regs = {
 	.addrs = &default_dma_addrs,
 	.axi = &default_dma_axi,
+	.intr_ena = &default_dma_intr_ena,
+	.status = &default_dma_status,
+};
+
+const struct dwmac_regs dwmac_loongson_dma_regs = {
+	.addrs = &loongson_dma_addrs,
+	.axi = &loongson_dma_axi,
+	.intr_ena = &loongson_dma_intr_ena,
+	.status = &loongson_dma_status,
+};
+
+const struct dwmac_regs dwmac_loongson64_dma_regs = {
+	.addrs = &loongson64_dma_addrs,
+	.axi = &loongson_dma_axi,
 	.intr_ena = &default_dma_intr_ena,
 	.status = &default_dma_status,
 };

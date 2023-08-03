@@ -102,6 +102,8 @@
 #define NUM_DWMAC4_DMA_REGS	27
 
 extern const struct dwmac_regs dwmac_default_dma_regs;
+extern const struct dwmac_regs dwmac_loongson_dma_regs;
+extern const struct dwmac_regs dwmac_loongson64_dma_regs;
 
 void dwmac_enable_dma_transmission(struct stmmac_priv *priv,
 				   void __iomem *ioaddr, u32 chan);
