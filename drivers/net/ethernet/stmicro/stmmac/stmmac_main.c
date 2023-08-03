@@ -3840,6 +3840,11 @@ static int __stmmac_open(struct net_device *dev,
 				   __func__, ret);
 			goto init_phy_error;
 		}
+
+		if (priv->plat->disable_flow_control) {
+			phy_support_sym_pause(dev->phydev);
+			phy_set_sym_pause(dev->phydev, false, false, true);
+		}
 	}
 
 	priv->rx_copybreak = STMMAC_RX_COPYBREAK;
