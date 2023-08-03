@@ -382,5 +382,7 @@ struct plat_stmmacenet_data {
 	u32 irq_flags;
 	bool disable_flow_control;
 	bool use_single_queue;
+	bool disable_half_duplex;
+	bool disable_force_1000;
 };
 #endif
