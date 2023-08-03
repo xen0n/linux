@@ -95,6 +95,7 @@ static int loongson_gmac_config(struct pci_dev *pdev,
 	}
 
 	plat->dma_reset_times = 5;
+	plat->disable_flow_control = true;
 
 	return 0;
 }
