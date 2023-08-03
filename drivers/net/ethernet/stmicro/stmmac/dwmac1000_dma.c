@@ -112,6 +112,9 @@ static void dwmac1000_dma_init(struct stmmac_priv *priv, void __iomem *ioaddr,
 
 	/* Mask interrupts by writing to CSR7 */
 	writel(mask, ioaddr + DMA_INTR_ENA);
+
+	if (dma_cfg->dma64)
+		writel(0x100, ioaddr + DMA_FUNC_CONFIG);
 }
 
 static void dwmac1000_dma_init_channel(struct stmmac_priv *priv,
@@ -168,11 +171,25 @@ static void dwmac1000_dma_init_rx(struct stmmac_priv *priv,
 				  struct stmmac_dma_cfg *dma_cfg,
 				  dma_addr_t dma_rx_phy, u32 chan)
 {
+	const struct dwmac_dma_addrs *addrs = priv->plat->dwmac_regs->addrs;
 	u32 offset = priv->plat->dwmac_regs->addrs->chan_offset;
-	u32 addr = priv->plat->dwmac_regs->addrs->rcv_base_addr;
 
-	/* RX descriptor base address list must be written into DMA CSR3 */
-	writel(lower_32_bits(dma_rx_phy), ioaddr + addr + chan * offset);
+	if (dma_cfg->dma64) {
+		writel(lower_32_bits(dma_rx_phy), ioaddr + addrs->rcv_base_addr +
+		       chan * offset);
+		writel(upper_32_bits(dma_rx_phy), ioaddr + addrs->rcv_base_addr +
+		       0x4 + chan * offset);
+		if (addrs->rcv_base_addr_shadow1)
+			writel(upper_32_bits(dma_rx_phy),
+			       ioaddr + addrs->rcv_base_addr_shadow1);
+		if (addrs->rcv_base_addr_shadow2)
+			writel(upper_32_bits(dma_rx_phy),
+			       ioaddr + addrs->rcv_base_addr_shadow2);
+	} else {
+		/* RX descriptor base address list must be written into DMA CSR3 */
+		writel(lower_32_bits(dma_rx_phy), ioaddr + addrs->rcv_base_addr +
+		       chan * offset);
+	}
 }
 
 static void dwmac1000_dma_init_tx(struct stmmac_priv *priv,
@@ -183,8 +200,13 @@ static void dwmac1000_dma_init_tx(struct stmmac_priv *priv,
 	u32 offset = priv->plat->dwmac_regs->addrs->chan_offset;
 	u32 addr = priv->plat->dwmac_regs->addrs->tx_base_addr;
 
-	/* TX descriptor base address list must be written into DMA CSR4 */
-	writel(lower_32_bits(dma_tx_phy), ioaddr + addr + chan * offset);
+	if (dma_cfg->dma64) {
+		writel(lower_32_bits(dma_tx_phy), ioaddr + addr + chan * offset);
+		writel(upper_32_bits(dma_tx_phy), ioaddr + addr + 0x4 + chan * offset);
+	} else {
+		/* TX descriptor base address list must be written into DMA CSR4 */
+		writel(lower_32_bits(dma_tx_phy), ioaddr + addr + chan * offset);
+	}
 }
 
 static u32 dwmac1000_configure_fc(u32 csr6, int rxfifosz)
