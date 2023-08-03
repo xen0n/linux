@@ -381,5 +381,6 @@ struct plat_stmmacenet_data {
 	u32 control_value;
 	u32 irq_flags;
 	bool disable_flow_control;
+	bool use_single_queue;
 };
 #endif
