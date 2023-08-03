@@ -97,7 +97,7 @@ int stmmac_reset(struct stmmac_priv *priv, void __iomem *ioaddr)
 	if (plat && plat->fix_soc_reset)
 		return plat->fix_soc_reset(plat, ioaddr);
 
-	return stmmac_do_callback(priv, dma, reset, ioaddr);
+	return stmmac_do_callback(priv, dma, reset, priv, ioaddr);
 }
 
 static const struct stmmac_hwif_entry {
