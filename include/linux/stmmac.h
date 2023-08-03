@@ -379,5 +379,6 @@ struct plat_stmmacenet_data {
 	bool fix_channel_num;
 	bool dma_reset_times;
 	u32 control_value;
+	u32 irq_flags;
 };
 #endif
