@@ -24,6 +24,7 @@
 #include <net/net_namespace.h>
 #include <net/cfg80211.h>
 #include <net/rtnetlink.h>
+#include <kunit/visibility.h>
 
 #include "ieee80211_i.h"
 #include "driver-ops.h"
@@ -1654,6 +1655,7 @@ ieee802_11_parse_elems_full(struct ieee80211_elems_parse_params *params)
 
 	return elems;
 }
+EXPORT_SYMBOL_IF_KUNIT(ieee802_11_parse_elems_full);
 
 void ieee80211_regulatory_limit_wmm_params(struct ieee80211_sub_if_data *sdata,
 					   struct ieee80211_tx_queue_params
@@ -2316,9 +2318,10 @@ void ieee80211_stop_device(struct ieee80211_local *local)
 	ieee80211_led_radio(local, false);
 	ieee80211_mod_tpt_led_trig(local, 0, IEEE80211_TPT_LEDTRIG_FL_RADIO);
 
-	cancel_work_sync(&local->reconfig_filter);
+	wiphy_work_cancel(local->hw.wiphy, &local->reconfig_filter);
 
 	flush_workqueue(local->workqueue);
+	wiphy_work_flush(local->hw.wiphy, NULL);
 	drv_stop(local);
 }
 
@@ -2340,8 +2343,8 @@ static void ieee80211_flush_completed_scan(struct ieee80211_local *local,
 		 */
 		if (aborted)
 			set_bit(SCAN_ABORTED, &local->scanning);
-		ieee80211_queue_delayed_work(&local->hw, &local->scan_work, 0);
-		flush_delayed_work(&local->scan_work);
+		wiphy_delayed_work_queue(local->hw.wiphy, &local->scan_work, 0);
+		wiphy_delayed_work_flush(local->hw.wiphy, &local->scan_work);
 	}
 }
 
@@ -2349,6 +2352,8 @@ static void ieee80211_handle_reconfig_failure(struct ieee80211_local *local)
 {
 	struct ieee80211_sub_if_data *sdata;
 	struct ieee80211_chanctx *ctx;
+
+	lockdep_assert_wiphy(local->hw.wiphy);
 
 	/*
 	 * We get here if during resume the device can't be restarted properly.
@@ -2378,10 +2383,8 @@ static void ieee80211_handle_reconfig_failure(struct ieee80211_local *local)
 	/* Mark channel contexts as not being in the driver any more to avoid
 	 * removing them from the driver during the shutdown process...
 	 */
-	mutex_lock(&local->chanctx_mtx);
 	list_for_each_entry(ctx, &local->chanctx_list, list)
 		ctx->driver_present = false;
-	mutex_unlock(&local->chanctx_mtx);
 }
 
 static void ieee80211_assign_chanctx(struct ieee80211_local *local,
@@ -2391,17 +2394,17 @@ static void ieee80211_assign_chanctx(struct ieee80211_local *local,
 	struct ieee80211_chanctx_conf *conf;
 	struct ieee80211_chanctx *ctx;
 
+	lockdep_assert_wiphy(local->hw.wiphy);
+
 	if (!local->use_chanctx)
 		return;
 
-	mutex_lock(&local->chanctx_mtx);
 	conf = rcu_dereference_protected(link->conf->chanctx_conf,
-					 lockdep_is_held(&local->chanctx_mtx));
+					 lockdep_is_held(&local->hw.wiphy->mtx));
 	if (conf) {
 		ctx = container_of(conf, struct ieee80211_chanctx, conf);
 		drv_assign_vif_chanctx(local, sdata, link->conf, ctx);
 	}
-	mutex_unlock(&local->chanctx_mtx);
 }
 
 static void ieee80211_reconfig_stations(struct ieee80211_sub_if_data *sdata)
@@ -2409,8 +2412,9 @@ static void ieee80211_reconfig_stations(struct ieee80211_sub_if_data *sdata)
 	struct ieee80211_local *local = sdata->local;
 	struct sta_info *sta;
 
+	lockdep_assert_wiphy(local->hw.wiphy);
+
 	/* add STAs back */
-	mutex_lock(&local->sta_mtx);
 	list_for_each_entry(sta, &local->sta_list, list) {
 		enum ieee80211_sta_state state;
 
@@ -2422,7 +2426,6 @@ static void ieee80211_reconfig_stations(struct ieee80211_sub_if_data *sdata)
 			WARN_ON(drv_sta_state(local, sta->sdata, sta, state,
 					      state + 1));
 	}
-	mutex_unlock(&local->sta_mtx);
 }
 
 static int ieee80211_reconfig_nan(struct ieee80211_sub_if_data *sdata)
@@ -2508,6 +2511,8 @@ int ieee80211_reconfig(struct ieee80211_local *local)
 	bool sched_scan_stopped = false;
 	bool suspended = local->suspended;
 	bool in_reconfig = false;
+
+	lockdep_assert_wiphy(local->hw.wiphy);
 
 	/* nothing to do if HW shouldn't run */
 	if (!local->open_count)
@@ -2624,12 +2629,10 @@ int ieee80211_reconfig(struct ieee80211_local *local)
 
 	/* add channel contexts */
 	if (local->use_chanctx) {
-		mutex_lock(&local->chanctx_mtx);
 		list_for_each_entry(ctx, &local->chanctx_list, list)
 			if (ctx->replace_state !=
 			    IEEE80211_CHANCTX_REPLACES_OTHER)
 				WARN_ON(drv_add_chanctx(local, ctx));
-		mutex_unlock(&local->chanctx_mtx);
 
 		sdata = wiphy_dereference(local->hw.wiphy,
 					  local->monitor_sdata);
@@ -2663,7 +2666,6 @@ int ieee80211_reconfig(struct ieee80211_local *local)
 		if (!ieee80211_sdata_running(sdata))
 			continue;
 
-		sdata_lock(sdata);
 		if (ieee80211_vif_is_mld(&sdata->vif)) {
 			struct ieee80211_bss_conf *old[IEEE80211_MLD_MAX_NUM_LINKS] = {
 				[0] = &sdata->vif.bss_conf,
@@ -2795,7 +2797,6 @@ int ieee80211_reconfig(struct ieee80211_local *local)
 		case NL80211_IFTYPE_NAN:
 			res = ieee80211_reconfig_nan(sdata);
 			if (res < 0) {
-				sdata_unlock(sdata);
 				ieee80211_handle_reconfig_failure(local);
 				return res;
 			}
@@ -2813,7 +2814,6 @@ int ieee80211_reconfig(struct ieee80211_local *local)
 			WARN_ON(1);
 			break;
 		}
-		sdata_unlock(sdata);
 
 		if (active_links)
 			ieee80211_set_active_links(&sdata->vif, active_links);
@@ -2843,7 +2843,6 @@ int ieee80211_reconfig(struct ieee80211_local *local)
 		if (!ieee80211_sdata_running(sdata))
 			continue;
 
-		sdata_lock(sdata);
 		switch (sdata->vif.type) {
 		case NL80211_IFTYPE_AP_VLAN:
 		case NL80211_IFTYPE_AP:
@@ -2852,7 +2851,6 @@ int ieee80211_reconfig(struct ieee80211_local *local)
 		default:
 			break;
 		}
-		sdata_unlock(sdata);
 	}
 
 	/* add back keys */
@@ -2860,11 +2858,10 @@ int ieee80211_reconfig(struct ieee80211_local *local)
 		ieee80211_reenable_keys(sdata);
 
 	/* Reconfigure sched scan if it was interrupted by FW restart */
-	mutex_lock(&local->mtx);
 	sched_scan_sdata = rcu_dereference_protected(local->sched_scan_sdata,
-						lockdep_is_held(&local->mtx));
+						lockdep_is_held(&local->hw.wiphy->mtx));
 	sched_scan_req = rcu_dereference_protected(local->sched_scan_req,
-						lockdep_is_held(&local->mtx));
+						lockdep_is_held(&local->hw.wiphy->mtx));
 	if (sched_scan_sdata && sched_scan_req)
 		/*
 		 * Sched scan stopped, but we don't want to report it. Instead,
@@ -2880,7 +2877,6 @@ int ieee80211_reconfig(struct ieee80211_local *local)
 			RCU_INIT_POINTER(local->sched_scan_req, NULL);
 			sched_scan_stopped = true;
 		}
-	mutex_unlock(&local->mtx);
 
 	if (sched_scan_stopped)
 		cfg80211_sched_scan_stopped_locked(local->hw.wiphy, 0);
@@ -2901,16 +2897,12 @@ int ieee80211_reconfig(struct ieee80211_local *local)
 	 * are active. This is really a workaround though.
 	 */
 	if (ieee80211_hw_check(hw, AMPDU_AGGREGATION)) {
-		mutex_lock(&local->sta_mtx);
-
 		list_for_each_entry(sta, &local->sta_list, list) {
 			if (!local->resuming)
 				ieee80211_sta_tear_down_BA_sessions(
 						sta, AGG_STOP_LOCAL_REQUEST);
 			clear_sta_flag(sta, WLAN_STA_BLOCK_BA);
 		}
-
-		mutex_unlock(&local->sta_mtx);
 	}
 
 	/*
@@ -2926,9 +2918,7 @@ int ieee80211_reconfig(struct ieee80211_local *local)
 		barrier();
 
 		/* Restart deferred ROCs */
-		mutex_lock(&local->mtx);
 		ieee80211_start_next_roc(local);
-		mutex_unlock(&local->mtx);
 
 		/* Requeue all works */
 		list_for_each_entry(sdata, &local->interfaces, list)
@@ -2989,6 +2979,8 @@ static void ieee80211_reconfig_disconnect(struct ieee80211_vif *vif, u8 flag)
 	sdata = vif_to_sdata(vif);
 	local = sdata->local;
 
+	lockdep_assert_wiphy(local->hw.wiphy);
+
 	if (WARN_ON(flag & IEEE80211_SDATA_DISCONNECT_RESUME &&
 		    !local->resuming))
 		return;
@@ -3002,10 +2994,8 @@ static void ieee80211_reconfig_disconnect(struct ieee80211_vif *vif, u8 flag)
 
 	sdata->flags |= flag;
 
-	mutex_lock(&local->key_mtx);
 	list_for_each_entry(key, &sdata->key_list, list)
 		key->flags |= KEY_FLAG_TAINTED;
-	mutex_unlock(&local->key_mtx);
 }
 
 void ieee80211_hw_restart_disconnect(struct ieee80211_vif *vif)
@@ -3027,10 +3017,10 @@ void ieee80211_recalc_smps(struct ieee80211_sub_if_data *sdata,
 	struct ieee80211_chanctx_conf *chanctx_conf;
 	struct ieee80211_chanctx *chanctx;
 
-	mutex_lock(&local->chanctx_mtx);
+	lockdep_assert_wiphy(local->hw.wiphy);
 
 	chanctx_conf = rcu_dereference_protected(link->conf->chanctx_conf,
-						 lockdep_is_held(&local->chanctx_mtx));
+						 lockdep_is_held(&local->hw.wiphy->mtx));
 
 	/*
 	 * This function can be called from a work, thus it may be possible
@@ -3039,12 +3029,10 @@ void ieee80211_recalc_smps(struct ieee80211_sub_if_data *sdata,
 	 * So nothing should be done in such case.
 	 */
 	if (!chanctx_conf)
-		goto unlock;
+		return;
 
 	chanctx = container_of(chanctx_conf, struct ieee80211_chanctx, conf);
 	ieee80211_recalc_smps_chanctx(local, chanctx);
- unlock:
-	mutex_unlock(&local->chanctx_mtx);
 }
 
 void ieee80211_recalc_min_chandef(struct ieee80211_sub_if_data *sdata,
@@ -3055,7 +3043,7 @@ void ieee80211_recalc_min_chandef(struct ieee80211_sub_if_data *sdata,
 	struct ieee80211_chanctx *chanctx;
 	int i;
 
-	mutex_lock(&local->chanctx_mtx);
+	lockdep_assert_wiphy(local->hw.wiphy);
 
 	for (i = 0; i < ARRAY_SIZE(sdata->vif.link_conf); i++) {
 		struct ieee80211_bss_conf *bss_conf;
@@ -3071,9 +3059,9 @@ void ieee80211_recalc_min_chandef(struct ieee80211_sub_if_data *sdata,
 		}
 
 		chanctx_conf = rcu_dereference_protected(bss_conf->chanctx_conf,
-							 lockdep_is_held(&local->chanctx_mtx));
+							 lockdep_is_held(&local->hw.wiphy->mtx));
 		/*
-		 * Since we hold the chanctx_mtx (checked above)
+		 * Since we hold the wiphy mutex (checked above)
 		 * we can take the chanctx_conf pointer out of the
 		 * RCU critical section, it cannot go away without
 		 * the mutex. Just the way we reached it could - in
@@ -3083,14 +3071,12 @@ void ieee80211_recalc_min_chandef(struct ieee80211_sub_if_data *sdata,
 		rcu_read_unlock();
 
 		if (!chanctx_conf)
-			goto unlock;
+			return;
 
 		chanctx = container_of(chanctx_conf, struct ieee80211_chanctx,
 				       conf);
 		ieee80211_recalc_chanctx_min_def(local, chanctx, NULL);
 	}
- unlock:
-	mutex_unlock(&local->chanctx_mtx);
 }
 
 size_t ieee80211_ie_split_vendor(const u8 *ies, size_t ielen, size_t offset)
@@ -4333,16 +4319,15 @@ void ieee80211_dfs_cac_cancel(struct ieee80211_local *local)
 	struct ieee80211_sub_if_data *sdata;
 	struct cfg80211_chan_def chandef;
 
-	/* for interface list, to avoid linking iflist_mtx and chanctx_mtx */
 	lockdep_assert_wiphy(local->hw.wiphy);
 
-	mutex_lock(&local->mtx);
 	list_for_each_entry(sdata, &local->interfaces, list) {
 		/* it might be waiting for the local->mtx, but then
 		 * by the time it gets it, sdata->wdev.cac_started
 		 * will no longer be true
 		 */
-		cancel_delayed_work(&sdata->deflink.dfs_cac_timer_work);
+		wiphy_delayed_work_cancel(local->hw.wiphy,
+					  &sdata->deflink.dfs_cac_timer_work);
 
 		if (sdata->wdev.cac_started) {
 			chandef = sdata->vif.bss_conf.chandef;
@@ -4353,10 +4338,10 @@ void ieee80211_dfs_cac_cancel(struct ieee80211_local *local)
 					   GFP_KERNEL);
 		}
 	}
-	mutex_unlock(&local->mtx);
 }
 
-void ieee80211_dfs_radar_detected_work(struct work_struct *work)
+void ieee80211_dfs_radar_detected_work(struct wiphy *wiphy,
+				       struct wiphy_work *work)
 {
 	struct ieee80211_local *local =
 		container_of(work, struct ieee80211_local, radar_detected_work);
@@ -4364,7 +4349,8 @@ void ieee80211_dfs_radar_detected_work(struct work_struct *work)
 	struct ieee80211_chanctx *ctx;
 	int num_chanctx = 0;
 
-	mutex_lock(&local->chanctx_mtx);
+	lockdep_assert_wiphy(local->hw.wiphy);
+
 	list_for_each_entry(ctx, &local->chanctx_list, list) {
 		if (ctx->replace_state == IEEE80211_CHANCTX_REPLACES_OTHER)
 			continue;
@@ -4372,11 +4358,8 @@ void ieee80211_dfs_radar_detected_work(struct work_struct *work)
 		num_chanctx++;
 		chandef = ctx->conf.def;
 	}
-	mutex_unlock(&local->chanctx_mtx);
 
-	wiphy_lock(local->hw.wiphy);
 	ieee80211_dfs_cac_cancel(local);
-	wiphy_unlock(local->hw.wiphy);
 
 	if (num_chanctx > 1)
 		/* XXX: multi-channel is not supported yet */
@@ -4391,7 +4374,7 @@ void ieee80211_radar_detected(struct ieee80211_hw *hw)
 
 	trace_api_radar_detected(local);
 
-	schedule_work(&local->radar_detected_work);
+	wiphy_work_queue(hw->wiphy, &local->radar_detected_work);
 }
 EXPORT_SYMBOL(ieee80211_radar_detected);
 
@@ -4775,7 +4758,7 @@ static u8 ieee80211_chanctx_radar_detect(struct ieee80211_local *local,
 	struct ieee80211_link_data *link;
 	u8 radar_detect = 0;
 
-	lockdep_assert_held(&local->chanctx_mtx);
+	lockdep_assert_wiphy(local->hw.wiphy);
 
 	if (WARN_ON(ctx->replace_state == IEEE80211_CHANCTX_WILL_BE_REPLACED))
 		return 0;
@@ -4816,7 +4799,7 @@ int ieee80211_check_combinations(struct ieee80211_sub_if_data *sdata,
 		.radar_detect = radar_detect,
 	};
 
-	lockdep_assert_held(&local->chanctx_mtx);
+	lockdep_assert_wiphy(local->hw.wiphy);
 
 	if (WARN_ON(hweight32(radar_detect) > 1))
 		return -EINVAL;
@@ -4906,7 +4889,7 @@ int ieee80211_max_num_channels(struct ieee80211_local *local)
 	int err;
 	struct iface_combination_params params = {0};
 
-	lockdep_assert_held(&local->chanctx_mtx);
+	lockdep_assert_wiphy(local->hw.wiphy);
 
 	list_for_each_entry(ctx, &local->chanctx_list, list) {
 		if (ctx->replace_state == IEEE80211_CHANCTX_WILL_BE_REPLACED)
@@ -5117,32 +5100,4 @@ u8 *ieee80211_ie_build_eht_cap(u8 *pos,
 	}
 
 	return pos;
-}
-
-void ieee80211_fragment_element(struct sk_buff *skb, u8 *len_pos, u8 frag_id)
-{
-	unsigned int elem_len;
-
-	if (!len_pos)
-		return;
-
-	elem_len = skb->data + skb->len - len_pos - 1;
-
-	while (elem_len > 255) {
-		/* this one is 255 */
-		*len_pos = 255;
-		/* remaining data gets smaller */
-		elem_len -= 255;
-		/* make space for the fragment ID/len in SKB */
-		skb_put(skb, 2);
-		/* shift back the remaining data to place fragment ID/len */
-		memmove(len_pos + 255 + 3, len_pos + 255 + 1, elem_len);
-		/* place the fragment ID */
-		len_pos += 255 + 1;
-		*len_pos = frag_id;
-		/* and point to fragment length to update later */
-		len_pos++;
-	}
-
-	*len_pos = elem_len;
 }

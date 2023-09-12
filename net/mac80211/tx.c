@@ -266,8 +266,8 @@ ieee80211_tx_h_dynamic_ps(struct ieee80211_tx_data *tx)
 						IEEE80211_QUEUE_STOP_REASON_PS,
 						false);
 		ifmgd->flags &= ~IEEE80211_STA_NULLFUNC_ACKED;
-		ieee80211_queue_work(&local->hw,
-				     &local->dynamic_ps_disable_work);
+		wiphy_work_queue(local->hw.wiphy,
+				 &local->dynamic_ps_disable_work);
 	}
 
 	/* Don't restart the timer if we're not disassociated */
@@ -2855,9 +2855,10 @@ static struct sk_buff *ieee80211_build_hdr(struct ieee80211_sub_if_data *sdata,
 		goto free;
 	}
 
-	if (unlikely(!multicast && ((skb->sk &&
-		     skb_shinfo(skb)->tx_flags & SKBTX_WIFI_STATUS) ||
-		     ctrl_flags & IEEE80211_TX_CTL_REQ_TX_STATUS)))
+	if (unlikely(!multicast &&
+		     ((skb->sk &&
+		       skb_shinfo(skb)->tx_flags & SKBTX_WIFI_STATUS) ||
+		      ctrl_flags & IEEE80211_TX_CTL_REQ_TX_STATUS)))
 		info_id = ieee80211_store_ack_skb(local, skb, &info_flags,
 						  cookie);
 
@@ -2941,7 +2942,10 @@ static struct sk_buff *ieee80211_build_hdr(struct ieee80211_sub_if_data *sdata,
 	memset(info, 0, sizeof(*info));
 
 	info->flags = info_flags;
-	info->ack_frame_id = info_id;
+	if (info_id) {
+		info->status_data = info_id;
+		info->status_data_idr = 1;
+	}
 	info->band = band;
 
 	if (likely(!cookie)) {
@@ -4638,9 +4642,12 @@ static void ieee80211_8023_xmit(struct ieee80211_sub_if_data *sdata,
 	}
 
 	if (unlikely(skb->sk &&
-		     skb_shinfo(skb)->tx_flags & SKBTX_WIFI_STATUS))
-		info->ack_frame_id = ieee80211_store_ack_skb(local, skb,
-							     &info->flags, NULL);
+		     skb_shinfo(skb)->tx_flags & SKBTX_WIFI_STATUS)) {
+		info->status_data = ieee80211_store_ack_skb(local, skb,
+							    &info->flags, NULL);
+		if (info->status_data)
+			info->status_data_idr = 1;
+	}
 
 	dev_sw_netstats_tx_add(dev, skbs, len);
 	sta->deflink.tx_stats.packets[queue] += skbs;
@@ -5920,7 +5927,7 @@ int ieee80211_reserve_tid(struct ieee80211_sta *pubsta, u8 tid)
 	int ret;
 	u32 queues;
 
-	lockdep_assert_held(&local->sta_mtx);
+	lockdep_assert_wiphy(local->hw.wiphy);
 
 	/* only some cases are supported right now */
 	switch (sdata->vif.type) {
@@ -5981,7 +5988,7 @@ void ieee80211_unreserve_tid(struct ieee80211_sta *pubsta, u8 tid)
 	struct sta_info *sta = container_of(pubsta, struct sta_info, sta);
 	struct ieee80211_sub_if_data *sdata = sta->sdata;
 
-	lockdep_assert_held(&sdata->local->sta_mtx);
+	lockdep_assert_wiphy(sdata->local->hw.wiphy);
 
 	/* only some cases are supported right now */
 	switch (sdata->vif.type) {
@@ -6102,6 +6109,9 @@ int ieee80211_tx_control_port(struct wiphy *wiphy, struct net_device *dev,
 	u32 flags = 0;
 	int err;
 
+	/* mutex lock is only needed for incrementing the cookie counter */
+	lockdep_assert_wiphy(local->hw.wiphy);
+
 	/* Only accept CONTROL_PORT_PROTOCOL configured in CONNECT/ASSOCIATE
 	 * or Pre-Authentication
 	 */
@@ -6192,14 +6202,9 @@ int ieee80211_tx_control_port(struct wiphy *wiphy, struct net_device *dev,
 	rcu_read_unlock();
 
 start_xmit:
-	/* mutex lock is only needed for incrementing the cookie counter */
-	mutex_lock(&local->mtx);
-
 	local_bh_disable();
 	__ieee80211_subif_start_xmit(skb, skb->dev, flags, ctrl_flags, cookie);
 	local_bh_enable();
-
-	mutex_unlock(&local->mtx);
 
 	return 0;
 }

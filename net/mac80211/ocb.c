@@ -124,10 +124,10 @@ void ieee80211_ocb_work(struct ieee80211_sub_if_data *sdata)
 	struct ieee80211_if_ocb *ifocb = &sdata->u.ocb;
 	struct sta_info *sta;
 
+	lockdep_assert_wiphy(sdata->local->hw.wiphy);
+
 	if (ifocb->joined != true)
 		return;
-
-	sdata_lock(sdata);
 
 	spin_lock_bh(&ifocb->incomplete_lock);
 	while (!list_empty(&ifocb->incomplete_stations)) {
@@ -144,8 +144,6 @@ void ieee80211_ocb_work(struct ieee80211_sub_if_data *sdata)
 
 	if (test_and_clear_bit(OCB_WORK_HOUSEKEEPING, &ifocb->wrkq_flags))
 		ieee80211_ocb_housekeeping(sdata);
-
-	sdata_unlock(sdata);
 }
 
 static void ieee80211_ocb_housekeeping_timer(struct timer_list *t)
@@ -178,6 +176,8 @@ int ieee80211_ocb_join(struct ieee80211_sub_if_data *sdata,
 	u64 changed = BSS_CHANGED_OCB | BSS_CHANGED_BSSID;
 	int err;
 
+	lockdep_assert_wiphy(sdata->local->hw.wiphy);
+
 	if (ifocb->joined == true)
 		return -EINVAL;
 
@@ -185,10 +185,8 @@ int ieee80211_ocb_join(struct ieee80211_sub_if_data *sdata,
 	sdata->deflink.smps_mode = IEEE80211_SMPS_OFF;
 	sdata->deflink.needed_rx_chains = sdata->local->rx_chains;
 
-	mutex_lock(&sdata->local->mtx);
 	err = ieee80211_link_use_channel(&sdata->deflink, &setup->chandef,
 					 IEEE80211_CHANCTX_SHARED);
-	mutex_unlock(&sdata->local->mtx);
 	if (err)
 		return err;
 
@@ -209,6 +207,8 @@ int ieee80211_ocb_leave(struct ieee80211_sub_if_data *sdata)
 	struct ieee80211_local *local = sdata->local;
 	struct sta_info *sta;
 
+	lockdep_assert_wiphy(sdata->local->hw.wiphy);
+
 	ifocb->joined = false;
 	sta_info_flush(sdata);
 
@@ -228,9 +228,7 @@ int ieee80211_ocb_leave(struct ieee80211_sub_if_data *sdata)
 	clear_bit(SDATA_STATE_OFFCHANNEL, &sdata->state);
 	ieee80211_bss_info_change_notify(sdata, BSS_CHANGED_OCB);
 
-	mutex_lock(&sdata->local->mtx);
 	ieee80211_link_release_channel(&sdata->deflink);
-	mutex_unlock(&sdata->local->mtx);
 
 	skb_queue_purge(&sdata->skb_queue);
 

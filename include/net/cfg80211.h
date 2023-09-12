@@ -410,6 +410,19 @@ struct ieee80211_sta_eht_cap {
 	u8 eht_ppe_thres[IEEE80211_EHT_PPE_THRES_MAX_LEN];
 };
 
+/* sparse defines __CHECKER__; see Documentation/dev-tools/sparse.rst */
+#ifdef __CHECKER__
+/*
+ * This is used to mark the sband->iftype_data pointer which is supposed
+ * to be an array with special access semantics (per iftype), but a lot
+ * of code got it wrong in the past, so with this marking sparse will be
+ * noisy when the pointer is used directly.
+ */
+# define __iftd		__attribute__((noderef, address_space(__iftype_data)))
+#else
+# define __iftd
+#endif /* __CHECKER__ */
+
 /**
  * struct ieee80211_sband_iftype_data - sband data per interface type
  *
@@ -543,8 +556,46 @@ struct ieee80211_supported_band {
 	struct ieee80211_sta_s1g_cap s1g_cap;
 	struct ieee80211_edmg edmg_cap;
 	u16 n_iftype_data;
-	const struct ieee80211_sband_iftype_data *iftype_data;
+	const struct ieee80211_sband_iftype_data __iftd *iftype_data;
 };
+
+/**
+ * _ieee80211_set_sband_iftype_data - set sband iftype data array
+ * @sband: the sband to initialize
+ * @iftd: the iftype data array pointer
+ * @n_iftd: the length of the iftype data array
+ *
+ * Set the sband iftype data array; use this where the length cannot
+ * be derived from the ARRAY_SIZE() of the argument, but prefer
+ * ieee80211_set_sband_iftype_data() where it can be used.
+ */
+static inline void
+_ieee80211_set_sband_iftype_data(struct ieee80211_supported_band *sband,
+				 const struct ieee80211_sband_iftype_data *iftd,
+				 u16 n_iftd)
+{
+	sband->iftype_data = (const void __iftd __force *)iftd;
+	sband->n_iftype_data = n_iftd;
+}
+
+/**
+ * ieee80211_set_sband_iftype_data - set sband iftype data array
+ * @sband: the sband to initialize
+ * @iftd: the iftype data array
+ */
+#define ieee80211_set_sband_iftype_data(sband, iftd)	\
+	_ieee80211_set_sband_iftype_data(sband, iftd, ARRAY_SIZE(iftd))
+
+/**
+ * for_each_sband_iftype_data - iterate sband iftype data entries
+ * @sband: the sband whose iftype_data array to iterate
+ * @i: iterator counter
+ * @iftd: iftype data pointer to set
+ */
+#define for_each_sband_iftype_data(sband, i, iftd)				\
+	for (i = 0, iftd = (const void __force *)&(sband)->iftype_data[i];	\
+	     i < (sband)->n_iftype_data;					\
+	     i++, iftd = (const void __force *)&(sband)->iftype_data[i])
 
 /**
  * ieee80211_get_sband_iftype_data - return sband data for a given iftype
@@ -557,6 +608,7 @@ static inline const struct ieee80211_sband_iftype_data *
 ieee80211_get_sband_iftype_data(const struct ieee80211_supported_band *sband,
 				u8 iftype)
 {
+	const struct ieee80211_sband_iftype_data *data;
 	int i;
 
 	if (WARN_ON(iftype >= NL80211_IFTYPE_MAX))
@@ -565,10 +617,7 @@ ieee80211_get_sband_iftype_data(const struct ieee80211_supported_band *sband,
 	if (iftype == NL80211_IFTYPE_AP_VLAN)
 		iftype = NL80211_IFTYPE_AP;
 
-	for (i = 0; i < sband->n_iftype_data; i++)  {
-		const struct ieee80211_sband_iftype_data *data =
-			&sband->iftype_data[i];
-
+	for_each_sband_iftype_data(sband, i, data) {
 		if (data->types_mask & BIT(iftype))
 			return data;
 	}
@@ -5826,6 +5875,16 @@ void wiphy_work_queue(struct wiphy *wiphy, struct wiphy_work *work);
  */
 void wiphy_work_cancel(struct wiphy *wiphy, struct wiphy_work *work);
 
+/**
+ * wiphy_work_flush - flush previously queued work
+ * @wiphy: the wiphy, for debug purposes
+ * @work: the work to flush, this can be %NULL to flush all work
+ *
+ * Flush the work (i.e. run it if pending). This must be called
+ * under the wiphy mutex acquired by wiphy_lock().
+ */
+void wiphy_work_flush(struct wiphy *wiphy, struct wiphy_work *work);
+
 struct wiphy_delayed_work {
 	struct wiphy_work work;
 	struct wiphy *wiphy;
@@ -5868,6 +5927,17 @@ void wiphy_delayed_work_queue(struct wiphy *wiphy,
  */
 void wiphy_delayed_work_cancel(struct wiphy *wiphy,
 			       struct wiphy_delayed_work *dwork);
+
+/**
+ * wiphy_delayed work_flush - flush previously queued delayed work
+ * @wiphy: the wiphy, for debug purposes
+ * @work: the work to flush
+ *
+ * Flush the work (i.e. run it if pending). This must be called
+ * under the wiphy mutex acquired by wiphy_lock().
+ */
+void wiphy_delayed_work_flush(struct wiphy *wiphy,
+			      struct wiphy_delayed_work *dwork);
 
 /**
  * struct wireless_dev - wireless device state
@@ -5917,8 +5987,6 @@ void wiphy_delayed_work_cancel(struct wiphy *wiphy,
  * @mgmt_registrations: list of registrations for management frames
  * @mgmt_registrations_need_update: mgmt registrations were updated,
  *	need to propagate the update to the driver
- * @mtx: mutex used to lock data in this struct, may be used by drivers
- *	and some API functions require it held
  * @beacon_interval: beacon interval used on this device for transmitting
  *	beacons, 0 when not valid
  * @address: The address for this device, valid only if @netdev is %NULL
@@ -5963,8 +6031,6 @@ struct wireless_dev {
 
 	struct list_head mgmt_registrations;
 	u8 mgmt_registrations_need_update:1;
-
-	struct mutex mtx;
 
 	bool use_4addr, is_running, registered, registering;
 
@@ -8569,7 +8635,7 @@ bool cfg80211_reg_can_beacon_relax(struct wiphy *wiphy,
  * @link_id: the link ID for MLO, must be 0 for non-MLO
  * @punct_bitmap: the new puncturing bitmap
  *
- * Caller must acquire wdev_lock, therefore must only be called from sleepable
+ * Caller must hold wiphy mutex, therefore must only be called from sleepable
  * driver context!
  */
 void cfg80211_ch_switch_notify(struct net_device *dev,
@@ -8807,6 +8873,18 @@ static inline size_t ieee80211_ie_split(const u8 *ies, size_t ielen,
 {
 	return ieee80211_ie_split_ric(ies, ielen, ids, n_ids, NULL, 0, offset);
 }
+
+/**
+ * ieee80211_fragment_element - fragment the last element in skb
+ * @skb: The skbuf that the element was added to
+ * @len_pos: Pointer to length of the element to fragment
+ * @frag_id: The element ID to use for fragments
+ *
+ * This function fragments all data after @len_pos, adding fragmentation
+ * elements with the given ID as appropriate. The SKB will grow in size
+ * accordingly.
+ */
+void ieee80211_fragment_element(struct sk_buff *skb, u8 *len_pos, u8 frag_id);
 
 /**
  * cfg80211_report_wowlan_wakeup - report wakeup from WoWLAN
