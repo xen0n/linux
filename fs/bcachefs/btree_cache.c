@@ -285,7 +285,7 @@ static int btree_node_write_and_reclaim(struct bch_fs *c, struct btree *b)
 static unsigned long bch2_btree_cache_scan(struct shrinker *shrink,
 					   struct shrink_control *sc)
 {
-	struct bch_fs *c = container_of(shrink, struct bch_fs,
+	struct bch_fs *c = container_of(&shrink, struct bch_fs,
 					btree_cache.shrink);
 	struct btree_cache *bc = &c->btree_cache;
 	struct btree *b, *t;
@@ -384,7 +384,7 @@ out_nounlock:
 static unsigned long bch2_btree_cache_count(struct shrinker *shrink,
 					    struct shrink_control *sc)
 {
-	struct bch_fs *c = container_of(shrink, struct bch_fs,
+	struct bch_fs *c = container_of(&shrink, struct bch_fs,
 					btree_cache.shrink);
 	struct btree_cache *bc = &c->btree_cache;
 
@@ -400,7 +400,7 @@ void bch2_fs_btree_cache_exit(struct bch_fs *c)
 	struct btree *b;
 	unsigned i, flags;
 
-	unregister_shrinker(&bc->shrink);
+	shrinker_free(bc->shrink);
 
 	/* vfree() can allocate memory: */
 	flags = memalloc_nofs_save();
@@ -454,6 +454,7 @@ void bch2_fs_btree_cache_exit(struct bch_fs *c)
 int bch2_fs_btree_cache_init(struct bch_fs *c)
 {
 	struct btree_cache *bc = &c->btree_cache;
+	struct shrinker *shrink;
 	unsigned i;
 	int ret = 0;
 
@@ -473,12 +474,14 @@ int bch2_fs_btree_cache_init(struct bch_fs *c)
 
 	mutex_init(&c->verify_lock);
 
-	bc->shrink.count_objects	= bch2_btree_cache_count;
-	bc->shrink.scan_objects		= bch2_btree_cache_scan;
-	bc->shrink.seeks		= 4;
-	ret = register_shrinker(&bc->shrink, "%s/btree_cache", c->name);
-	if (ret)
+	shrink = shrinker_alloc(0, "%s/btree_cache", c->name);
+	if (!shrink)
 		goto err;
+	bc->shrink = shrink;
+	shrink->count_objects	= bch2_btree_cache_count;
+	shrink->scan_objects	= bch2_btree_cache_scan;
+	shrink->seeks		= 4;
+	shrinker_register(shrink);
 
 	return 0;
 err:
