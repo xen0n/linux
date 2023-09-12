@@ -348,7 +348,7 @@ static void __cold btrfs_print_data_csum_error(struct btrfs_inode *inode,
 }
 
 /*
- * btrfs_inode_lock - lock inode i_rwsem based on arguments passed
+ * Lock inode i_rwsem based on arguments passed.
  *
  * ilock_flags can have the following bit set:
  *
@@ -382,7 +382,7 @@ int btrfs_inode_lock(struct btrfs_inode *inode, unsigned int ilock_flags)
 }
 
 /*
- * btrfs_inode_unlock - unock inode i_rwsem
+ * Unock inode i_rwsem.
  *
  * ilock_flags should contain the same bits set as passed to btrfs_inode_lock()
  * to decide whether the lock acquired is shared or exclusive.
@@ -1077,6 +1077,7 @@ static void submit_uncompressed_range(struct btrfs_inode *inode,
 	wbc_detach_inode(&wbc);
 	if (ret < 0) {
 		btrfs_cleanup_ordered_extents(inode, locked_page, start, end - start + 1);
+		mapping_set_error(inode->vfs_inode.i_mapping, ret);
 		if (locked_page) {
 			const u64 page_start = page_offset(locked_page);
 
@@ -1085,10 +1086,6 @@ static void submit_uncompressed_range(struct btrfs_inode *inode,
 			btrfs_mark_ordered_io_finished(inode, locked_page,
 						       page_start, PAGE_SIZE,
 						       !ret);
-			btrfs_page_clear_uptodate(inode->root->fs_info,
-						  locked_page, page_start,
-						  PAGE_SIZE);
-			mapping_set_error(locked_page->mapping, ret);
 			unlock_page(locked_page);
 		}
 	}
@@ -1433,26 +1430,6 @@ static noinline int cow_file_range(struct btrfs_inode *inode,
 			ret = PTR_ERR(ordered);
 			goto out_drop_extent_cache;
 		}
-
-		if (btrfs_is_data_reloc_root(root)) {
-			ret = btrfs_reloc_clone_csums(ordered);
-
-			/*
-			 * Only drop cache here, and process as normal.
-			 *
-			 * We must not allow extent_clear_unlock_delalloc()
-			 * at out_unlock label to free meta of this ordered
-			 * extent, as its meta should be freed by
-			 * btrfs_finish_ordered_io().
-			 *
-			 * So we must continue until @start is increased to
-			 * skip current ordered extent.
-			 */
-			if (ret)
-				btrfs_drop_extent_map_range(inode, start,
-							    start + ram_size - 1,
-							    false);
-		}
 		btrfs_put_ordered_extent(ordered);
 
 		btrfs_dec_block_group_reservations(fs_info, ins.objectid);
@@ -1479,14 +1456,6 @@ static noinline int cow_file_range(struct btrfs_inode *inode,
 		alloc_hint = ins.objectid + ins.offset;
 		start += cur_alloc_size;
 		extent_reserved = false;
-
-		/*
-		 * btrfs_reloc_clone_csums() error, since start is increased
-		 * extent_clear_unlock_delalloc() at out_unlock label won't
-		 * free metadata of current ordered extent, we're OK to exit.
-		 */
-		if (ret)
-			goto out_unlock;
 	}
 done:
 	if (done_offset)
@@ -1524,12 +1493,9 @@ out_unlock:
 	 * However, in case of @keep_locked, we still need to unlock the pages
 	 * (except @locked_page) to ensure all the pages are unlocked.
 	 */
-	if (keep_locked && orig_start < start) {
-		if (!locked_page)
-			mapping_set_error(inode->vfs_inode.i_mapping, ret);
+	if (keep_locked && orig_start < start)
 		extent_clear_unlock_delalloc(inode, orig_start, start - 1,
 					     locked_page, 0, page_ops);
-	}
 
 	/*
 	 * For the range (2). If we reserved an extent for our delalloc range
@@ -2171,14 +2137,6 @@ must_cow:
 			ret = PTR_ERR(ordered);
 			goto error;
 		}
-
-		if (btrfs_is_data_reloc_root(root))
-			/*
-			 * Error handled later, as we must prevent
-			 * extent_clear_unlock_delalloc() in error handler
-			 * from freeing metadata of created ordered extent.
-			 */
-			ret = btrfs_reloc_clone_csums(ordered);
 		btrfs_put_ordered_extent(ordered);
 
 		extent_clear_unlock_delalloc(inode, cur_offset, nocow_end,
@@ -2187,15 +2145,7 @@ must_cow:
 					     EXTENT_CLEAR_DATA_RESV,
 					     PAGE_UNLOCK | PAGE_SET_ORDERED);
 
-		cur_offset = extent_end;
-
-		/*
-		 * btrfs_reloc_clone_csums() error, now we're OK to call error
-		 * handler, as metadata for created ordered extent will only
-		 * be freed by btrfs_finish_ordered_io().
-		 */
-		if (ret)
-			goto error;
+		cur_offset = nocow_end + 1;
 		if (cur_offset > end)
 			break;
 	}
@@ -2789,9 +2739,6 @@ out_page:
 		 * to reflect the errors and clean the page.
 		 */
 		mapping_set_error(page->mapping, ret);
-		btrfs_mark_ordered_io_finished(inode, page, page_start,
-					       PAGE_SIZE, !ret);
-		btrfs_page_clear_uptodate(fs_info, page, page_start, PAGE_SIZE);
 		clear_page_dirty_for_io(page);
 	}
 	btrfs_page_clear_checked(fs_info, page, page_start, PAGE_SIZE);
@@ -3310,7 +3257,7 @@ zeroit:
 }
 
 /*
- * btrfs_add_delayed_iput - perform a delayed iput on @inode
+ * Perform a delayed iput on @inode.
  *
  * @inode: The inode we want to perform iput on
  *
@@ -4645,7 +4592,8 @@ out_notrans:
 }
 
 /*
- * btrfs_truncate_block - read, zero a chunk and write a block
+ * Read, zero a chunk and write a block.
+ *
  * @inode - inode that we're zeroing
  * @from - the offset to start zeroing
  * @len - the length to zero, 0 to zero the entire range respective to the
@@ -5780,7 +5728,8 @@ static int btrfs_get_dir_last_index(struct btrfs_inode *dir, u64 *index)
 		}
 	}
 
-	*index = dir->index_cnt;
+	/* index_cnt is the index number of next new entry, so decrement it. */
+	*index = dir->index_cnt - 1;
 
 	return 0;
 }
@@ -5815,6 +5764,19 @@ static int btrfs_opendir(struct inode *inode, struct file *file)
 	}
 	file->private_data = private;
 	return 0;
+}
+
+static loff_t btrfs_dir_llseek(struct file *file, loff_t offset, int whence)
+{
+	struct btrfs_file_private *private = file->private_data;
+	int ret;
+
+	ret = btrfs_get_dir_last_index(BTRFS_I(file_inode(file)),
+				       &private->last_index);
+	if (ret)
+		return ret;
+
+	return generic_file_llseek(file, offset, whence);
 }
 
 struct dir_entry {
@@ -10868,7 +10830,7 @@ static const struct inode_operations btrfs_dir_inode_operations = {
 };
 
 static const struct file_operations btrfs_dir_file_operations = {
-	.llseek		= generic_file_llseek,
+	.llseek		= btrfs_dir_llseek,
 	.read		= generic_read_dir,
 	.iterate_shared	= btrfs_real_readdir,
 	.open		= btrfs_opendir,
