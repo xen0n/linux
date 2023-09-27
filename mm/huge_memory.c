@@ -65,7 +65,11 @@ unsigned long transparent_hugepage_flags __read_mostly =
 	(1<<TRANSPARENT_HUGEPAGE_DEFRAG_KHUGEPAGED_FLAG)|
 	(1<<TRANSPARENT_HUGEPAGE_USE_ZERO_PAGE_FLAG);
 
-static struct shrinker deferred_split_shrinker;
+static struct shrinker *deferred_split_shrinker;
+static unsigned long deferred_split_count(struct shrinker *shrink,
+					  struct shrink_control *sc);
+static unsigned long deferred_split_scan(struct shrinker *shrink,
+					 struct shrink_control *sc);
 
 static atomic_t huge_zero_refcount;
 struct page *huge_zero_page __read_mostly;
@@ -229,11 +233,7 @@ static unsigned long shrink_huge_zero_page_scan(struct shrinker *shrink,
 	return 0;
 }
 
-static struct shrinker huge_zero_page_shrinker = {
-	.count_objects = shrink_huge_zero_page_count,
-	.scan_objects = shrink_huge_zero_page_scan,
-	.seeks = DEFAULT_SEEKS,
-};
+static struct shrinker *huge_zero_page_shrinker;
 
 #ifdef CONFIG_SYSFS
 static ssize_t enabled_show(struct kobject *kobj,
@@ -454,6 +454,38 @@ static inline void hugepage_exit_sysfs(struct kobject *hugepage_kobj)
 }
 #endif /* CONFIG_SYSFS */
 
+static int __init thp_shrinker_init(void)
+{
+	huge_zero_page_shrinker = shrinker_alloc(0, "thp-zero");
+	if (!huge_zero_page_shrinker)
+		return -ENOMEM;
+
+	deferred_split_shrinker = shrinker_alloc(SHRINKER_NUMA_AWARE |
+						 SHRINKER_MEMCG_AWARE |
+						 SHRINKER_NONSLAB,
+						 "thp-deferred_split");
+	if (!deferred_split_shrinker) {
+		shrinker_free(huge_zero_page_shrinker);
+		return -ENOMEM;
+	}
+
+	huge_zero_page_shrinker->count_objects = shrink_huge_zero_page_count;
+	huge_zero_page_shrinker->scan_objects = shrink_huge_zero_page_scan;
+	shrinker_register(huge_zero_page_shrinker);
+
+	deferred_split_shrinker->count_objects = deferred_split_count;
+	deferred_split_shrinker->scan_objects = deferred_split_scan;
+	shrinker_register(deferred_split_shrinker);
+
+	return 0;
+}
+
+static void __init thp_shrinker_exit(void)
+{
+	shrinker_free(huge_zero_page_shrinker);
+	shrinker_free(deferred_split_shrinker);
+}
+
 static int __init hugepage_init(void)
 {
 	int err;
@@ -482,12 +514,9 @@ static int __init hugepage_init(void)
 	if (err)
 		goto err_slab;
 
-	err = register_shrinker(&huge_zero_page_shrinker, "thp-zero");
+	err = thp_shrinker_init();
 	if (err)
-		goto err_hzp_shrinker;
-	err = register_shrinker(&deferred_split_shrinker, "thp-deferred_split");
-	if (err)
-		goto err_split_shrinker;
+		goto err_shrinker;
 
 	/*
 	 * By default disable transparent hugepages on smaller systems,
@@ -505,10 +534,8 @@ static int __init hugepage_init(void)
 
 	return 0;
 err_khugepaged:
-	unregister_shrinker(&deferred_split_shrinker);
-err_split_shrinker:
-	unregister_shrinker(&huge_zero_page_shrinker);
-err_hzp_shrinker:
+	thp_shrinker_exit();
+err_shrinker:
 	khugepaged_destroy();
 err_slab:
 	hugepage_exit_sysfs(hugepage_kobj);
@@ -1490,9 +1517,9 @@ vm_fault_t do_huge_pmd_numa_page(struct vm_fault *vmf)
 	struct vm_area_struct *vma = vmf->vma;
 	pmd_t oldpmd = vmf->orig_pmd;
 	pmd_t pmd;
-	struct page *page;
+	struct folio *folio;
 	unsigned long haddr = vmf->address & HPAGE_PMD_MASK;
-	int page_nid = NUMA_NO_NODE;
+	int nid = NUMA_NO_NODE;
 	int target_nid, last_cpupid = (-1 & LAST_CPUPID_MASK);
 	bool migrated = false, writable = false;
 	int flags = 0;
@@ -1514,36 +1541,34 @@ vm_fault_t do_huge_pmd_numa_page(struct vm_fault *vmf)
 	    can_change_pmd_writable(vma, vmf->address, pmd))
 		writable = true;
 
-	page = vm_normal_page_pmd(vma, haddr, pmd);
-	if (!page)
+	folio = vm_normal_folio_pmd(vma, haddr, pmd);
+	if (!folio)
 		goto out_map;
 
 	/* See similar comment in do_numa_page for explanation */
 	if (!writable)
 		flags |= TNF_NO_GROUP;
 
-	page_nid = page_to_nid(page);
+	nid = folio_nid(folio);
 	/*
 	 * For memory tiering mode, cpupid of slow memory page is used
 	 * to record page access time.  So use default value.
 	 */
-	if (node_is_toptier(page_nid))
-		last_cpupid = page_cpupid_last(page);
-	target_nid = numa_migrate_prep(page, vma, haddr, page_nid,
-				       &flags);
-
+	if (node_is_toptier(nid))
+		last_cpupid = page_cpupid_last(&folio->page);
+	target_nid = numa_migrate_prep(folio, vma, haddr, nid, &flags);
 	if (target_nid == NUMA_NO_NODE) {
-		put_page(page);
+		folio_put(folio);
 		goto out_map;
 	}
 
 	spin_unlock(vmf->ptl);
 	writable = false;
 
-	migrated = migrate_misplaced_page(page, vma, target_nid);
+	migrated = migrate_misplaced_folio(folio, vma, target_nid);
 	if (migrated) {
 		flags |= TNF_MIGRATED;
-		page_nid = target_nid;
+		nid = target_nid;
 	} else {
 		flags |= TNF_MIGRATE_FAIL;
 		vmf->ptl = pmd_lock(vma->vm_mm, vmf->pmd);
@@ -1555,9 +1580,8 @@ vm_fault_t do_huge_pmd_numa_page(struct vm_fault *vmf)
 	}
 
 out:
-	if (page_nid != NUMA_NO_NODE)
-		task_numa_fault(last_cpupid, page_nid, HPAGE_PMD_NR,
-				flags);
+	if (nid != NUMA_NO_NODE)
+		task_numa_fault(last_cpupid, nid, HPAGE_PMD_NR, flags);
 
 	return 0;
 
@@ -1931,6 +1955,136 @@ unlock:
 	spin_unlock(ptl);
 	return ret;
 }
+
+#ifdef CONFIG_USERFAULTFD
+/*
+ * The PT lock for src_pmd and the mmap_lock for reading are held by
+ * the caller, but it must return after releasing the
+ * page_table_lock. We're guaranteed the src_pmd is a pmd_trans_huge
+ * until the PT lock of the src_pmd is released. Just move the page
+ * from src_pmd to dst_pmd if possible. Return zero if succeeded in
+ * moving the page, -EAGAIN if it needs to be repeated by the caller,
+ * or other errors in case of failure.
+ */
+int remap_pages_huge_pmd(struct mm_struct *dst_mm, struct mm_struct *src_mm,
+			 pmd_t *dst_pmd, pmd_t *src_pmd, pmd_t dst_pmdval,
+			 struct vm_area_struct *dst_vma,
+			 struct vm_area_struct *src_vma,
+			 unsigned long dst_addr, unsigned long src_addr)
+{
+	pmd_t _dst_pmd, src_pmdval;
+	struct page *src_page;
+	struct folio *src_folio;
+	struct anon_vma *src_anon_vma, *dst_anon_vma;
+	spinlock_t *src_ptl, *dst_ptl;
+	pgtable_t src_pgtable, dst_pgtable;
+	struct mmu_notifier_range range;
+	int err = 0;
+
+	src_pmdval = *src_pmd;
+	src_ptl = pmd_lockptr(src_mm, src_pmd);
+
+	BUG_ON(!spin_is_locked(src_ptl));
+	mmap_assert_locked(src_mm);
+	mmap_assert_locked(dst_mm);
+
+	BUG_ON(!pmd_trans_huge(src_pmdval));
+	BUG_ON(!pmd_none(dst_pmdval));
+	BUG_ON(src_addr & ~HPAGE_PMD_MASK);
+	BUG_ON(dst_addr & ~HPAGE_PMD_MASK);
+
+	src_page = pmd_page(src_pmdval);
+	if (unlikely(!PageAnonExclusive(src_page))) {
+		spin_unlock(src_ptl);
+		return -EBUSY;
+	}
+
+	src_folio = page_folio(src_page);
+	folio_get(src_folio);
+	spin_unlock(src_ptl);
+
+	/* preallocate dst_pgtable if needed */
+	if (dst_mm != src_mm) {
+		dst_pgtable = pte_alloc_one(dst_mm);
+		if (unlikely(!dst_pgtable)) {
+			err = -ENOMEM;
+			goto put_folio;
+		}
+	} else {
+		dst_pgtable = NULL;
+	}
+
+	mmu_notifier_range_init(&range, MMU_NOTIFY_CLEAR, 0, src_mm, src_addr,
+				src_addr + HPAGE_PMD_SIZE);
+	mmu_notifier_invalidate_range_start(&range);
+
+	/* block all concurrent rmap walks */
+	folio_lock(src_folio);
+
+	/*
+	 * split_huge_page walks the anon_vma chain without the page
+	 * lock. Serialize against it with the anon_vma lock, the page
+	 * lock is not enough.
+	 */
+	src_anon_vma = folio_get_anon_vma(src_folio);
+	if (!src_anon_vma) {
+		err = -EAGAIN;
+		goto unlock_folio;
+	}
+	anon_vma_lock_write(src_anon_vma);
+
+	dst_ptl = pmd_lockptr(dst_mm, dst_pmd);
+	double_pt_lock(src_ptl, dst_ptl);
+	if (unlikely(!pmd_same(*src_pmd, src_pmdval) ||
+		     !pmd_same(*dst_pmd, dst_pmdval) ||
+		     folio_mapcount(src_folio) != 1)) {
+		double_pt_unlock(src_ptl, dst_ptl);
+		err = -EAGAIN;
+		goto put_anon_vma;
+	}
+
+	BUG_ON(!folio_test_head(src_folio));
+	BUG_ON(!folio_test_anon(src_folio));
+
+	dst_anon_vma = (void *)dst_vma->anon_vma + PAGE_MAPPING_ANON;
+	WRITE_ONCE(src_folio->mapping, (struct address_space *) dst_anon_vma);
+	WRITE_ONCE(src_folio->index, linear_page_index(dst_vma, dst_addr));
+
+	src_pmdval = pmdp_huge_clear_flush(src_vma, src_addr, src_pmd);
+	_dst_pmd = mk_huge_pmd(&src_folio->page, dst_vma->vm_page_prot);
+	_dst_pmd = maybe_pmd_mkwrite(pmd_mkdirty(_dst_pmd), dst_vma);
+	set_pmd_at(dst_mm, dst_addr, dst_pmd, _dst_pmd);
+
+	src_pgtable = pgtable_trans_huge_withdraw(src_mm, src_pmd);
+	if (dst_pgtable) {
+		pgtable_trans_huge_deposit(dst_mm, dst_pmd, dst_pgtable);
+		pte_free(src_mm, src_pgtable);
+		dst_pgtable = NULL;
+
+		mm_inc_nr_ptes(dst_mm);
+		mm_dec_nr_ptes(src_mm);
+		add_mm_counter(dst_mm, MM_ANONPAGES, HPAGE_PMD_NR);
+		add_mm_counter(src_mm, MM_ANONPAGES, -HPAGE_PMD_NR);
+	} else {
+		pgtable_trans_huge_deposit(dst_mm, dst_pmd, src_pgtable);
+	}
+	double_pt_unlock(src_ptl, dst_ptl);
+
+put_anon_vma:
+	anon_vma_unlock_write(src_anon_vma);
+	put_anon_vma(src_anon_vma);
+unlock_folio:
+	/* unblock rmap walks */
+	folio_unlock(src_folio);
+	mmu_notifier_invalidate_range_end(&range);
+	if (dst_pgtable)
+		pte_free(dst_mm, dst_pgtable);
+put_folio:
+	folio_put(src_folio);
+
+	return err;
+}
+#endif /* CONFIG_USERFAULTFD */
 
 /*
  * Returns page table lock pointer if a given pmd maps a thp, NULL otherwise.
@@ -2446,9 +2600,9 @@ static void __split_huge_page_tail(struct folio *folio, int tail,
 			 (1L << PG_dirty) |
 			 LRU_GEN_MASK | LRU_REFS_MASK));
 
-	/* ->mapping in first and second tail page is replaced by other uses */
-	VM_BUG_ON_PAGE(tail > 2 && page_tail->mapping != TAIL_MAPPING,
-			page_tail);
+	/* ->mapping in <=TAIL_MAPPING_REUSED_MAX tail pages are reused */
+	VM_BUG_ON_PAGE(tail > TAIL_MAPPING_REUSED_MAX &&
+		       page_tail->mapping != TAIL_MAPPING, page_tail);
 	page_tail->mapping = head->mapping;
 	page_tail->index = head->index + tail;
 
@@ -2828,7 +2982,7 @@ void deferred_split_folio(struct folio *folio)
 #ifdef CONFIG_MEMCG
 		if (memcg)
 			set_shrinker_bit(memcg, folio_nid(folio),
-					 deferred_split_shrinker.id);
+					 deferred_split_shrinker->id);
 #endif
 	}
 	spin_unlock_irqrestore(&ds_queue->split_queue_lock, flags);
@@ -2901,14 +3055,6 @@ next:
 		return SHRINK_STOP;
 	return split;
 }
-
-static struct shrinker deferred_split_shrinker = {
-	.count_objects = deferred_split_count,
-	.scan_objects = deferred_split_scan,
-	.seeks = DEFAULT_SEEKS,
-	.flags = SHRINKER_NUMA_AWARE | SHRINKER_MEMCG_AWARE |
-		 SHRINKER_NONSLAB,
-};
 
 #ifdef CONFIG_DEBUG_FS
 static void split_huge_pages_all(void)

@@ -295,7 +295,7 @@ static size_t adjust_range_hwpoison(struct page *page, size_t offset, size_t byt
 	size_t res = 0;
 
 	/* First subpage to start the loop. */
-	page += offset / PAGE_SIZE;
+	page = nth_page(page, offset / PAGE_SIZE);
 	offset %= PAGE_SIZE;
 	while (1) {
 		if (is_raw_hwpoison_page_in_hugepage(page))
@@ -309,7 +309,7 @@ static size_t adjust_range_hwpoison(struct page *page, size_t offset, size_t byt
 			break;
 		offset += n;
 		if (offset == PAGE_SIZE) {
-			page++;
+			page = nth_page(page, 1);
 			offset = 0;
 		}
 	}
@@ -334,7 +334,7 @@ static ssize_t hugetlbfs_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	ssize_t retval = 0;
 
 	while (iov_iter_count(to)) {
-		struct page *page;
+		struct folio *folio;
 		size_t nr, copied, want;
 
 		/* nr is the maximum number of bytes to copy from this page */
@@ -352,18 +352,18 @@ static ssize_t hugetlbfs_read_iter(struct kiocb *iocb, struct iov_iter *to)
 		}
 		nr = nr - offset;
 
-		/* Find the page */
-		page = find_lock_page(mapping, index);
-		if (unlikely(page == NULL)) {
+		/* Find the folio */
+		folio = filemap_lock_hugetlb_folio(h, mapping, index);
+		if (unlikely(folio == NULL)) {
 			/*
 			 * We have a HOLE, zero out the user-buffer for the
 			 * length of the hole or request.
 			 */
 			copied = iov_iter_zero(nr, to);
 		} else {
-			unlock_page(page);
+			folio_unlock(folio);
 
-			if (!PageHWPoison(page))
+			if (!folio_test_has_hwpoisoned(folio))
 				want = nr;
 			else {
 				/*
@@ -371,19 +371,19 @@ static ssize_t hugetlbfs_read_iter(struct kiocb *iocb, struct iov_iter *to)
 				 * touching the 1st raw HWPOISON subpage after
 				 * offset.
 				 */
-				want = adjust_range_hwpoison(page, offset, nr);
+				want = adjust_range_hwpoison(&folio->page, offset, nr);
 				if (want == 0) {
-					put_page(page);
+					folio_put(folio);
 					retval = -EIO;
 					break;
 				}
 			}
 
 			/*
-			 * We have the page, copy it to user space buffer.
+			 * We have the folio, copy it to user space buffer.
 			 */
-			copied = copy_page_to_iter(page, offset, want, to);
-			put_page(page);
+			copied = copy_folio_to_iter(folio, offset, want, to);
+			folio_put(folio);
 		}
 		offset += copied;
 		retval += copied;
@@ -485,7 +485,6 @@ static void hugetlb_unmap_file_folio(struct hstate *h,
 					struct folio *folio, pgoff_t index)
 {
 	struct rb_root_cached *root = &mapping->i_mmap;
-	struct hugetlb_vma_lock *vma_lock;
 	struct page *page = &folio->page;
 	struct vm_area_struct *vma;
 	unsigned long v_start;
@@ -495,9 +494,9 @@ static void hugetlb_unmap_file_folio(struct hstate *h,
 	start = index * pages_per_huge_page(h);
 	end = (index + 1) * pages_per_huge_page(h);
 
+	filemap_invalidate_lock(mapping);
 	i_mmap_lock_write(mapping);
-retry:
-	vma_lock = NULL;
+
 	vma_interval_tree_foreach(vma, root, start, end - 1) {
 		v_start = vma_offset_start(vma, start);
 		v_end = vma_offset_end(vma, end);
@@ -505,62 +504,13 @@ retry:
 		if (!hugetlb_vma_maps_page(vma, v_start, page))
 			continue;
 
-		if (!hugetlb_vma_trylock_write(vma)) {
-			vma_lock = vma->vm_private_data;
-			/*
-			 * If we can not get vma lock, we need to drop
-			 * immap_sema and take locks in order.  First,
-			 * take a ref on the vma_lock structure so that
-			 * we can be guaranteed it will not go away when
-			 * dropping immap_sema.
-			 */
-			kref_get(&vma_lock->refs);
-			break;
-		}
-
 		unmap_hugepage_range(vma, v_start, v_end, NULL,
 				     ZAP_FLAG_DROP_MARKER);
 		hugetlb_vma_unlock_write(vma);
 	}
 
+	filemap_invalidate_unlock(mapping);
 	i_mmap_unlock_write(mapping);
-
-	if (vma_lock) {
-		/*
-		 * Wait on vma_lock.  We know it is still valid as we have
-		 * a reference.  We must 'open code' vma locking as we do
-		 * not know if vma_lock is still attached to vma.
-		 */
-		down_write(&vma_lock->rw_sema);
-		i_mmap_lock_write(mapping);
-
-		vma = vma_lock->vma;
-		if (!vma) {
-			/*
-			 * If lock is no longer attached to vma, then just
-			 * unlock, drop our reference and retry looking for
-			 * other vmas.
-			 */
-			up_write(&vma_lock->rw_sema);
-			kref_put(&vma_lock->refs, hugetlb_vma_lock_release);
-			goto retry;
-		}
-
-		/*
-		 * vma_lock is still attached to vma.  Check to see if vma
-		 * still maps page and if so, unmap.
-		 */
-		v_start = vma_offset_start(vma, start);
-		v_end = vma_offset_end(vma, end);
-		if (hugetlb_vma_maps_page(vma, v_start, page))
-			unmap_hugepage_range(vma, v_start, v_end, NULL,
-					     ZAP_FLAG_DROP_MARKER);
-
-		kref_put(&vma_lock->refs, hugetlb_vma_lock_release);
-		hugetlb_vma_unlock_write(vma);
-
-		goto retry;
-	}
 }
 
 static void
@@ -578,20 +528,10 @@ hugetlb_vmdelete_list(struct rb_root_cached *root, pgoff_t start, pgoff_t end,
 		unsigned long v_start;
 		unsigned long v_end;
 
-		if (!hugetlb_vma_trylock_write(vma))
-			continue;
-
 		v_start = vma_offset_start(vma, start);
 		v_end = vma_offset_end(vma, end);
 
 		unmap_hugepage_range(vma, v_start, v_end, NULL, zap_flags);
-
-		/*
-		 * Note that vma lock only exists for shared/non-private
-		 * vmas.  Therefore, lock is not held when calling
-		 * unmap_hugepage_range for private vmas.
-		 */
-		hugetlb_vma_unlock_write(vma);
 	}
 }
 
@@ -661,21 +601,20 @@ static void remove_inode_hugepages(struct inode *inode, loff_t lstart,
 {
 	struct hstate *h = hstate_inode(inode);
 	struct address_space *mapping = &inode->i_data;
-	const pgoff_t start = lstart >> huge_page_shift(h);
-	const pgoff_t end = lend >> huge_page_shift(h);
+	const pgoff_t end = lend >> PAGE_SHIFT;
 	struct folio_batch fbatch;
 	pgoff_t next, index;
 	int i, freed = 0;
 	bool truncate_op = (lend == LLONG_MAX);
 
 	folio_batch_init(&fbatch);
-	next = start;
+	next = lstart >> PAGE_SHIFT;
 	while (filemap_get_folios(mapping, &next, end - 1, &fbatch)) {
 		for (i = 0; i < folio_batch_count(&fbatch); ++i) {
 			struct folio *folio = fbatch.folios[i];
 			u32 hash = 0;
 
-			index = folio->index;
+			index = folio->index >> huge_page_order(h);
 			hash = hugetlb_fault_mutex_hash(mapping, index);
 			mutex_lock(&hugetlb_fault_mutex_table[hash]);
 
@@ -693,7 +632,9 @@ static void remove_inode_hugepages(struct inode *inode, loff_t lstart,
 	}
 
 	if (truncate_op)
-		(void)hugetlb_unreserve_pages(inode, start, LONG_MAX, freed);
+		(void)hugetlb_unreserve_pages(inode,
+				lstart >> huge_page_shift(h),
+				LONG_MAX, freed);
 }
 
 static void hugetlbfs_evict_inode(struct inode *inode)
@@ -725,10 +666,12 @@ static void hugetlb_vmtruncate(struct inode *inode, loff_t offset)
 	pgoff = offset >> PAGE_SHIFT;
 
 	i_size_write(inode, offset);
+	filemap_invalidate_lock(mapping);
 	i_mmap_lock_write(mapping);
 	if (!RB_EMPTY_ROOT(&mapping->i_mmap.rb_root))
 		hugetlb_vmdelete_list(&mapping->i_mmap, pgoff, 0,
 				      ZAP_FLAG_DROP_MARKER);
+	filemap_invalidate_unlock(mapping);
 	i_mmap_unlock_write(mapping);
 	remove_inode_hugepages(inode, offset, LLONG_MAX);
 }
@@ -741,7 +684,7 @@ static void hugetlbfs_zero_partial_page(struct hstate *h,
 	pgoff_t idx = start >> huge_page_shift(h);
 	struct folio *folio;
 
-	folio = filemap_lock_folio(mapping, idx);
+	folio = filemap_lock_hugetlb_folio(h, mapping, idx);
 	if (IS_ERR(folio))
 		return;
 
@@ -886,7 +829,7 @@ static long hugetlbfs_fallocate(struct file *file, int mode, loff_t offset,
 		mutex_lock(&hugetlb_fault_mutex_table[hash]);
 
 		/* See if already present in mapping to avoid alloc/free */
-		folio = filemap_get_folio(mapping, index);
+		folio = filemap_get_folio(mapping, index << huge_page_order(h));
 		if (!IS_ERR(folio)) {
 			folio_put(folio);
 			mutex_unlock(&hugetlb_fault_mutex_table[hash]);
