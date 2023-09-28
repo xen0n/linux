@@ -563,6 +563,8 @@ struct smu_context {
 	u32 debug_resp_reg;
 
 	struct delayed_work		swctf_delayed_work;
+
+	enum pp_xgmi_plpd_mode plpd_mode;
 };
 
 struct i2c_adapter;
@@ -837,6 +839,12 @@ struct pptable_funcs {
 	 *                         interconnect power down.
 	 */
 	int (*allow_xgmi_power_down)(struct smu_context *smu, bool en);
+
+	/**
+	 * @select_xgmi_plpd_policy: Select xgmi per-link power down policy.
+	 */
+	int (*select_xgmi_plpd_policy)(struct smu_context *smu,
+				       enum pp_xgmi_plpd_mode mode);
 
 	/**
 	 * @update_pcie_parameters: Update and upload the system's PCIe
@@ -1484,6 +1492,9 @@ int smu_set_gfx_power_up_by_imu(struct smu_context *smu);
 int smu_set_ac_dc(struct smu_context *smu);
 
 int smu_allow_xgmi_power_down(struct smu_context *smu, bool en);
+
+int smu_set_xgmi_plpd_mode(struct smu_context *smu,
+			   enum pp_xgmi_plpd_mode mode);
 
 int smu_get_entrycount_gfxoff(struct smu_context *smu, u64 *value);
 
