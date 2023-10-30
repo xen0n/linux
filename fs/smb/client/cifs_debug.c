@@ -13,6 +13,7 @@
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
 #include <uapi/linux/ethtool.h>
+#include <net/inet_sock.h>
 #include "cifspdu.h"
 #include "cifsglob.h"
 #include "cifsproto.h"
@@ -153,11 +154,37 @@ cifs_dump_channel(struct seq_file *m, int i, struct cifs_chan *chan)
 		   in_flight(server),
 		   atomic_read(&server->in_send),
 		   atomic_read(&server->num_waiters));
+
 #ifdef CONFIG_NET_NS
 	if (server->net)
 		seq_printf(m, " Net namespace: %u ", server->net->ns.inum);
 #endif /* NET_NS */
 
+#ifdef CONFIG_CIFS_SMB_DIRECT
+	if (!server->rdma)
+		goto skip_rdma;
+
+	if (server->smbd_conn && server->smbd_conn->id) {
+		struct rdma_addr *addr =
+			&server->smbd_conn->id->route.addr;
+		seq_printf(m, "\n\t\tIP addr: dst: %pISpc, src: %pISpc",
+			   &addr->dst_addr, &addr->src_addr);
+	}
+
+skip_rdma:
+#endif
+	if (server->ssocket) {
+		struct sockaddr src;
+		int addrlen;
+
+		addrlen = kernel_getsockname(server->ssocket, &src);
+		if (addrlen != sizeof(struct sockaddr_in) &&
+		    addrlen != sizeof(struct sockaddr_in6))
+			return;
+
+		seq_printf(m, "\n\t\tIP addr: dst: %pISpc, src: %pISpc",
+			   &server->dstaddr, &src);
+	}
 }
 
 static inline const char *smb_speed_to_str(size_t bps)
@@ -274,7 +301,7 @@ static int cifs_debug_files_proc_show(struct seq_file *m, void *v)
 static int cifs_debug_data_proc_show(struct seq_file *m, void *v)
 {
 	struct mid_q_entry *mid_entry;
-	struct TCP_Server_Info *server;
+	struct TCP_Server_Info *server, *nserver;
 	struct TCP_Server_Info *chan_server;
 	struct cifs_ses *ses;
 	struct cifs_tcon *tcon;
@@ -329,7 +356,7 @@ static int cifs_debug_data_proc_show(struct seq_file *m, void *v)
 
 	c = 0;
 	spin_lock(&cifs_tcp_ses_lock);
-	list_for_each_entry(server, &cifs_tcp_ses_list, tcp_ses_list) {
+	list_for_each_entry_safe(server, nserver, &cifs_tcp_ses_list, tcp_ses_list) {
 		/* channel info will be printed as a part of sessions below */
 		if (SERVER_IS_CHAN(server))
 			continue;
@@ -407,8 +434,39 @@ static int cifs_debug_data_proc_show(struct seq_file *m, void *v)
 		seq_printf(m, "\nMR mr_ready_count: %x mr_used_count: %x",
 			atomic_read(&server->smbd_conn->mr_ready_count),
 			atomic_read(&server->smbd_conn->mr_used_count));
+		if (server->smbd_conn->id) {
+			struct rdma_addr *addr =
+				&server->smbd_conn->id->route.addr;
+			seq_printf(m, "\nIP addr: dst: %pISpc, src: %pISpc",
+				   &addr->dst_addr, &addr->src_addr);
+		}
 skip_rdma:
 #endif
+		if (server->ssocket) {
+			struct sockaddr src;
+			int addrlen;
+
+			/* kernel_getsockname can block. so drop the lock first */
+			server->srv_count++;
+			spin_unlock(&cifs_tcp_ses_lock);
+
+			addrlen = kernel_getsockname(server->ssocket, &src);
+			if (addrlen != sizeof(struct sockaddr_in) &&
+			    addrlen != sizeof(struct sockaddr_in6)) {
+				cifs_put_tcp_session(server, 0);
+				spin_lock(&cifs_tcp_ses_lock);
+
+				goto skip_addr_details;
+			}
+
+			seq_printf(m, "\nIP addr: dst: %pISpc, src: %pISpc",
+				   &server->dstaddr, &src);
+
+			cifs_put_tcp_session(server, 0);
+			spin_lock(&cifs_tcp_ses_lock);
+		}
+
+skip_addr_details:
 		seq_printf(m, "\nNumber of credits: %d,%d,%d Dialect 0x%x",
 			server->credits,
 			server->echo_credits,
@@ -514,7 +572,18 @@ skip_rdma:
 				seq_printf(m, "\n\n\tExtra Channels: %zu ",
 					   ses->chan_count-1);
 				for (j = 1; j < ses->chan_count; j++) {
+					/*
+					 * kernel_getsockname can block inside
+					 * cifs_dump_channel. so drop the lock first
+					 */
+					server->srv_count++;
+					spin_unlock(&cifs_tcp_ses_lock);
+
 					cifs_dump_channel(m, j, &ses->chans[j]);
+
+					cifs_put_tcp_session(server, 0);
+					spin_lock(&cifs_tcp_ses_lock);
+
 					if (CIFS_CHAN_NEEDS_RECONNECT(ses, j))
 						seq_puts(m, "\tDISCONNECTED ");
 					if (CIFS_CHAN_IN_RECONNECT(ses, j))
